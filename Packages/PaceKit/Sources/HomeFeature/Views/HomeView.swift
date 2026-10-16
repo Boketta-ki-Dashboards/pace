@@ -6,7 +6,6 @@ public struct HomeView: View {
     private let viewModel: HomeViewModel
 
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.openURL) private var openURL
 
     public init(viewModel: HomeViewModel) {
         self.viewModel = viewModel
@@ -16,8 +15,7 @@ public struct HomeView: View {
         NavigationStack {
             HomeContentView(
                 state: viewModel.state,
-                onRetry: { Task { await viewModel.retry() } },
-                onOpenHealthApp: { openURL(HealthAppLink.url) }
+                onRetry: { Task { await viewModel.retry() } }
             )
             .refreshable { [viewModel] in await viewModel.refresh() }
             .navigationTitle("Heute")
@@ -30,9 +28,4 @@ public struct HomeView: View {
             Task { await viewModel.refresh() }
         }
     }
-}
-
-enum HealthAppLink {
-    /// Öffnet die Health-App. Apple dokumentiert keinen direkten Link zu den Zugriffsrechten einer App.
-    static let url = URL(string: "x-apple-health://")!
 }

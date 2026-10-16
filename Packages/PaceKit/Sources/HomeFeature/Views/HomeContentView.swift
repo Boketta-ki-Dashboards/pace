@@ -6,7 +6,6 @@ import SwiftUI
 struct HomeContentView: View {
     let state: HomeViewModel.State
     let onRetry: () -> Void
-    let onOpenHealthApp: () -> Void
 
     var body: some View {
         ScrollView {
@@ -34,10 +33,8 @@ struct HomeContentView: View {
                     """,
                     tint: PaceColor.warning
                 ) {
-                    Button("Health-App öffnen", action: onOpenHealthApp)
-                        .buttonStyle(.pacePrimary)
                     Button("Erneut prüfen", action: onRetry)
-                        .buttonStyle(.paceSecondary)
+                        .buttonStyle(.pacePrimary)
                 }
                 .containerRelativeFrame(.vertical)
 
@@ -62,25 +59,23 @@ struct HomeContentView: View {
     NavigationStack {
         HomeContentView(
             state: .loaded(DailyStepCount(day: .now, steps: 8_432, updatedAt: .now)),
-            onRetry: {},
-            onOpenHealthApp: {}
+            onRetry: {}
         )
         .navigationTitle("Heute")
     }
 }
 
 #Preview("Laden") {
-    HomeContentView(state: .loading, onRetry: {}, onOpenHealthApp: {})
+    HomeContentView(state: .loading, onRetry: {})
 }
 
 #Preview("Kein Zugriff") {
-    HomeContentView(state: .noReadAccess, onRetry: {}, onOpenHealthApp: {})
+    HomeContentView(state: .noReadAccess, onRetry: {})
 }
 
 #Preview("Fehler") {
     HomeContentView(
         state: .failed(message: "Deine Schritte konnten nicht geladen werden. Bitte versuche es erneut."),
-        onRetry: {},
-        onOpenHealthApp: {}
+        onRetry: {}
     )
 }

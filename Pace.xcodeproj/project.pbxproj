@@ -289,8 +289,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Pace;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Pace liest deine Schrittzahl aus Apple Health, um dir deine heutigen Schritte anzuzeigen.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Pace schreibt keine Daten in Apple Health.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Pace liest Bewegungsdaten aus Apple Health (Schritte, Distanz, aktive Energie, Stockwerke, Trainingsminuten), um deinen Tag anzuzeigen. Für Rankings wird nur deine tägliche Schrittzahl geteilt.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -325,8 +324,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Pace;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Pace liest deine Schrittzahl aus Apple Health, um dir deine heutigen Schritte anzuzeigen.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Pace schreibt keine Daten in Apple Health.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Pace liest Bewegungsdaten aus Apple Health (Schritte, Distanz, aktive Energie, Stockwerke, Trainingsminuten), um deinen Tag anzuzeigen. Für Rankings wird nur deine tägliche Schrittzahl geteilt.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
