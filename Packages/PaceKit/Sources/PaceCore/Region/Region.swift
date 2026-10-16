@@ -1,0 +1,108 @@
+import Foundation
+
+/// Feste ID einer Region, z. B. `DE:06432018` (Pfungstadt) oder `DE` (Deutschland).
+///
+/// Format: Länderkennung, optional gefolgt von `:` und dem amtlichen Schlüssel (Landes-, Kreis- bzw.
+/// Gemeindeschlüssel/AGS). Regionen werden nie über Namen identifiziert.
+public struct RegionID: Hashable, Sendable, Codable, RawRepresentable, ExpressibleByStringLiteral, CustomStringConvertible {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+        self.init(rawValue: value)
+    }
+
+    public init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    public var description: String { rawValue }
+}
+
+/// Ebene in der regionalen Hierarchie.
+public enum RegionLevel: String, Codable, Sendable, CaseIterable, Comparable {
+    case municipality
+    case district
+    case state
+    case country
+
+    private var order: Int {
+        switch self {
+        case .municipality: 0
+        case .district: 1
+        case .state: 2
+        case .country: 3
+        }
+    }
+
+    public static func < (lhs: RegionLevel, rhs: RegionLevel) -> Bool {
+        lhs.order < rhs.order
+    }
+}
+
+/// Art der Gebietseinheit laut Gemeindeverzeichnis (Textkennzeichen).
+public enum RegionKind: String, Codable, Sendable {
+    case country
+    case state
+    // Kreise
+    case kreisfreieStadt = "kreisfreie_stadt"
+    case stadtkreis
+    case kreis
+    case landkreis
+    case regionalverband
+    // Gemeinden
+    case markt
+    case stadt
+    case gemeinde
+    case grosseKreisstadt = "grosse_kreisstadt"
+    case gemeindefreiesGebiet = "gemeindefreies_gebiet"
+}
+
+public struct Region: Hashable, Sendable, Identifiable {
+    public let id: RegionID
+    /// Amtlicher Schlüssel, z. B. `06432018`. Für Länder der ISO-Code, z. B. `DE`.
+    public let code: String
+    /// Anzeigename ohne amtlichen Zusatz, z. B. `Pfungstadt` statt `Pfungstadt, Stadt`.
+    public let name: String
+    public let level: RegionLevel
+    public let kind: RegionKind?
+    public let parentID: RegionID?
+    /// Anzahl der Gemeinden in dieser Region (Gemeinde selbst: 1).
+    public let municipalityCount: Int
+
+    public init(
+        id: RegionID,
+        code: String,
+        name: String,
+        level: RegionLevel,
+        kind: RegionKind?,
+        parentID: RegionID?,
+        municipalityCount: Int
+    ) {
+        self.id = id
+        self.code = code
+        self.name = name
+        self.level = level
+        self.kind = kind
+        self.parentID = parentID
+        self.municipalityCount = municipalityCount
+    }
+
+    /// Name mit Art der Gebietseinheit, z. B. `Landkreis Darmstadt-Dieburg`.
+    public var displayName: String {
+        switch kind {
+        case .landkreis: "Landkreis \(name)"
+        case .kreis: "Kreis \(name)"
+        case .stadtkreis: "Stadtkreis \(name)"
+        default: name
+        }
+    }
+}
