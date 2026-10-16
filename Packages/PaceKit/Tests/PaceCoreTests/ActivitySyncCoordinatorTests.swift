@@ -6,7 +6,7 @@ import Testing
 struct ActivitySyncCoordinatorTests {
     private let today = Fixtures.day(2026, 10, 16)
 
-    private func overview(steps: [Int]) -> ActivityOverview {
+    private func overview(steps: [Int], updatedAt: Date = Fixtures.date(2026, 10, 16, 12)) -> ActivityOverview {
         let calendar = Fixtures.activityCalendar
         let days = steps.enumerated().map { index, value in
             DailyActivitySummary(
@@ -20,7 +20,7 @@ struct ActivitySyncCoordinatorTests {
             yesterday: days[days.count - 2],
             currentWeek: ActivityPeriodSummary(period: .currentWeek, days: Array(days.suffix(5))),
             lastSevenDays: ActivityPeriodSummary(period: .lastSevenDays, days: days),
-            updatedAt: Fixtures.date(2026, 10, 16, 12)
+            updatedAt: updatedAt
         )
     }
 
@@ -129,6 +129,18 @@ struct ActivitySyncCoordinatorTests {
 
         let values = repository.state.current.uploads[0].map(\.competitionSteps)
         #expect(values.suffix(2) == [0, DailyCompetitionSteps.maximumSteps])
+    }
+
+    @Test func olderOverviewArrivingLateIsIgnored() async {
+        let (coordinator, repository) = makeCoordinator(clock: Locked(Fixtures.date(2026, 10, 16, 12)))
+        var newer = week
+        newer[6] = 7_800
+
+        await coordinator.submit(overview(steps: newer, updatedAt: Fixtures.date(2026, 10, 16, 12, 5)), trigger: .appStart)
+        await coordinator.submit(overview(steps: week, updatedAt: Fixtures.date(2026, 10, 16, 12, 1)), trigger: .pullToRefresh)
+
+        #expect(repository.state.current.uploads.count == 1)
+        #expect(repository.state.current.uploads[0].last?.competitionSteps == 7_800)
     }
 
     @Test func flushWithoutPendingValuesDoesNothing() async {

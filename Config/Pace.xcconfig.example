@@ -1,0 +1,15 @@
+// Lokale Pace-Konfiguration – VORLAGE (nur Platzhalter).
+//
+// So richtest du sie ein:
+//   1. Kopiere diese Datei nach Config/Pace.xcconfig (gleicher Ordner).
+//   2. Trage dort die Project URL und den Publishable Key deines Pace-Supabase-Projekts ein.
+//   3. Config/Pace.xcconfig wird von Git ignoriert und darf nie committet werden.
+//
+// Wichtig: In .xcconfig-Dateien beginnt mit "//" ein Kommentar. Trage die Project URL deshalb OHNE "https://"
+// ein (z. B. abcdefghijklmnop.supabase.co) – die App ergänzt "https://" automatisch.
+//
+// Nur den Publishable Key (sb_publishable_...) verwenden. Secret Keys (sb_secret_...) und service_role-Keys
+// gehören nie in die App – Pace verweigert damit den Start.
+
+SUPABASE_URL = example.supabase.co
+SUPABASE_PUBLISHABLE_KEY = sb_publishable_example

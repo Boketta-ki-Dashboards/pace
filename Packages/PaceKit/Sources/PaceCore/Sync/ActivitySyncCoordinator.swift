@@ -23,6 +23,7 @@ public actor ActivitySyncCoordinator: ActivitySyncing {
     /// Noch nicht übertragene Werte je Tag.
     private var pending: [LocalDate: Int] = [:]
     private var lastAttempt: Date?
+    private var lastSubmittedAt: Date?
     private var isSending = false
 
     public private(set) var status: Status = .idle
@@ -40,6 +41,12 @@ public actor ActivitySyncCoordinator: ActivitySyncing {
     }
 
     public func submit(_ overview: ActivityOverview, trigger: ActivitySyncTrigger) async {
+        // Übergaben können in anderer Reihenfolge eintreffen; ein älterer Stand darf einen neueren nie überschreiben.
+        if let lastSubmittedAt, overview.updatedAt < lastSubmittedAt {
+            return
+        }
+        lastSubmittedAt = overview.updatedAt
+
         for day in overview.lastSevenDays.days {
             let steps = min(max(day.competitionSteps, 0), DailyCompetitionSteps.maximumSteps)
             if synced[day.date] == steps {

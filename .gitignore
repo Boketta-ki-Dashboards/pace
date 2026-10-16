@@ -10,3 +10,6 @@ build/
 # Swift Package Manager
 .build/
 .swiftpm/
+
+# Lokale Konfiguration mit Supabase-Werten – niemals committen
+Config/Pace.xcconfig

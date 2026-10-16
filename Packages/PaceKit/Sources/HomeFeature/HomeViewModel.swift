@@ -24,60 +24,75 @@ public final class HomeViewModel {
 
     @ObservationIgnored private let loader: ActivitySummaryLoader
     @ObservationIgnored private let activityData: any ActivityDataProviding
+    @ObservationIgnored private let syncing: (any ActivitySyncing)?
     @ObservationIgnored private var isLoading = false
     @ObservationIgnored private var needsReload = false
+    @ObservationIgnored private var pendingTrigger: ActivitySyncTrigger?
 
+    /// - Parameter syncing: Nimmt neue Tageswerte für das Backend entgegen. `nil`, wenn kein Backend verfügbar ist.
     public init(
         activityData: any ActivityDataProviding,
+        syncing: (any ActivitySyncing)? = nil,
         calendar: ActivityCalendar = ActivityCalendar(),
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.activityData = activityData
+        self.syncing = syncing
         loader = ActivitySummaryLoader(provider: activityData, calendar: calendar, now: now)
     }
 
-    /// Erstes Laden beim Erscheinen des Screens. Bereits geladene Daten bleiben sichtbar.
+    /// Erstes Laden beim Erscheinen des Screens (App-Start). Bereits geladene Daten bleiben sichtbar.
     public func loadIfNeeded() async {
         guard case .loading = state else { return }
-        await refresh()
+        await refresh(trigger: .appStart)
     }
 
     /// Zeigt den Ladezustand und lädt neu – für „Erneut versuchen“ nach Fehlern oder fehlendem Zugriff.
     public func retry() async {
         state = .loading
-        await refresh()
+        await refresh(trigger: .pullToRefresh)
+    }
+
+    /// Aktualisiert die Werte per Pull-to-Refresh.
+    public func refresh() async {
+        await refresh(trigger: .pullToRefresh)
     }
 
     /// Aktualisiert die Werte, ohne die aktuelle Anzeige vorher zu verwerfen.
     ///
     /// Trifft eine Anfrage ein, während noch geladen wird, wird danach genau einmal erneut geladen,
     /// damit keine Änderung verloren geht.
-    public func refresh() async {
+    public func refresh(trigger: ActivitySyncTrigger) async {
         guard !isLoading else {
             needsReload = true
+            pendingTrigger = Self.prioritized(pendingTrigger, trigger)
             return
         }
         isLoading = true
         defer { isLoading = false }
 
+        var currentTrigger = trigger
         repeat {
             needsReload = false
-            await performLoad()
+            await performLoad(trigger: currentTrigger)
+            currentTrigger = pendingTrigger ?? .healthKitUpdate
+            pendingTrigger = nil
         } while needsReload && !Task.isCancelled
     }
 
     /// Lädt neu, sobald HealthKit neue Bewegungsdaten meldet. Läuft, bis der aufrufende Task beendet wird.
     public func observeActivityChanges() async {
         for await _ in activityData.activityChanges() {
-            await refresh()
+            await refresh(trigger: .healthKitUpdate)
         }
     }
 
-    private func performLoad() async {
+    private func performLoad(trigger: ActivitySyncTrigger) async {
         do {
             switch try await loader.load() {
             case .available(let overview):
                 state = .loaded(overview)
+                submitForSync(overview, trigger: trigger)
             case .noReadAccess:
                 state = .noReadAccess
             }
@@ -86,6 +101,20 @@ public final class HomeViewModel {
         } catch {
             state = .failed(message: Self.message(for: error))
         }
+    }
+
+    /// Übergibt die Werte an den Sync, ohne die Anzeige zu blockieren. Fehler behandelt der Sync selbst.
+    private func submitForSync(_ overview: ActivityOverview, trigger: ActivitySyncTrigger) {
+        guard let syncing else { return }
+        Task { [syncing] in
+            await syncing.submit(overview, trigger: trigger)
+        }
+    }
+
+    /// Ein gedrosselter HealthKit-Anlass soll einen sofortigen Anlass (z. B. Pull-to-Refresh) nicht überschreiben.
+    private static func prioritized(_ current: ActivitySyncTrigger?, _ new: ActivitySyncTrigger) -> ActivitySyncTrigger {
+        guard let current, current != .healthKitUpdate else { return new }
+        return current
     }
 
     static func message(for error: Error) -> String {

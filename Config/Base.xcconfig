@@ -1,0 +1,13 @@
+// Pace – gemeinsame Build-Einstellungen für alle Konfigurationen (Debug und Release).
+//
+// Lokale Werte (Supabase) stehen in Config/Pace.xcconfig. Diese Datei steht in .gitignore und wird nie
+// committet. Vorlage: Config/Pace.xcconfig.example.
+//
+// Fehlt Config/Pace.xcconfig, bleiben die Werte leer: Die App baut trotzdem (z. B. in der CI) und zeigt beim
+// Start einen Hinweis, dass das Backend nicht konfiguriert ist.
+
+SUPABASE_URL =
+SUPABASE_PUBLISHABLE_KEY =
+
+// Optionaler Include: kein Fehler, wenn die Datei fehlt.
+#include? "Pace.xcconfig"

@@ -9,9 +9,9 @@ struct HomeViewModelTests {
     private let now = Fixtures.date(2026, 10, 16, 9, 15)
     private let today = Fixtures.day(2026, 10, 16)
 
-    private func makeViewModel(_ service: HealthServiceStub) -> HomeViewModel {
+    private func makeViewModel(_ service: HealthServiceStub, syncing: ActivitySyncingSpy? = nil) -> HomeViewModel {
         let currentDate = now
-        return HomeViewModel(activityData: service, calendar: Fixtures.activityCalendar, now: { currentDate })
+        return HomeViewModel(activityData: service, syncing: syncing, calendar: Fixtures.activityCalendar, now: { currentDate })
     }
 
     private func todaysCompetitionSteps(_ viewModel: HomeViewModel) -> Int? {
@@ -129,5 +129,55 @@ struct HomeViewModelTests {
         await observation.value
 
         #expect(service.activeChangeObservers == 0)
+    }
+
+    // MARK: Sync
+
+    @Test func initialLoadSubmitsForSyncAsAppStart() async throws {
+        let syncing = ActivitySyncingSpy()
+        let viewModel = makeViewModel(HealthServiceStub { $0.setSteps(1_234, on: today) }, syncing: syncing)
+
+        await viewModel.loadIfNeeded()
+
+        try await waitUntil { syncing.triggers == [.appStart] }
+        #expect(syncing.state.current.submissions.first?.overview.today.competitionSteps == 1_234)
+    }
+
+    @Test func refreshTriggersAreForwarded() async throws {
+        let syncing = ActivitySyncingSpy()
+        let viewModel = makeViewModel(HealthServiceStub { $0.setSteps(10, on: today) }, syncing: syncing)
+        await viewModel.loadIfNeeded()
+
+        await viewModel.refresh(trigger: .foreground)
+        await viewModel.refresh()
+
+        try await waitUntil { syncing.triggers.count == 3 }
+        #expect(syncing.triggers == [.appStart, .foreground, .pullToRefresh])
+    }
+
+    @Test func healthKitChangesSubmitAsHealthKitUpdate() async throws {
+        let syncing = ActivitySyncingSpy()
+        let service = HealthServiceStub { $0.setSteps(100, on: today) }
+        let viewModel = makeViewModel(service, syncing: syncing)
+        await viewModel.loadIfNeeded()
+
+        let observation = Task { await viewModel.observeActivityChanges() }
+        defer { observation.cancel() }
+        try await waitUntil { service.activeChangeObservers == 1 }
+        service.simulateActivityChange()
+
+        try await waitUntil { syncing.triggers.contains(.healthKitUpdate) }
+    }
+
+    @Test func nothingIsSubmittedWithoutReadAccessOrOnError() async throws {
+        let syncing = ActivitySyncingSpy()
+        let noAccess = makeViewModel(HealthServiceStub(), syncing: syncing)
+        let failing = makeViewModel(HealthServiceStub { $0.dailyTotalsError = .queryFailed(reason: "x") }, syncing: syncing)
+
+        await noAccess.loadIfNeeded()
+        await failing.loadIfNeeded()
+        try await Task.sleep(for: .milliseconds(50))
+
+        #expect(syncing.triggers.isEmpty)
     }
 }

@@ -36,7 +36,7 @@ public struct HomeView: View {
         .onChange(of: scenePhase) { _, newPhase in
             // Zurück aus dem Hintergrund oder aus den Einstellungen: Werte und Zugriff erneut prüfen.
             guard newPhase == .active else { return }
-            Task { await viewModel.refresh() }
+            Task { await viewModel.refresh(trigger: .foreground) }
         }
     }
 }

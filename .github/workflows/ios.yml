@@ -16,7 +16,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -35,13 +35,27 @@ jobs:
             -scheme Pace \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build/DerivedData \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build.log
+
+      - name: No compiler warnings in Pace sources
+        # Warnungen aus Abhängigkeiten (SourcePackages) werden ignoriert, Warnungen in eigenem Code nicht.
+        run: |
+          grep -E "^$GITHUB_WORKSPACE/(Pace|Packages)/[^:]+:[0-9]+:[0-9]+: warning:" build.log | sort -u > warnings.txt || true
+          if [ -s warnings.txt ]; then
+            cat warnings.txt
+            echo "::error::$(wc -l < warnings.txt) Compiler-Warnung(en) in Pace-Code"
+            exit 1
+          fi
+          echo "Keine Warnungen in Pace-Code."
 
       - name: Verify Info.plist privacy strings
         # Ohne NSHealthShareUsageDescription beendet iOS die App beim Permission-Request.
         run: |
           PLIST=build/DerivedData/Build/Products/Debug-iphonesimulator/Pace.app/Info.plist
           plutil -extract NSHealthShareUsageDescription raw "$PLIST"
+          # Supabase-Werte kommen aus Config/Pace.xcconfig; in der CI sind sie leer, die Schlüssel müssen aber existieren.
+          plutil -extract PaceSupabaseURL raw "$PLIST" >/dev/null
+          plutil -extract PaceSupabasePublishableKey raw "$PLIST" >/dev/null
           # Pace schreibt nichts in Health – der Schreib-Text darf deshalb nicht enthalten sein.
           if plutil -extract NSHealthUpdateUsageDescription raw "$PLIST" >/dev/null 2>&1; then
             echo "NSHealthUpdateUsageDescription darf nicht gesetzt sein"; exit 1
