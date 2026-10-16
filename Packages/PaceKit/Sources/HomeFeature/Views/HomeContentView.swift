@@ -1,11 +1,14 @@
+import ActivityFeature
 import DesignSystem
 import PaceCore
 import SwiftUI
 
 /// Reine Darstellung des Home-Zustands – ohne Logik, dadurch einfach in Previews prüfbar.
-struct HomeContentView: View {
+struct HomeContentView<Details: View>: View {
     let state: HomeViewModel.State
+    let formatter: ActivityFormatter
     let onRetry: () -> Void
+    @ViewBuilder let details: () -> Details
 
     var body: some View {
         ScrollView {
@@ -14,9 +17,13 @@ struct HomeContentView: View {
                 PaceLoadingView("Schritte werden geladen …")
                     .containerRelativeFrame(.vertical)
 
-            case .loaded(let count):
-                VStack(spacing: PaceSpacing.m) {
-                    TodayStepsCard(count: count)
+            case .loaded(let overview):
+                VStack(alignment: .leading, spacing: PaceSpacing.m) {
+                    HomeStepsHero(today: overview.today, formatter: formatter, details: details)
+                    Text("Aktualisiert um \(formatter.time(overview.updatedAt))")
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .padding(PaceSpacing.m)
 
@@ -55,27 +62,57 @@ struct HomeContentView: View {
     }
 }
 
+private let previewFormatter = ActivityFormatter(locale: Locale(identifier: "de_DE"))
+
+private func previewOverview(health: Int, competition: Int) -> ActivityOverview {
+    let calendar = ActivityCalendar()
+    let today = calendar.day(containing: .now)
+    let days = (0..<7).map { offset in
+        DailyActivitySummary(
+            date: calendar.adding(offset - 6, to: today),
+            healthSteps: offset == 6 ? health : 6_000 + offset * 500,
+            competitionSteps: offset == 6 ? competition : 6_000 + offset * 500,
+            walkingRunningDistanceMeters: 6_400,
+            activeEnergyKilocalories: 382,
+            flightsClimbed: 9,
+            exerciseMinutes: 34
+        )
+    }
+    return ActivityOverview(
+        today: days[6],
+        yesterday: days[5],
+        currentWeek: ActivityPeriodSummary(period: .currentWeek, days: days),
+        lastSevenDays: ActivityPeriodSummary(period: .lastSevenDays, days: days),
+        updatedAt: .now
+    )
+}
+
 #Preview("Geladen") {
     NavigationStack {
         HomeContentView(
-            state: .loaded(DailyStepCount(day: .now, steps: 8_432, updatedAt: .now)),
+            state: .loaded(previewOverview(health: 9_120, competition: 8_742)),
+            formatter: previewFormatter,
             onRetry: {}
-        )
-        .navigationTitle("Heute")
+        ) {
+            Text("Details")
+        }
     }
 }
 
 #Preview("Laden") {
-    HomeContentView(state: .loading, onRetry: {})
+    HomeContentView(state: .loading, formatter: previewFormatter, onRetry: {}) { EmptyView() }
 }
 
 #Preview("Kein Zugriff") {
-    HomeContentView(state: .noReadAccess, onRetry: {})
+    HomeContentView(state: .noReadAccess, formatter: previewFormatter, onRetry: {}) { EmptyView() }
 }
 
 #Preview("Fehler") {
     HomeContentView(
         state: .failed(message: "Deine Schritte konnten nicht geladen werden. Bitte versuche es erneut."),
+        formatter: previewFormatter,
         onRetry: {}
-    )
+    ) {
+        EmptyView()
+    }
 }

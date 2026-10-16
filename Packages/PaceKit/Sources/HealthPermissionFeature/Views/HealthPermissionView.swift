@@ -17,8 +17,13 @@ public struct HealthPermissionView: View {
                     VStack(alignment: .leading, spacing: PaceSpacing.l) {
                         HealthPermissionPoint(
                             systemImage: "figure.walk",
-                            title: "Nur deine Schritte",
-                            text: "Pace liest ausschließlich deine Schrittzahl aus Apple Health – keine anderen Gesundheitsdaten."
+                            title: "Nur Bewegungsdaten",
+                            text: "Schritte, Distanz, aktive Kalorien, Stockwerke und Trainingsminuten. Keine Herzfrequenz, kein Schlaf, keine medizinischen Daten."
+                        )
+                        HealthPermissionPoint(
+                            systemImage: "trophy.fill",
+                            title: "Nur Schritte zählen für Rankings",
+                            text: "Geteilt wird ausschließlich deine tägliche Schrittzahl. Alle anderen Werte bleiben auf deinem iPhone."
                         )
                         HealthPermissionPoint(
                             systemImage: "lock.fill",
@@ -28,7 +33,7 @@ public struct HealthPermissionView: View {
                         HealthPermissionPoint(
                             systemImage: "location.slash",
                             title: "Kein Standort nötig",
-                            text: "Für deine Schritte brauchst du keine Standortfreigabe."
+                            text: "Für Schritte und Rankings brauchst du keine Standortfreigabe."
                         )
                         HealthPermissionPoint(
                             systemImage: "hand.raised.fill",
@@ -59,7 +64,7 @@ public struct HealthPermissionView: View {
                 .font(PaceFont.largeTitle)
                 .foregroundStyle(PaceColor.textPrimary)
 
-            Text("Verbinde Pace mit Apple Health, damit wir deine heutigen Schritte anzeigen können.")
+            Text("Verbinde Pace mit Apple Health, damit wir deine Bewegung von heute anzeigen können.")
                 .font(PaceFont.body)
                 .foregroundStyle(PaceColor.textSecondary)
         }

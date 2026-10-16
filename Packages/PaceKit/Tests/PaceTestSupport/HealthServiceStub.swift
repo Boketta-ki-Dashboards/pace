@@ -1,22 +1,40 @@
 import Foundation
 import PaceCore
 
-/// Konfigurierbarer Test-Double für die Health-Protokolle. Threadsicher über einen Lock.
-public final class HealthServiceStub: HealthAuthorizationProviding, StepCountProviding, @unchecked Sendable {
+/// Konfigurierbarer Test-Double für die Health-Protokolle.
+///
+/// `@unchecked Sendable`: Der gesamte veränderliche Zustand wird ausschließlich unter `lock` gelesen und geschrieben.
+public final class HealthServiceStub: HealthAuthorizationProviding, ActivityDataProviding, @unchecked Sendable {
     public struct Configuration: Sendable {
         public var isHealthDataAvailable = true
         public var authorizationStatus: Result<HealthAuthorizationRequestStatus, HealthDataError> = .success(.alreadyRequested)
         public var requestAuthorizationResult: Result<Void, HealthDataError> = .success(())
-        public var stepCount: Result<Int?, HealthDataError> = .success(nil)
-        public var hasAnyStepSamples: Result<Bool, HealthDataError> = .success(false)
+        /// Tageswerte je Kennzahl. Eine fehlende Kennzahl bzw. ein fehlender Tag bedeutet „keine Samples“.
+        public var dailyTotals: [ActivityMetric: [LocalDate: Double]] = [:]
+        /// Fehler, den `dailyTotals(of:for:calendar:)` für alle Kennzahlen wirft.
+        public var dailyTotalsError: HealthDataError?
+        /// Kennzahlen, für die irgendwann Samples existieren (unabhängig vom Zeitraum).
+        public var metricsWithAnySamples: Set<ActivityMetric> = []
 
         public init() {}
+
+        /// Setzt einen Tageswert und markiert die Kennzahl als grundsätzlich lesbar.
+        public mutating func set(_ metric: ActivityMetric, _ value: Double, on day: LocalDate) {
+            dailyTotals[metric, default: [:]][day] = value
+            metricsWithAnySamples.insert(metric)
+        }
+
+        /// Setzt Health- und Wettbewerbsschritte eines Tags.
+        public mutating func setSteps(_ steps: Int, competition: Int? = nil, on day: LocalDate) {
+            set(.steps, Double(steps), on: day)
+            set(.competitionSteps, Double(competition ?? steps), on: day)
+        }
     }
 
     public struct Calls: Sendable {
         public var authorizationRequests = 0
-        public var stepCountIntervals: [DateInterval] = []
-        public var hasAnyStepSamplesQueries = 0
+        public var dailyTotalsRequests: [(metric: ActivityMetric, days: ClosedRange<LocalDate>)] = []
+        public var hasAnySamplesQueries: [ActivityMetric] = []
     }
 
     private let lock = NSLock()
@@ -42,8 +60,8 @@ public final class HealthServiceStub: HealthAuthorizationProviding, StepCountPro
         withLock { changeContinuations.count }
     }
 
-    /// Simuliert eine Benachrichtigung von HealthKit über neue Schrittdaten.
-    public func simulateStepCountChange() {
+    /// Simuliert eine Benachrichtigung von HealthKit über neue Daten.
+    public func simulateActivityChange() {
         let continuations = withLock { Array(changeContinuations.values) }
         continuations.forEach { $0.yield() }
     }
@@ -65,23 +83,30 @@ public final class HealthServiceStub: HealthAuthorizationProviding, StepCountPro
         }.get()
     }
 
-    // MARK: StepCountProviding
+    // MARK: ActivityDataProviding
 
-    public func stepCount(in interval: DateInterval) async throws -> Int? {
+    public func dailyTotals(
+        of metric: ActivityMetric,
+        for days: ClosedRange<LocalDate>,
+        calendar: ActivityCalendar
+    ) async throws -> [LocalDate: Double] {
         try withLock {
-            calls.stepCountIntervals.append(interval)
-            return configuration.stepCount
-        }.get()
+            calls.dailyTotalsRequests.append((metric, days))
+            if let error = configuration.dailyTotalsError {
+                throw error
+            }
+            return (configuration.dailyTotals[metric] ?? [:]).filter { days.contains($0.key) }
+        }
     }
 
-    public func hasAnyStepSamples() async throws -> Bool {
-        try withLock {
-            calls.hasAnyStepSamplesQueries += 1
-            return configuration.hasAnyStepSamples
-        }.get()
+    public func hasAnySamples(of metric: ActivityMetric) async throws -> Bool {
+        withLock {
+            calls.hasAnySamplesQueries.append(metric)
+            return configuration.metricsWithAnySamples.contains(metric)
+        }
     }
 
-    public func stepCountChanges() -> AsyncStream<Void> {
+    public func activityChanges() -> AsyncStream<Void> {
         let (stream, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         let id = UUID()
         continuation.onTermination = { [weak self] _ in

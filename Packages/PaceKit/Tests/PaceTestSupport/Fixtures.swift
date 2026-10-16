@@ -1,12 +1,14 @@
 import Foundation
+import PaceCore
 
 public enum Fixtures {
-    /// Gregorianischer Kalender in Berlin, damit Tagesgrenzen und Sommerzeit deterministisch sind.
-    public static let calendar: Calendar = {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "Europe/Berlin")!
-        return calendar
-    }()
+    /// Berlin, damit Tagesgrenzen und Sommerzeit deterministisch sind.
+    public static let timeZone = TimeZone(identifier: "Europe/Berlin")!
+
+    public static let activityCalendar = ActivityCalendar(timeZone: timeZone)
+
+    /// Gregorianischer Kalender in Berlin.
+    public static var calendar: Calendar { activityCalendar.calendar }
 
     public static func date(
         _ year: Int, _ month: Int, _ day: Int,
@@ -15,9 +17,18 @@ public enum Fixtures {
         let components = DateComponents(year: year, month: month, day: day, hour: hour, minute: minute)
         return calendar.date(from: components)!
     }
+
+    public static func day(_ year: Int, _ month: Int, _ day: Int) -> LocalDate {
+        LocalDate(year: year, month: month, day: day)
+    }
 }
 
 public struct WaitTimeoutError: Error {}
+
+/// Ein Test hat einen anderen Zustand erhalten als erwartet (Details stehen im aufgezeichneten Issue).
+public struct UnexpectedStateError: Error {
+    public init() {}
+}
 
 /// Wartet, bis `condition` erfüllt ist, und gibt dabei den Main Actor frei.
 @MainActor

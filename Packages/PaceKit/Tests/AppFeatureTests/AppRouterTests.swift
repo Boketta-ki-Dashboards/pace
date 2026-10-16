@@ -6,7 +6,7 @@ import Testing
 @MainActor
 struct AppRouterTests {
     private func makeRouter(_ service: HealthServiceStub) -> AppRouter {
-        AppRouter(dependencies: AppDependencies(healthAuthorization: service, stepCounts: service))
+        AppRouter(dependencies: AppDependencies(healthAuthorization: service, activityData: service))
     }
 
     @Test func startsInLaunchingState() {

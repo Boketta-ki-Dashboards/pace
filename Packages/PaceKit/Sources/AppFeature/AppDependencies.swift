@@ -5,13 +5,13 @@ import PaceCore
 /// Die konkreten Implementierungen werden im Composition Root der App erzeugt.
 public struct AppDependencies: Sendable {
     public let healthAuthorization: any HealthAuthorizationProviding
-    public let stepCounts: any StepCountProviding
+    public let activityData: any ActivityDataProviding
 
     public init(
         healthAuthorization: any HealthAuthorizationProviding,
-        stepCounts: any StepCountProviding
+        activityData: any ActivityDataProviding
     ) {
         self.healthAuthorization = healthAuthorization
-        self.stepCounts = stepCounts
+        self.activityData = activityData
     }
 }

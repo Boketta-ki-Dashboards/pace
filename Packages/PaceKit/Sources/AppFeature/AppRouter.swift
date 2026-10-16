@@ -46,6 +46,6 @@ public final class AppRouter {
     }
 
     private func showHome() {
-        route = .home(HomeViewModel(stepCounts: dependencies.stepCounts))
+        route = .home(HomeViewModel(activityData: dependencies.activityData))
     }
 }

@@ -4,19 +4,21 @@ import PaceCore
 
 /// Einziger Zugangspunkt der App zu HealthKit.
 ///
-/// Liest ausschließlich den Typ `stepCount` und schreibt nichts in Health.
-/// `@unchecked Sendable`: Der einzige Zustand sind unveränderliche Referenzen; `HKHealthStore` ist laut Apple
-/// threadsicher und soll app-weit als einzelne Instanz verwendet werden.
+/// Liest ausschließlich Bewegungsdaten (Schritte, Distanz, aktive Energie, Stockwerke, Trainingsminuten) und schreibt
+/// nichts in Health. Siehe docs/HEALTH_DATA.md.
+///
+/// `@unchecked Sendable`: Der einzige Zustand ist die unveränderliche Referenz auf `HKHealthStore`, der laut Apple
+/// threadsicher ist und app-weit als einzelne Instanz verwendet werden soll.
 public final class HealthKitService: @unchecked Sendable {
     private let healthStore: HKHealthStore
-    private let stepCountType = HKQuantityType(.stepCount)
 
     public init() {
         healthStore = HKHealthStore()
     }
 
-    private var readTypes: Set<HKObjectType> {
-        [stepCountType]
+    /// Alle Typen, für die Pace Lesezugriff anfragt.
+    static var readTypes: Set<HKObjectType> {
+        Set(HealthMetricMapping.quantityTypes)
     }
 }
 
@@ -33,7 +35,7 @@ extension HealthKitService: HealthAuthorizationProviding {
         let status: HKAuthorizationRequestStatus
         do {
             status = try await withCheckedThrowingContinuation { continuation in
-                healthStore.getRequestStatusForAuthorization(toShare: [], read: readTypes) { status, error in
+                healthStore.getRequestStatusForAuthorization(toShare: [], read: Self.readTypes) { status, error in
                     if let error {
                         continuation.resume(throwing: error)
                     } else {
@@ -42,9 +44,10 @@ extension HealthKitService: HealthAuthorizationProviding {
                 }
             }
         } catch {
-            throw Self.mapError(error, fallback: HealthDataError.queryFailed)
+            throw HealthKitErrorMapping.map(error, fallback: HealthDataError.queryFailed)
         }
 
+        // Kommen neue Lesetypen hinzu, meldet HealthKit wieder `.shouldRequest` – die Abfrage erscheint dann erneut.
         switch status {
         case .shouldRequest:
             return .shouldRequest
@@ -61,43 +64,63 @@ extension HealthKitService: HealthAuthorizationProviding {
         guard isHealthDataAvailable else { throw HealthDataError.healthDataUnavailable }
 
         do {
-            try await healthStore.requestAuthorization(toShare: [], read: readTypes)
+            try await healthStore.requestAuthorization(toShare: [], read: Self.readTypes)
         } catch {
-            throw Self.mapError(error, fallback: HealthDataError.authorizationRequestFailed)
+            throw HealthKitErrorMapping.map(error, fallback: HealthDataError.authorizationRequestFailed)
         }
     }
 }
 
-// MARK: - Schritte
+// MARK: - Bewegungsdaten
 
-extension HealthKitService: StepCountProviding {
-    public func stepCount(in interval: DateInterval) async throws -> Int? {
-        let predicate = HKQuery.predicateForSamples(
-            withStart: interval.start,
-            end: interval.end,
-            options: .strictStartDate
-        )
-        // `.cumulativeSum` dedupliziert überlappende Quellen (iPhone + Apple Watch) wie die Health-App.
-        let descriptor = HKStatisticsQueryDescriptor(
-            predicate: .quantitySample(type: stepCountType, predicate: predicate),
-            options: .cumulativeSum
-        )
-
-        do {
-            guard let sum = try await descriptor.result(for: healthStore)?.sumQuantity() else {
-                return nil
-            }
-            return Int(sum.doubleValue(for: .count()).rounded())
-        } catch let error as HKError where error.code == .errorNoData {
-            return nil
-        } catch {
-            throw Self.mapError(error, fallback: HealthDataError.queryFailed)
+extension HealthKitService: ActivityDataProviding {
+    public func dailyTotals(
+        of metric: ActivityMetric,
+        for days: ClosedRange<LocalDate>,
+        calendar: ActivityCalendar
+    ) async throws -> [LocalDate: Double] {
+        let interval = calendar.interval(from: days.lowerBound, through: days.upperBound)
+        var predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: [])
+        if let filter = HealthMetricMapping.additionalPredicate(for: metric) {
+            predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate, filter])
         }
+
+        // Statistik-Abfragen mit `.cumulativeSum` führen überlappende Quellen (iPhone + Apple Watch) nach der
+        // Prioritätenliste der Health-App zusammen – auch, wenn ein zusätzliches Predicate Samples ausschließt.
+        let descriptor = HKStatisticsCollectionQueryDescriptor(
+            predicate: .quantitySample(type: HealthMetricMapping.quantityType(for: metric), predicate: predicate),
+            options: .cumulativeSum,
+            anchorDate: interval.start,
+            intervalComponents: DateComponents(day: 1)
+        )
+
+        let collection: HKStatisticsCollection
+        do {
+            collection = try await descriptor.result(for: healthStore)
+        } catch let error as HKError where error.code == .errorNoData {
+            return [:]
+        } catch {
+            throw HealthKitErrorMapping.map(error, fallback: HealthDataError.queryFailed)
+        }
+
+        let unit = HealthMetricMapping.unit(for: metric)
+        var totals: [LocalDate: Double] = [:]
+        // `statistics()` enthält nur Intervalle mit Samples.
+        for statistics in collection.statistics() {
+            guard let sum = statistics.sumQuantity() else { continue }
+            let day = calendar.day(containing: statistics.startDate)
+            guard days.contains(day) else { continue }
+            totals[day, default: 0] += sum.doubleValue(for: unit)
+        }
+        return totals
     }
 
-    public func hasAnyStepSamples() async throws -> Bool {
+    public func hasAnySamples(of metric: ActivityMetric) async throws -> Bool {
         let descriptor = HKSampleQueryDescriptor(
-            predicates: [.quantitySample(type: stepCountType)],
+            predicates: [.quantitySample(
+                type: HealthMetricMapping.quantityType(for: metric),
+                predicate: HealthMetricMapping.additionalPredicate(for: metric)
+            )],
             sortDescriptors: [],
             limit: 1
         )
@@ -108,14 +131,15 @@ extension HealthKitService: StepCountProviding {
         } catch let error as HKError where error.code == .errorNoData {
             return false
         } catch {
-            throw Self.mapError(error, fallback: HealthDataError.queryFailed)
+            throw HealthKitErrorMapping.map(error, fallback: HealthDataError.queryFailed)
         }
     }
 
-    public func stepCountChanges() -> AsyncStream<Void> {
+    public func activityChanges() -> AsyncStream<Void> {
         let (stream, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
 
-        let query = HKObserverQuery(sampleType: stepCountType, predicate: nil) { _, completionHandler, error in
+        let descriptors = HealthMetricMapping.quantityTypes.map { HKQueryDescriptor(sampleType: $0, predicate: nil) }
+        let query = HKObserverQuery(queryDescriptors: descriptors) { _, _, completionHandler, error in
             if error == nil {
                 continuation.yield()
             }
@@ -128,27 +152,6 @@ extension HealthKitService: StepCountProviding {
         healthStore.execute(query)
 
         return stream
-    }
-}
-
-// MARK: - Fehler
-
-private extension HealthKitService {
-    static func mapError(_ error: Error, fallback: (String) -> HealthDataError) -> HealthDataError {
-        if let error = error as? HealthDataError {
-            return error
-        }
-        if let error = error as? HKError {
-            switch error.code {
-            case .errorHealthDataUnavailable, .errorHealthDataRestricted:
-                return .healthDataUnavailable
-            case .errorDatabaseInaccessible:
-                return .protectedDataUnavailable
-            default:
-                break
-            }
-        }
-        return fallback(error.localizedDescription)
     }
 }
 

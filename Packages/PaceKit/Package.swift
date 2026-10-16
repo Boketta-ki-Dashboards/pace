@@ -25,7 +25,8 @@ let package = Package(
 
         // Features: jeweils ViewModel (ohne SwiftUI) + Views.
         .target(name: "HealthPermissionFeature", dependencies: ["PaceCore", "DesignSystem"]),
-        .target(name: "HomeFeature", dependencies: ["PaceCore", "DesignSystem"]),
+        .target(name: "ActivityFeature", dependencies: ["PaceCore", "DesignSystem"]),
+        .target(name: "HomeFeature", dependencies: ["PaceCore", "DesignSystem", "ActivityFeature"]),
 
         // App-Routing und Zusammenbau der Features.
         .target(
@@ -41,6 +42,7 @@ let package = Package(
             name: "HealthPermissionFeatureTests",
             dependencies: ["HealthPermissionFeature", "PaceTestSupport"]
         ),
+        .testTarget(name: "ActivityFeatureTests", dependencies: ["ActivityFeature", "PaceTestSupport"]),
         .testTarget(name: "HomeFeatureTests", dependencies: ["HomeFeature", "PaceTestSupport"]),
         .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "PaceTestSupport"]),
     ]

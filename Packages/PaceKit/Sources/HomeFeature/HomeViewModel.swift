@@ -2,13 +2,13 @@ import Foundation
 import Observation
 import PaceCore
 
-/// Lädt und aktualisiert die heutige Schrittzahl für den Home-Screen.
+/// Lädt und aktualisiert die Bewegungsdaten für den Home-Screen.
 @MainActor
 @Observable
 public final class HomeViewModel {
     public enum State: Equatable {
         case loading
-        case loaded(DailyStepCount)
+        case loaded(ActivityOverview)
         /// Es sind keine Schrittdaten lesbar – meist, weil der Lesezugriff verweigert wurde.
         case noReadAccess
         case failed(message: String)
@@ -16,18 +16,24 @@ public final class HomeViewModel {
 
     public private(set) var state: State = .loading
 
-    @ObservationIgnored private let loader: TodayStepsLoader
-    @ObservationIgnored private let stepCounts: any StepCountProviding
+    /// Die zuletzt geladenen Werte, auch während eines erneuten Ladevorgangs.
+    public var overview: ActivityOverview? {
+        guard case .loaded(let overview) = state else { return nil }
+        return overview
+    }
+
+    @ObservationIgnored private let loader: ActivitySummaryLoader
+    @ObservationIgnored private let activityData: any ActivityDataProviding
     @ObservationIgnored private var isLoading = false
     @ObservationIgnored private var needsReload = false
 
     public init(
-        stepCounts: any StepCountProviding,
-        calendar: Calendar = .current,
+        activityData: any ActivityDataProviding,
+        calendar: ActivityCalendar = ActivityCalendar(),
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
-        self.stepCounts = stepCounts
-        loader = TodayStepsLoader(provider: stepCounts, calendar: calendar, now: now)
+        self.activityData = activityData
+        loader = ActivitySummaryLoader(provider: activityData, calendar: calendar, now: now)
     }
 
     /// Erstes Laden beim Erscheinen des Screens. Bereits geladene Daten bleiben sichtbar.
@@ -42,7 +48,7 @@ public final class HomeViewModel {
         await refresh()
     }
 
-    /// Aktualisiert die Schrittzahl, ohne die aktuelle Anzeige vorher zu verwerfen.
+    /// Aktualisiert die Werte, ohne die aktuelle Anzeige vorher zu verwerfen.
     ///
     /// Trifft eine Anfrage ein, während noch geladen wird, wird danach genau einmal erneut geladen,
     /// damit keine Änderung verloren geht.
@@ -60,9 +66,9 @@ public final class HomeViewModel {
         } while needsReload && !Task.isCancelled
     }
 
-    /// Lädt neu, sobald HealthKit neue Schrittdaten meldet. Läuft, bis der aufrufende Task beendet wird.
-    public func observeStepChanges() async {
-        for await _ in stepCounts.stepCountChanges() {
+    /// Lädt neu, sobald HealthKit neue Bewegungsdaten meldet. Läuft, bis der aufrufende Task beendet wird.
+    public func observeActivityChanges() async {
+        for await _ in activityData.activityChanges() {
             await refresh()
         }
     }
@@ -70,8 +76,8 @@ public final class HomeViewModel {
     private func performLoad() async {
         do {
             switch try await loader.load() {
-            case .available(let count):
-                state = .loaded(count)
+            case .available(let overview):
+                state = .loaded(overview)
             case .noReadAccess:
                 state = .noReadAccess
             }
