@@ -54,7 +54,9 @@ struct StepsTodayCardView<Details: View>: View {
                         systemImage: "hand.raised.fill",
                         title: "Keine Schrittdaten lesbar",
                         text: "Öffne die Health-App, tippe auf dein Profilbild und aktiviere unter „Datenschutz“ → "
-                            + "„Apps“ → „Pace“ den Zugriff auf „Schritte“."
+                            + "„Apps“ → „Pace“ den Zugriff auf „Schritte“. Hast du den Zugriff bereits erlaubt? Dann "
+                            + "prüfe unter Einstellungen → Datenschutz & Sicherheit → Bewegung & Fitness, ob "
+                            + "„Fitness-Tracking“ aktiviert ist."
                     )
 
                 case .failed(let text):

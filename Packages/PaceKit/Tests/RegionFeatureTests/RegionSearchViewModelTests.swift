@@ -79,13 +79,16 @@ struct RegionSearchViewModelTests {
         #expect(viewModel.state == .results([Fixtures.frankfurtHierarchy]))
     }
 
-    @Test func overtakenSearchDoesNotOverwriteNewerResult() async {
+    @Test func overtakenSearchDoesNotOverwriteNewerResult() async throws {
         let regions = RegionRepositoryStub()
-        let viewModel = makeViewModel(regions, debounce: .milliseconds(30))
+        let viewModel = makeViewModel(regions, debounce: .milliseconds(300))
 
-        async let older: Void = viewModel.search("Griesheim")
-        async let newer: Void = viewModel.search("Pfungstadt")
-        _ = await (older, newer)
+        // Die ältere Suche startet sicher zuerst und wartet noch, wenn die neuere beginnt.
+        let older = Task { await viewModel.search("Griesheim") }
+        try await Task.sleep(for: .milliseconds(50))
+        let newer = Task { await viewModel.search("Pfungstadt") }
+        await older.value
+        await newer.value
 
         #expect(viewModel.state == .results([Fixtures.pfungstadtHierarchy]))
     }

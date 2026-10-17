@@ -106,6 +106,34 @@ struct HomeViewModelTests {
         #expect(syncing.triggers == [.pullToRefresh])
     }
 
+    @Test func unchangedValuesDoNotReplaceTheDisplayedState() async {
+        let clock = Locked(Fixtures.date(2026, 10, 16, 9))
+        let service = HealthServiceStub { $0.setSteps(5_000, on: today) }
+        let viewModel = HomeViewModel(activityData: service, calendar: Fixtures.activityCalendar, now: { clock.current })
+        await viewModel.loadIfNeeded()
+        let first = viewModel.overview?.updatedAt
+
+        clock.withLock { $0 = $0.addingTimeInterval(15) }
+        await viewModel.refresh(trigger: .healthKitUpdate)
+        #expect(viewModel.overview?.updatedAt == first)
+
+        service.update { $0.setSteps(5_100, on: today) }
+        await viewModel.refresh(trigger: .healthKitUpdate)
+        #expect(todaysCompetitionSteps(viewModel) == 5_100)
+    }
+
+    @Test func cancelledCallerDoesNotFailOrDropTheLoad() async {
+        let service = HealthServiceStub { $0.setSteps(5_000, on: today) }
+        let viewModel = makeViewModel(service)
+
+        let caller = Task { await viewModel.refresh(trigger: .healthKitUpdate) }
+        caller.cancel()
+        await caller.value
+        await viewModel.waitForPendingSync()
+
+        #expect(todaysCompetitionSteps(viewModel) == 5_000)
+    }
+
     @Test func showsMissingReadAccess() async {
         let viewModel = makeViewModel(HealthServiceStub())
 

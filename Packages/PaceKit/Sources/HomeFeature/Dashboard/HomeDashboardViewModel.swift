@@ -77,19 +77,37 @@ public final class HomeDashboardViewModel {
         standings.reloadKey
     }
 
+    /// Platzierungen werden nur geladen, wenn ein Bereich sie anzeigt.
+    public var showsStandings: Bool {
+        visibleSections.contains(.regionRanks) || visibleSections.contains(.neighborhood)
+    }
+
     /// Erstes Laden beim Erscheinen.
     public func loadIfNeeded() async {
+        guard showsStandings else { return }
         await standings.loadIfNeeded()
     }
 
     /// Pull-to-Refresh: Schritte neu aus Apple Health lesen, an den Sync übergeben, Platzierungen neu laden.
     public func refresh() async {
         await activity.refreshForRanking()
+        guard showsStandings else { return }
         await standings.load()
+    }
+
+    /// Zurück in der App: zuerst die Schritte lesen und übergeben, dann – falls älter als eine Minute – die
+    /// Platzierungen, damit sie die neuen Schritte schon enthalten.
+    public func returnedToForeground() async {
+        await activity.refresh(trigger: .foreground)
+        await activity.waitForPendingSync()
+        guard showsStandings else { return }
+        await standings.refreshIfStale()
     }
 
     /// Neue Schritte sind da: Platzierungen höchstens einmal pro Minute nachladen.
     public func stepsDidChange() async {
+        guard showsStandings else { return }
+        await activity.waitForPendingSync()
         await standings.refreshIfStale()
     }
 

@@ -94,7 +94,8 @@ Das betrifft nur die Statistik der letzten 7 Tage.
 
 - Beim Start, bei Rückkehr in die App, per Pull-to-Refresh und bei Tages-/Zeitzonenwechsel.
 - Sofort, wenn HealthKit neue Samples meldet (`HKObserverQuery`).
-- Zusätzlich alle 15 Sekunden, solange die App im Vordergrund ist – nur lokal aus Apple Health, ohne Netzwerk.
+- Zusätzlich alle 15 Sekunden, solange die App im Vordergrund ist. Gelesen wird lokal aus Apple Health; nur wenn
+  sich die Wettbewerbsschritte geändert haben, gehen sie gedrosselt (höchstens einmal pro Minute) an das Backend.
 - Schneller als Apple Health selbst geht es nicht: iOS schreibt die Schritte des iPhones gebündelt nach Health.
   Pace bietet bewusst keine Möglichkeit, Schritte manuell einzutragen.
 

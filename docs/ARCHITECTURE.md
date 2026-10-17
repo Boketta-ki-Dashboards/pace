@@ -52,7 +52,7 @@ App-Start
 - Ein vollständiges Profil wird lokal zwischengespeichert (`UserDefaultsProfileCache`). Ist es vorhanden, startet
   die App auch offline direkt in die Main App und gleicht das Profil im Hintergrund ab.
 - `AppRoute` besitzt das ViewModel des aktuellen Screens. Die Main App teilt einen `ProfileStore` (Profil + Region)
-  zwischen Rankings und Profil.
+  zwischen Home, Rankings und Profil.
 - Weitere Tabs kommen als zusätzlicher Fall in `MainViewModel.Tab` mit eigenem Feature-Modul hinzu. Home wechselt
   über Callbacks in andere Tabs (z. B. eine Ranking-Karte → Rankings mit dieser Ebene), ohne die Main App zu kennen.
 
@@ -73,8 +73,10 @@ App-Start
 ## Aktualisierung der Schritte
 
 - HealthKit-Observer (`HKObserverQuery`) für alle gelesenen Typen: neue Samples lösen sofort ein Neuladen aus.
-- Zusätzlich, solange die App im Vordergrund ist, alle 15 Sekunden eine lokale Abfrage aus Apple Health (kein
-  Netzwerk), falls Meldungen verzögert oder gebündelt ankommen.
+- Zusätzlich, solange die App im Vordergrund ist, alle 15 Sekunden eine Abfrage aus Apple Health, falls Meldungen
+  verzögert oder gebündelt ankommen. Das Lesen ist lokal; geänderte Schritte gehen wie sonst gedrosselt (höchstens
+  einmal pro Minute) an das Backend, und die Platzierungen auf Home werden höchstens einmal pro Minute nachgeladen.
+  Unveränderte Werte lösen weder ein Neuzeichnen noch einen Upload aus.
 - Sofortiges Neuladen bei Rückkehr in die App sowie bei Tages-, Zeitzonen- und Sommerzeitwechsel.
 - Grenze: iOS schreibt die Schritte des iPhones gebündelt nach Apple Health. Schneller als Health selbst kann Pace die
   Werte daher nicht anzeigen. Echtes Live-Zählen ginge nur über CoreMotion (eigene Berechtigung) und ist bewusst nicht
@@ -91,6 +93,8 @@ HealthKit ──▶ HealthKitService (Tagessummen, dedupliziert)
                               └──▶ SupabaseActivitySyncRepository ──▶ daily_activity (Upsert)
 LeaderboardViewModel ──flush──▶ ActivitySyncCoordinator
                      ──▶ LeaderboardLoader (Top 50 + eigene Position ± 1) ──▶ RPCs leaderboard_page/neighborhood
+RegionalStandingsViewModel (Home) ──flush──▶ ActivitySyncCoordinator
+                     ──▶ je Ebene RPC leaderboard_neighborhood (eigener Platz ± 2 in der Gemeinde, sonst ± 0)
 ```
 
 Details zu Gesundheitsdaten: [HEALTH_DATA.md](HEALTH_DATA.md). Backend, Schema, RLS und Regionen:
@@ -180,4 +184,7 @@ Neue Swift-Dateien im Ordner `Pace/` erkennt Xcode automatisch. Neue Dateien in
   und bricht bei Compiler-Warnungen in App-, Paket- oder Test-Code ab. CI benötigt keine Zugangsdaten.
 - `backend.yml` startet einen lokalen Supabase-Stack (keine Produktionsdaten, keine Zugangsdaten) und führt
   pgTAP-Tests und Swift-Integrationstests aus.
+- `PaceSnapshotTests` rendert Home, Rankings, Social und Profil mit Beispieldaten in Hell und Dunkel als PNG – nur,
+  wenn `PACE_SNAPSHOT_DIR` gesetzt ist. `ios.yml` lädt die Bilder als Artefakt „snapshots“ hoch (visuelle Kontrolle,
+  kein Pixelvergleich).
 - HealthKit selbst lässt sich nur auf echten Geräten bzw. im Simulator mit eingetragenen Daten sinnvoll prüfen.

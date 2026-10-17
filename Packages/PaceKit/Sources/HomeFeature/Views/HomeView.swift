@@ -38,16 +38,16 @@ public struct HomeView: View {
             .paceScreenBackground()
             .toolbar(.hidden, for: .navigationBar)
         }
-        .task(id: viewModel.standingsReloadKey) { [viewModel] in
+        .task(id: StandingsTrigger(key: viewModel.standingsReloadKey, isShown: viewModel.showsStandings)) { [viewModel] in
             await viewModel.loadIfNeeded()
         }
         .onChange(of: viewModel.stepsToday?.steps) {
             Task { await viewModel.stepsDidChange() }
         }
         .onChange(of: scenePhase) { _, newPhase in
-            // Zurück in der App: Platzierungen auffrischen, falls sie älter als eine Minute sind.
+            // Zurück in der App: Schritte lesen, dann Platzierungen auffrischen, falls älter als eine Minute.
             guard newPhase == .active else { return }
-            Task { await viewModel.stepsDidChange() }
+            Task { await viewModel.returnedToForeground() }
         }
         .sheet(item: $viewModel.presentedSheet) { sheet in
             switch sheet {
@@ -91,4 +91,10 @@ public struct HomeView: View {
             GroupsPreviewCardView { viewModel.openSocial() }
         }
     }
+}
+
+/// Lädt Platzierungen neu, wenn sich Gemeinde oder Teilnahme ändern oder ein Bereich sie wieder anzeigt.
+private struct StandingsTrigger: Hashable {
+    let key: RegionalStandingsViewModel.ReloadKey
+    let isShown: Bool
 }

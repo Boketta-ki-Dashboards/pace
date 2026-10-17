@@ -218,6 +218,8 @@ struct RegionalStandingsViewModelTests {
         #expect(standings.scopes.allSatisfy { $0.rank == nil })
         #expect(standings.scopes.first?.rankText == "–")
         #expect(standings.neighborhood == nil)
+        // Ohne Zustimmung erscheint der Nutzer nirgends – dafür werden keine Rankings berechnet.
+        #expect(leaderboards.state.current.neighborhoodRequests.isEmpty)
     }
 
     @Test func enablingParticipationReloads() async {
@@ -229,7 +231,34 @@ struct RegionalStandingsViewModelTests {
 
         #expect(viewModel.isParticipating)
         #expect(profiles.state.current.optInUpdates == [true])
-        #expect(leaderboards.state.current.neighborhoodRequests.count == 8)
+        #expect(leaderboards.state.current.neighborhoodRequests.count == 4)
+    }
+
+    @Test func failedLoadIsNotRetriedOnEveryStepChange() async {
+        let leaderboards = LeaderboardRepositoryStub { $0.error = .network }
+        let (viewModel, _) = makeViewModel(leaderboards: leaderboards)
+        await viewModel.loadIfNeeded()
+        let requests = leaderboards.state.current.neighborhoodRequests.count
+
+        await viewModel.refreshIfStale()
+        await viewModel.refreshIfStale()
+
+        #expect(leaderboards.state.current.neighborhoodRequests.count == requests)
+    }
+
+    @Test func concurrentRequestsShareOneLoad() async {
+        let leaderboards = LeaderboardRepositoryStub()
+        let (viewModel, _) = makeViewModel(leaderboards: leaderboards)
+
+        async let first: Void = viewModel.load()
+        async let second: Void = viewModel.loadIfNeeded()
+        async let third: Void = viewModel.refreshIfStale()
+        _ = await (first, second, third)
+
+        // Höchstens ein Ladevorgang plus ein zusammengefasstes erneutes Laden.
+        let count = leaderboards.state.current.neighborhoodRequests.count
+        #expect(count == 4 || count == 8)
+        #expect(viewModel.standings != nil)
     }
 
     @Test func freshDataIsNotReloadedWithinAMinute() async {
@@ -301,6 +330,50 @@ struct HomeDashboardViewModelTests {
 
         dashboard.present(.customize)
         #expect(dashboard.presentedSheet == .customize)
+    }
+
+    @Test func hiddenRankSectionsLoadNoRankings() async {
+        let profile = Fixtures.profile(regionalLeaderboardEnabled: true)
+        let profiles = ProfileRepositoryStub { $0.profiles[profile.id] = profile }
+        let store = ProfileStore(profile: profile, profiles: profiles, regions: RegionRepositoryStub(), cache: InMemoryProfileCache())
+        let leaderboards = LeaderboardRepositoryStub()
+        let settings = HomeSettings(store: InMemoryHomePreferencesStore())
+        settings.setVisible(false, for: .regionRanks)
+        settings.setVisible(false, for: .neighborhood)
+        let dashboard = HomeDashboardViewModel(
+            activity: HomeViewModel(activityData: HealthServiceStub(), calendar: Fixtures.activityCalendar),
+            standings: RegionalStandingsViewModel(store: store, leaderboards: leaderboards, syncing: nil),
+            settings: settings,
+            store: store
+        )
+
+        await dashboard.loadIfNeeded()
+        await dashboard.stepsDidChange()
+        await dashboard.returnedToForeground()
+
+        #expect(!dashboard.showsStandings)
+        #expect(leaderboards.state.current.neighborhoodRequests.isEmpty)
+    }
+
+    @Test func foregroundReadsStepsBeforeRankings() async {
+        let profile = Fixtures.profile(regionalLeaderboardEnabled: true)
+        let profiles = ProfileRepositoryStub { $0.profiles[profile.id] = profile }
+        let store = ProfileStore(profile: profile, profiles: profiles, regions: RegionRepositoryStub(), cache: InMemoryProfileCache())
+        let syncing = ActivitySyncingSpy()
+        let health = HealthServiceStub { $0.setSteps(5_000, on: Fixtures.day(2026, 10, 16)) }
+        let dashboard = HomeDashboardViewModel(
+            activity: HomeViewModel(activityData: health, syncing: syncing, calendar: Fixtures.activityCalendar, now: { Fixtures.date(2026, 10, 16, 9) }),
+            standings: RegionalStandingsViewModel(store: store, leaderboards: LeaderboardRepositoryStub(), syncing: syncing),
+            settings: HomeSettings(store: InMemoryHomePreferencesStore()),
+            store: store
+        )
+
+        await dashboard.returnedToForeground()
+
+        // Die neuen Schritte sind übergeben, bevor die Platzierungen (mit flush) geladen werden.
+        #expect(syncing.triggers == [.foreground])
+        #expect(syncing.state.current.flushes == 1)
+        #expect(dashboard.standings.standings != nil)
     }
 }
 

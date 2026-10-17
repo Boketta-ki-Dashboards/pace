@@ -25,8 +25,11 @@ public final class RegionalStandingsViewModel {
     @ObservationIgnored private let syncing: (any ActivitySyncing)?
     @ObservationIgnored private let calendar: ActivityCalendar
     @ObservationIgnored private let now: @Sendable () -> Date
-    @ObservationIgnored private var generation = 0
-    @ObservationIgnored private var lastLoadedAt: ContinuousClock.Instant?
+    /// Der laufende Ladevorgang; weitere Anfragen warten darauf und lösen höchstens ein erneutes Laden aus.
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var needsReload = false
+    /// Beginn des letzten Ladeversuchs – auch fehlgeschlagene Versuche warten so bis zum nächsten.
+    @ObservationIgnored private var lastAttemptAt: ContinuousClock.Instant?
     @ObservationIgnored private var loadedKey: ReloadKey?
 
     public struct ReloadKey: Hashable, Sendable {
@@ -69,37 +72,71 @@ public final class RegionalStandingsViewModel {
     /// Lädt, wenn noch nichts geladen ist oder sich Gemeinde bzw. Teilnahme geändert haben.
     public func loadIfNeeded() async {
         if case .loaded = state, loadedKey == reloadKey { return }
+        if loadTask != nil, loadedKey == reloadKey { return }
         await load()
     }
 
-    /// Lädt neu, wenn die letzten Daten älter als `maximumAge` sind – z. B. nachdem neue Schritte da sind.
+    /// Lädt neu, wenn der letzte Versuch länger als `maximumAge` zurückliegt – z. B. nachdem neue Schritte da sind.
+    /// Gilt auch nach Fehlern, damit offline nicht bei jeder Schrittänderung erneut angefragt wird.
     public func refreshIfStale(maximumAge: Duration = .seconds(60)) async {
-        if let lastLoadedAt, ContinuousClock.now - lastLoadedAt < maximumAge, loadedKey == reloadKey { return }
+        if let lastAttemptAt, ContinuousClock.now - lastAttemptAt < maximumAge, loadedKey == reloadKey { return }
         await load()
     }
 
+    /// Lädt die Platzierungen. Läuft bereits ein Ladevorgang, wird danach genau einmal neu geladen.
     public func load() async {
-        generation += 1
-        let current = generation
+        if let loadTask {
+            needsReload = true
+            await loadTask.value
+            return
+        }
+        let task = Task { await self.runLoads() }
+        loadTask = task
+        await task.value
+    }
+
+    private func runLoads() async {
+        repeat {
+            needsReload = false
+            await performLoad()
+        } while needsReload
+        loadTask = nil
+    }
+
+    private func performLoad() async {
         let key = reloadKey
-        if case .loaded = state, loadedKey == key {} else {
+        lastAttemptAt = .now
+        loadedKey = key
+        if !showsResults(for: key) {
             state = .loading
         }
 
         do {
             try await store.loadHierarchyIfNeeded()
         } catch {
-            guard current == generation, !Task.isCancelled else { return }
             state = .failed(message: Self.message(for: error))
             return
         }
-        guard current == generation, !Task.isCancelled, let hierarchy = store.hierarchy else { return }
+        guard let hierarchy = store.hierarchy, key == reloadKey else {
+            needsReload = true
+            return
+        }
+        let scopes = hierarchy.leaderboardScopes
+
+        // Ohne Zustimmung erscheint der Nutzer in keinem Ranking – dafür keine Abfragen.
+        guard key.isParticipating else {
+            state = .loaded(RegionalStandings(scopes: scopes, neighborhoods: [:], isParticipating: false))
+            return
+        }
 
         // Eigene Schritte zuerst hochladen, damit die Platzierung stimmt.
         await syncing?.flush()
+        guard key == reloadKey else {
+            needsReload = true
+            return
+        }
 
         let date = calendar.day(containing: now())
-        let scopes = hierarchy.leaderboardScopes
         let repository = leaderboards
         do {
             let neighborhoods = try await withThrowingTaskGroup(of: (RegionID, [LeaderboardEntry]).self) { group in
@@ -115,15 +152,23 @@ public final class RegionalStandingsViewModel {
                 }
                 return result
             }
-            guard current == generation, !Task.isCancelled else { return }
-            state = .loaded(RegionalStandings(scopes: scopes, neighborhoods: neighborhoods, isParticipating: key.isParticipating))
-            loadedKey = key
-            lastLoadedAt = .now
+            guard key == reloadKey else {
+                needsReload = true
+                return
+            }
+            state = .loaded(RegionalStandings(scopes: scopes, neighborhoods: neighborhoods, isParticipating: true))
         } catch {
-            guard current == generation, !Task.isCancelled, !(error is CancellationError) else { return }
-            if case .loaded = state, loadedKey == key { return }
+            // Bei einem Fehler bleibt eine bereits angezeigte Platzierung derselben Gemeinde sichtbar.
+            if showsResults(for: key) { return }
             state = .failed(message: Self.message(for: error))
         }
+    }
+
+    /// Ob bereits Platzierungen für diese Gemeinde und Teilnahme angezeigt werden.
+    private func showsResults(for key: ReloadKey) -> Bool {
+        guard let standings else { return false }
+        return standings.isParticipating == key.isParticipating
+            && standings.scopes.first?.region.id == key.municipalityID
     }
 
     /// Ausdrückliche Zustimmung, in regionalen Rankings zu erscheinen.

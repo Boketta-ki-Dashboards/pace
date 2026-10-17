@@ -30,7 +30,7 @@ public final class SocialViewModel {
             subtitle: "Freunde hinzufügen und jeden Tag vergleichen",
             systemImage: "person.2",
             emptyTitle: "Noch keine Freunde",
-            emptyMessage: "Füge Freunde hinzu und tritt in eurem eigenen Ranking gegeneinander an.",
+            emptyMessage: "Füge Freunde hinzu und tretet in eurem eigenen Ranking gegeneinander an.",
             availability: .comingSoon
         ),
         Section(

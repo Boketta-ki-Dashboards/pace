@@ -50,7 +50,9 @@ public final class HomeViewModel {
     @ObservationIgnored private let loader: ActivitySummaryLoader
     @ObservationIgnored private let activityData: any ActivityDataProviding
     @ObservationIgnored private let syncing: (any ActivitySyncing)?
-    @ObservationIgnored private var isLoading = false
+    /// Der laufende Ladevorgang. Läuft unabhängig vom Aufrufer, damit ein abgebrochener Aufrufer (z. B. ein
+    /// beendeter `.task`) weder die HealthKit-Abfrage abbricht noch nachgemeldete Anfragen verliert.
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var needsReload = false
     @ObservationIgnored private var pendingTrigger: ActivitySyncTrigger?
     /// Letzte Übergabe an den Sync. Übergaben laufen nacheinander, damit `refreshForRanking()` auf sie warten kann.
@@ -85,26 +87,37 @@ public final class HomeViewModel {
         await refresh(trigger: .pullToRefresh)
     }
 
-    /// Aktualisiert die Werte, ohne die aktuelle Anzeige vorher zu verwerfen.
+    /// Aktualisiert die Werte, ohne die aktuelle Anzeige vorher zu verwerfen. Kehrt zurück, wenn geladen wurde.
     ///
     /// Trifft eine Anfrage ein, während noch geladen wird, wird danach genau einmal erneut geladen,
-    /// damit keine Änderung verloren geht.
+    /// damit keine Änderung verloren geht; der Aufrufer wartet bis dahin.
     public func refresh(trigger: ActivitySyncTrigger) async {
-        guard !isLoading else {
+        if let loadTask {
             needsReload = true
             pendingTrigger = Self.prioritized(pendingTrigger, trigger)
+            await loadTask.value
             return
         }
-        isLoading = true
-        defer { isLoading = false }
+        let task = Task { await self.runLoads(startingWith: trigger) }
+        loadTask = task
+        await task.value
+    }
 
+    private func runLoads(startingWith trigger: ActivitySyncTrigger) async {
         var currentTrigger = trigger
         repeat {
             needsReload = false
             await performLoad(trigger: currentTrigger)
             currentTrigger = pendingTrigger ?? .healthKitUpdate
             pendingTrigger = nil
-        } while needsReload && !Task.isCancelled
+        } while needsReload
+        loadTask = nil
+    }
+
+    /// Wartet, bis ein laufender Ladevorgang abgeschlossen und sein Ergebnis an den Sync übergeben ist.
+    public func waitForPendingSync() async {
+        await loadTask?.value
+        await lastSubmission?.value
     }
 
     /// Lädt neu, sobald HealthKit neue Bewegungsdaten meldet. Läuft, bis der aufrufende Task beendet wird.
@@ -118,6 +131,11 @@ public final class HomeViewModel {
         do {
             switch try await loader.load() {
             case .available(let overview):
+                // Unveränderte Werte (häufig bei der Abfrage im Vordergrund) lösen kein Neuzeichnen aus.
+                if case .loaded(let current) = state, Self.hasSameValues(current, overview) {
+                    submitForSync(current, trigger: trigger)
+                    return
+                }
                 state = .loaded(overview)
                 lastLoadedOverview = overview
                 submitForSync(overview, trigger: trigger)
@@ -145,6 +163,14 @@ public final class HomeViewModel {
     public func refreshForRanking() async {
         await refresh(trigger: .pullToRefresh)
         await lastSubmission?.value
+    }
+
+    /// Gleiche Werte, nur ein anderer Lesezeitpunkt.
+    private static func hasSameValues(_ lhs: ActivityOverview, _ rhs: ActivityOverview) -> Bool {
+        lhs.today == rhs.today
+            && lhs.yesterday == rhs.yesterday
+            && lhs.currentWeek == rhs.currentWeek
+            && lhs.lastSevenDays == rhs.lastSevenDays
     }
 
     /// Ein gedrosselter HealthKit-Anlass soll einen sofortigen Anlass (z. B. Pull-to-Refresh) nicht überschreiben.

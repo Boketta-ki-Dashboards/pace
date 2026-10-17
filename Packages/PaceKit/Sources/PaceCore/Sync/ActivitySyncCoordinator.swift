@@ -1,6 +1,7 @@
 import Foundation
 
-/// Synchronisiert die Wettbewerbsschritte der letzten 7 Tage – sparsam und ohne Polling.
+/// Synchronisiert die Wettbewerbsschritte der letzten 7 Tage – sparsam: Der Server wird nie abgefragt, gesendet wird
+/// nur, was sich geändert hat.
 ///
 /// - Es werden nur Tage gesendet, deren Wert sich seit dem letzten erfolgreichen Sync geändert hat.
 /// - HealthKit-Updates werden gedrosselt (`minimumInterval`); zurückgehaltene Werte gehen beim nächsten Anlass
