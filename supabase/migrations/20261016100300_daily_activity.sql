@@ -24,13 +24,17 @@ comment on table public.daily_activity is
 
 create index daily_activity_date_steps_idx on public.daily_activity (activity_date, competition_steps desc);
 
--- Zeitstempel kommen immer vom Server; Werte des Clients werden überschrieben.
+-- Zeitstempel kommen immer vom Server; Werte des Clients werden überschrieben. Nutzer und Tag einer Zeile sind
+-- unveränderlich (sonst ließen sich alte Tage in das Sync-Fenster verschieben).
 create function private.maintain_daily_activity_timestamps()
 returns trigger
 language plpgsql
 set search_path = ''
 as $$
 begin
+  if tg_op = 'UPDATE' and (new.user_id, new.activity_date) is distinct from (old.user_id, old.activity_date) then
+    raise exception 'immutable_key' using errcode = '42501';
+  end if;
   new.synced_at := now();
   if tg_op = 'INSERT' or new.competition_steps is distinct from old.competition_steps then
     new.steps_changed_at := now();
@@ -63,7 +67,10 @@ create policy daily_activity_insert_own on public.daily_activity
 
 create policy daily_activity_update_own on public.daily_activity
   for update to authenticated
-  using ((select auth.uid()) = user_id)
+  using (
+    (select auth.uid()) = user_id
+    and activity_date between (now() at time zone 'utc')::date - 8 and (now() at time zone 'utc')::date + 1
+  )
   with check (
     (select auth.uid()) = user_id
     and activity_date between (now() at time zone 'utc')::date - 8 and (now() at time zone 'utc')::date + 1

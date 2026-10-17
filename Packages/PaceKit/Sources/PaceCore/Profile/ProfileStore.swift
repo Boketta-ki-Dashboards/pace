@@ -12,6 +12,9 @@ public final class ProfileStore {
     @ObservationIgnored private let profiles: any ProfileRepository
     @ObservationIgnored private let regions: any RegionRepository
     @ObservationIgnored private let cache: any ProfileCaching
+    /// Zählt Beginn und Ende eigener Änderungen. Ein Abgleich, der vor oder während einer Änderung gestartet wurde,
+    /// darf sie nicht überschreiben.
+    @ObservationIgnored private var mutationCount = 0
 
     public init(
         profile: UserProfile,
@@ -41,14 +44,20 @@ public final class ProfileStore {
     }
 
     /// Lädt das Profil neu (z. B. nach einem Start aus dem Cache).
+    ///
+    /// Ändert der Nutzer währenddessen etwas (z. B. die Zustimmung zu Rankings), wird der ältere Serverstand verworfen.
     public func refresh() async throws {
+        let mutationsBefore = mutationCount
         guard let fresh = try await profiles.fetchProfile(for: profile.id) else { return }
+        guard mutationCount == mutationsBefore else { return }
         apply(fresh)
         try await loadHierarchyIfNeeded()
     }
 
     /// Wechselt die Gemeinde. Die Zustimmung zum Regionalranking bleibt unverändert.
     public func changeRegion(to newHierarchy: RegionHierarchy) async throws {
+        mutationCount += 1
+        defer { mutationCount += 1 }
         let updated = try await profiles.updateRegion(
             municipalityID: newHierarchy.municipality.id,
             regionalLeaderboardEnabled: profile.regionalLeaderboardEnabled,
@@ -59,6 +68,8 @@ public final class ProfileStore {
     }
 
     public func setRegionalLeaderboardEnabled(_ enabled: Bool) async throws {
+        mutationCount += 1
+        defer { mutationCount += 1 }
         let updated = try await profiles.updateRegionalLeaderboardEnabled(enabled, for: profile.id)
         apply(updated)
     }

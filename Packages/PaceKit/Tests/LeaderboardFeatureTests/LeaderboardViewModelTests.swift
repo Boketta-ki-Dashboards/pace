@@ -1,5 +1,5 @@
 import Foundation
-import LeaderboardFeature
+@testable import LeaderboardFeature
 import PaceCore
 import PaceTestSupport
 import Testing
@@ -200,16 +200,16 @@ struct LeaderboardViewModelTests {
 
         await viewModel.loadIfNeeded()
 
-        #expect(viewModel.emptyStateText == "Noch keine Pace-Nutzer in Pfungstadt.")
+        #expect(viewModel.emptyStateText == "Heute tritt in Pfungstadt noch niemand an.")
     }
 
-    @Test func emptyDistrictUsesFullDistrictName() async {
+    @Test func emptyDistrictUsesDistrictNameWithPreposition() async {
         let (viewModel, _) = makeViewModel(profile: Fixtures.profile(regionalLeaderboardEnabled: false))
         await viewModel.loadIfNeeded()
 
         await viewModel.select(Fixtures.darmstadtDieburg)
 
-        #expect(viewModel.emptyStateText == "Noch keine Pace-Nutzer in Landkreis Darmstadt-Dieburg.")
+        #expect(viewModel.emptyStateText == "Heute tritt im Landkreis Darmstadt-Dieburg noch niemand an.")
     }
 
     @Test func enableParticipationStoresConsentAndReloads() async {
@@ -226,6 +226,36 @@ struct LeaderboardViewModelTests {
         // Die anschließende `.task(id: reloadKey)` der View lädt nicht ein drittes Mal.
         await viewModel.loadIfNeeded()
         #expect(env.leaderboards.state.current.pageRequests.count == 2)
+    }
+
+    @Test func failedReloadAfterParticipationChangeDoesNotShowStaleRanking() async {
+        let leaderboards = LeaderboardRepositoryStub {
+            $0.rankings[Fixtures.pfungstadt.id] = Fixtures.ranking(count: 2)
+        }
+        let (viewModel, _) = makeViewModel(profile: Fixtures.profile(regionalLeaderboardEnabled: false), leaderboards: leaderboards)
+        await viewModel.loadIfNeeded()
+        #expect(viewModel.snapshot?.totalParticipants == 2)
+
+        leaderboards.state.withLock { $0.error = .network }
+        await viewModel.enableParticipation()
+
+        guard case .failed = viewModel.state else {
+            Issue.record("Expected failed state, got \(viewModel.state)")
+            return
+        }
+    }
+
+    @Test(arguments: [
+        (Fixtures.pfungstadt, "in Pfungstadt"),
+        (Fixtures.darmstadtDieburg, "im Landkreis Darmstadt-Dieburg"),
+        (Region(id: "DE:05554", code: "05554", name: "Borken", level: .district, kind: .kreis, parentID: "DE:05", municipalityCount: 17), "im Kreis Borken"),
+        (Region(id: "DE:10041", code: "10041", name: "Saarbrücken", level: .district, kind: .regionalverband, parentID: "DE:10", municipalityCount: 10), "im Regionalverband Saarbrücken"),
+        (Region(id: "DE:10", code: "10", name: "Saarland", level: .state, kind: .state, parentID: "DE", municipalityCount: 52), "im Saarland"),
+        (Fixtures.hessen, "in Hessen"),
+        (Fixtures.germany, "in Deutschland"),
+    ])
+    func locativeUsesTheRightPreposition(region: Region, expected: String) {
+        #expect(LeaderboardViewModel.locative(region) == expected)
     }
 
     @Test func failedParticipationUpdateShowsError() async {

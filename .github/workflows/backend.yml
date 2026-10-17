@@ -10,6 +10,9 @@ concurrency:
   group: backend-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   secrets:
     name: Secret scan
@@ -32,8 +35,8 @@ jobs:
             echo "::error::Supabase-Schlüssel im Repository gefunden"
             exit 1
           fi
-          # Signierte JWTs (z. B. service_role-Keys). Test-Fixtures mit unsignierten Tokens sind ausgenommen.
-          if git grep -nE 'eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}' -- ':!Packages/PaceKit/Tests'; then
+          # Signierte JWTs (z. B. service_role-Keys). Test-Tokens werden zur Laufzeit erzeugt und sind unsigniert.
+          if git grep -nE 'eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}'; then
             echo "::error::JWT im Repository gefunden"
             exit 1
           fi

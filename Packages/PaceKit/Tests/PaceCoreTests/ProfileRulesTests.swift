@@ -51,6 +51,20 @@ struct DisplayNameRulesTests {
         #expect(DisplayNameRules.violation(for: "Nik\u{0007}las") == .invalidCharacters)
     }
 
+    /// Unsichtbare Formatzeichen lehnt auch der Server ab (Constraint `profiles_display_name_valid`).
+    @Test(arguments: ["\u{200B}", "Nik\u{200B}las", "Nik\u{202E}las", "\u{FEFF}Niklas"])
+    func rejectsInvisibleFormatCharacters(_ name: String) {
+        #expect(DisplayNameRules.violation(for: name) == .invalidCharacters)
+    }
+
+    /// Wie `char_length` auf dem Server: 29 Buchstaben plus ein Emoji aus zwei Codepoints sind zu lang.
+    @Test func lengthCountsCodePointsLikeTheServer() {
+        let name = String(repeating: "x", count: 29) + "\u{2764}\u{FE0F}"
+        #expect(name.count == 30)
+        #expect(DisplayNameRules.violation(for: name) == .tooLong)
+        #expect(DisplayNameRules.violation(for: String(repeating: "x", count: 28) + "\u{2764}\u{FE0F}") == nil)
+    }
+
     @Test func collapsesWhitespace() {
         #expect(DisplayNameRules.normalized("  Niklas    Zockt \n") == "Niklas Zockt")
     }

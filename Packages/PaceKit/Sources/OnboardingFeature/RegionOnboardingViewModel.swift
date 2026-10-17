@@ -12,8 +12,13 @@ public final class RegionOnboardingViewModel {
     public let search: RegionSearchViewModel
     public let profile: UserProfile
 
-    public private(set) var isSaving = false
+    /// Die Entscheidung, die gerade gespeichert wird (`true` = regional antreten); `nil`, wenn nichts gespeichert wird.
+    public private(set) var savingChoice: Bool?
     public private(set) var errorMessage: String?
+
+    public var isSaving: Bool {
+        savingChoice != nil
+    }
 
     @ObservationIgnored private let profiles: any ProfileRepository
     @ObservationIgnored private let onFinished: @MainActor (UserProfile) -> Void
@@ -39,9 +44,9 @@ public final class RegionOnboardingViewModel {
     /// - Parameter regionalLeaderboardEnabled: Ausdrückliche Zustimmung, in regionalen Rankings zu erscheinen.
     public func confirm(regionalLeaderboardEnabled: Bool) async {
         guard canConfirm, let selection = search.selection else { return }
-        isSaving = true
+        savingChoice = regionalLeaderboardEnabled
         errorMessage = nil
-        defer { isSaving = false }
+        defer { savingChoice = nil }
 
         do {
             let updated = try await profiles.updateRegion(

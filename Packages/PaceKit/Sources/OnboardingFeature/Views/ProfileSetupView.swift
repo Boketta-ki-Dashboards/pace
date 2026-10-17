@@ -55,7 +55,7 @@ struct ProfileSetupView: View {
                     }
                     .modifier(InputFieldStyle())
                     usernameStatus
-                    Text("3–20 Zeichen: Buchstaben, Ziffern und _. Groß- und Kleinschreibung zählen nicht als Unterschied.")
+                    Text(viewModel.usernameRulesHint)
                         .font(PaceFont.caption)
                         .foregroundStyle(PaceColor.textSecondary)
                 }

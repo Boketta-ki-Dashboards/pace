@@ -156,10 +156,11 @@ struct LeaderboardRepositoryTests {
         #expect(entries.isEmpty)
     }
 
-    @Test func unknownRegionIsMapped() async throws {
+    @Test(arguments: ["unknown_region", "region_not_allowed"])
+    func unknownOrForeignRegionIsMapped(message: String) async throws {
         let harness = BackendTestHarness()
         try await harness.signIn()
-        harness.stub("POST", "/rest/v1/rpc/leaderboard_page", .postgrestError(status: 400, code: "22023", message: "unknown_region"))
+        harness.stub("POST", "/rest/v1/rpc/leaderboard_page", .postgrestError(status: 400, code: "22023", message: message))
 
         await #expect(throws: LeaderboardError.unknownRegion) {
             try await harness.backend.leaderboards.page(for: query, offset: 0, limit: 50)

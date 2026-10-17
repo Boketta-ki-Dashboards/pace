@@ -61,10 +61,12 @@ public enum DisplayNameRules {
             .joined(separator: " ")
     }
 
+    /// Die Länge zählt Unicode-Codepoints wie der Server (`char_length`), nicht sichtbare Zeichen: Ein Emoji aus
+    /// mehreren Codepoints zählt mehrfach.
     public static func violation(for displayName: String) -> Violation? {
         let name = normalized(displayName)
-        if name.count < minLength { return .empty }
-        if name.count > maxLength { return .tooLong }
+        if name.isEmpty { return .empty }
+        if name.unicodeScalars.count > maxLength { return .tooLong }
         let hasControlCharacters = name.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) }
         return hasControlCharacters ? .invalidCharacters : nil
     }

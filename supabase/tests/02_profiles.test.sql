@@ -1,6 +1,6 @@
 -- Pace: Profile – eigene Zeile, Benutzernamen, Anzeigenamen, Gemeinde.
 begin;
-select plan(20);
+select plan(21);
 
 insert into auth.users (id, aud, role, is_anonymous) values
   ('11111111-1111-4111-8111-111111111111', 'authenticated', 'authenticated', true),
@@ -67,6 +67,10 @@ select throws_ok(
 select throws_ok(
   $$insert into public.profiles (id, username, display_name) values ('22222222-2222-4222-8222-222222222222', 'zweiter', ' Leerzeichen ')$$,
   '23514', null, 'Anzeigename mit Leerzeichen am Rand'
+);
+select throws_ok(
+  $$insert into public.profiles (id, username, display_name) values ('22222222-2222-4222-8222-222222222222', 'zweiter', E'Nik\u200Blas')$$,
+  '23514', null, 'Anzeigename mit unsichtbarem Formatzeichen'
 );
 select lives_ok(
   $$insert into public.profiles (id, username, display_name) values ('22222222-2222-4222-8222-222222222222', 'zweiter', 'Jürgen 🏃')$$,

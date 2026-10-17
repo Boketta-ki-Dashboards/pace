@@ -15,6 +15,15 @@ public struct RegionSearchView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
             searchField
+            // Die Auswahl bleibt immer sichtbar, auch während einer neuen Suche – gespeichert wird genau sie.
+            if let selection = viewModel.selection {
+                VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
+                    Text("Ausgewählt")
+                        .font(PaceFont.caption.weight(.semibold))
+                        .foregroundStyle(PaceColor.textSecondary)
+                    RegionResultRow(hierarchy: selection, isSelected: true) {}
+                }
+            }
             content
         }
         .task(id: query) { [viewModel, query] in
@@ -50,9 +59,7 @@ public struct RegionSearchView: View {
     private var content: some View {
         switch viewModel.state {
         case .idle:
-            if let selection = viewModel.selection {
-                RegionResultRow(hierarchy: selection, isSelected: true) {}
-            } else {
+            if viewModel.selection == nil {
                 hint("Gib mindestens zwei Buchstaben ein, z. B. „Pfungstadt“.")
             }
 

@@ -22,10 +22,13 @@ create table public.profiles (
     'system', 'root', 'official', 'offiziell', 'team', 'staff', 'null', 'undefined', 'me', 'du'
   ])),
   -- Spiegelt PaceCore.DisplayNameRules (die App normalisiert Leerzeichen vor dem Senden).
+  -- Unsichtbare Formatzeichen (z. B. Zero-Width Space, Richtungswechsel) sind wie Steuerzeichen verboten, damit
+  -- Namen im Ranking weder leer erscheinen noch andere vortäuschen können.
   constraint profiles_display_name_valid check (
     char_length(display_name) between 1 and 30
     and display_name = btrim(display_name)
     and display_name !~ '[[:cntrl:]]'
+    and display_name !~ '[\u0080-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000E0001\U000E0020-\U000E007F]'
   )
 );
 

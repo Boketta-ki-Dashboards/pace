@@ -12,8 +12,8 @@ struct RegionOnboardingView: View {
                 OnboardingStepHeader(
                     step: 2,
                     title: "Wo möchtest du antreten?",
-                    message: "Wähle deine Gemeinde. Darüber nimmst du an den Rankings deiner Gemeinde, deines Kreises, "
-                        + "deines Bundeslandes und ganz Deutschlands teil."
+                    message: "Wähle deine Gemeinde. Darüber kannst du in den Rankings deiner Gemeinde, deines Kreises, "
+                        + "deines Bundeslandes und ganz Deutschlands antreten."
                 )
 
                 RegionSearchView(viewModel: viewModel.search)
@@ -30,7 +30,7 @@ struct RegionOnboardingView: View {
                     Button {
                         Task { await viewModel.confirm(regionalLeaderboardEnabled: true) }
                     } label: {
-                        if viewModel.isSaving {
+                        if viewModel.savingChoice == true {
                             ProgressView().tint(PaceColor.onAccent)
                         } else {
                             Text("Regional antreten")
@@ -43,8 +43,14 @@ struct RegionOnboardingView: View {
                         .font(PaceFont.caption)
                         .foregroundStyle(PaceColor.textSecondary)
 
-                    Button("Ohne regionales Ranking weiter") {
+                    Button {
                         Task { await viewModel.confirm(regionalLeaderboardEnabled: false) }
+                    } label: {
+                        if viewModel.savingChoice == false {
+                            ProgressView().tint(PaceColor.accent)
+                        } else {
+                            Text("Ohne regionales Ranking weiter")
+                        }
                     }
                     .buttonStyle(.paceSecondary)
                     .disabled(!viewModel.canConfirm)

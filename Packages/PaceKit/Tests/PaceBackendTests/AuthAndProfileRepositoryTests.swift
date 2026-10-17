@@ -140,6 +140,7 @@ struct ProfileRepositoryTests {
         ("23514", "new row for relation \\\"profiles\\\" violates check constraint \\\"profiles_display_name_valid\\\"", .invalidDisplayName),
         ("23514", "invalid_municipality", .invalidRegion),
         ("23503", "insert or update on table \\\"profiles\\\" violates foreign key constraint", .invalidRegion),
+        ("23503", "insert or update on table \\\"profiles\\\" violates foreign key constraint \\\"profiles_id_fkey\\\"", .notAuthenticated),
         ("42501", "new row violates row-level security policy for table \\\"profiles\\\"", .notAuthenticated),
     ])
     func databaseErrorsAreMapped(code: String, message: String, expected: ProfileError) async throws {

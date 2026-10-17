@@ -64,10 +64,8 @@ public struct ProfileView: View {
             .refreshable { await viewModel.load() }
         }
         .task { await viewModel.load() }
-        .sheet(isPresented: regionSheetBinding) {
-            if let search = viewModel.regionSearch {
-                RegionChangeSheet(viewModel: viewModel, search: search)
-            }
+        .sheet(item: regionSheetBinding) { search in
+            RegionChangeSheet(viewModel: viewModel, search: search)
         }
     }
 
@@ -103,11 +101,12 @@ public struct ProfileView: View {
         )
     }
 
-    private var regionSheetBinding: Binding<Bool> {
+    /// Mit `sheet(item:)` behält SwiftUI den Inhalt während der Schließen-Animation.
+    private var regionSheetBinding: Binding<RegionSearchViewModel?> {
         Binding(
-            get: { viewModel.isChangingRegion },
-            set: { isPresented in
-                if !isPresented { viewModel.cancelRegionChange() }
+            get: { viewModel.regionSearch },
+            set: { search in
+                if search == nil { viewModel.cancelRegionChange() }
             }
         )
     }

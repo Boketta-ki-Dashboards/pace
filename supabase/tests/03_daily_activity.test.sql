@@ -1,6 +1,6 @@
 -- Pace: tägliche Wettbewerbsschritte – Upsert, Fenster, Grenzen, Sichtbarkeit.
 begin;
-select plan(12);
+select plan(14);
 
 insert into auth.users (id, aud, role, is_anonymous) values
   ('11111111-1111-4111-8111-111111111111', 'authenticated', 'authenticated', true),
@@ -52,11 +52,28 @@ select throws_ok(
   '42501', null, 'synced_at kann der Client nicht setzen'
 );
 
+-- Nutzer und Tag sind unveränderlich: alte Tage lassen sich nicht ins Fenster verschieben.
+select throws_ok(
+  $$update public.daily_activity set activity_date = (now() at time zone 'utc')::date - 1
+     where user_id = '11111111-1111-4111-8111-111111111111'$$,
+  '42501', 'immutable_key', 'Tag einer Zeile nicht änderbar'
+);
+reset role;
+insert into public.daily_activity (user_id, activity_date, competition_steps)
+values ('11111111-1111-4111-8111-111111111111', (now() at time zone 'utc')::date - 30, 4000);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","is_anonymous":true}';
+select is_empty(
+  $$update public.daily_activity set competition_steps = 1
+     where activity_date = (now() at time zone 'utc')::date - 30 returning user_id$$,
+  'Tage außerhalb des Fensters nicht mehr änderbar'
+);
+
 -- Zeitstempel kommen vom Server.
 reset role;
 select ok(
   (select synced_at > '2020-01-01' and steps_changed_at > '2020-01-01' from public.daily_activity
-    where user_id = '11111111-1111-4111-8111-111111111111'),
+    where user_id = '11111111-1111-4111-8111-111111111111' and activity_date = (now() at time zone 'utc')::date),
   'Zeitstempel vom Server gesetzt'
 );
 

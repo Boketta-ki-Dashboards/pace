@@ -68,3 +68,56 @@ struct ProfileStoreTests {
         #expect(store.hierarchy == Fixtures.berlinHierarchy)
     }
 }
+
+@MainActor
+struct ProfileStoreRaceTests {
+    /// Ein Abgleich, dessen Antwort erst nach einer eigenen Änderung eintrifft, darf die Änderung nicht zurückdrehen –
+    /// sonst wäre z. B. die Zustimmung zu Rankings ohne Zutun wieder an.
+    @Test func staleRefreshDoesNotRevertOptOut() async throws {
+        let base = ProfileRepositoryStub { $0.profiles[Fixtures.userID] = Fixtures.profile(regionalLeaderboardEnabled: true) }
+        let repository = SlowFetchRepository(base: base, delay: .milliseconds(80))
+        let cache = InMemoryProfileCache()
+        let store = ProfileStore(
+            profile: Fixtures.profile(regionalLeaderboardEnabled: true),
+            profiles: repository,
+            regions: RegionRepositoryStub(),
+            cache: cache
+        )
+
+        async let refresh: Void = store.refresh()
+        try await Task.sleep(for: .milliseconds(10))
+        try await store.setRegionalLeaderboardEnabled(false)
+        try await refresh
+
+        #expect(!store.profile.regionalLeaderboardEnabled)
+        #expect(cache.load(for: Fixtures.userID)?.regionalLeaderboardEnabled == false)
+    }
+}
+
+/// Liefert beim Laden den Stand vom Zeitpunkt der Anfrage – mit Verzögerung, wie eine langsame Verbindung.
+private struct SlowFetchRepository: ProfileRepository {
+    let base: ProfileRepositoryStub
+    let delay: Duration
+
+    func fetchProfile(for userID: UserID) async throws -> UserProfile? {
+        let snapshot = try await base.fetchProfile(for: userID)
+        try await Task.sleep(for: delay)
+        return snapshot
+    }
+
+    func createProfile(_ profile: NewProfile, for userID: UserID) async throws -> UserProfile {
+        try await base.createProfile(profile, for: userID)
+    }
+
+    func updateRegion(municipalityID: RegionID, regionalLeaderboardEnabled: Bool, for userID: UserID) async throws -> UserProfile {
+        try await base.updateRegion(municipalityID: municipalityID, regionalLeaderboardEnabled: regionalLeaderboardEnabled, for: userID)
+    }
+
+    func updateRegionalLeaderboardEnabled(_ enabled: Bool, for userID: UserID) async throws -> UserProfile {
+        try await base.updateRegionalLeaderboardEnabled(enabled, for: userID)
+    }
+
+    func isUsernameAvailable(_ username: String) async throws -> Bool {
+        try await base.isUsernameAvailable(username)
+    }
+}

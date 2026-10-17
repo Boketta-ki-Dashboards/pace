@@ -24,7 +24,8 @@ public actor ActivitySyncCoordinator: ActivitySyncing {
     private var pending: [LocalDate: Int] = [:]
     private var lastAttempt: Date?
     private var lastSubmittedAt: Date?
-    private var isSending = false
+    /// Der laufende Upload, damit `flush()` auf ihn warten kann.
+    private var inFlight: Task<Void, Never>?
 
     public private(set) var status: Status = .idle
 
@@ -66,7 +67,11 @@ public actor ActivitySyncCoordinator: ActivitySyncing {
         await send()
     }
 
+    /// Wartet auf einen laufenden Upload und sendet danach alles, was noch aussteht.
     public func flush() async {
+        while let inFlight {
+            await inFlight.value
+        }
         await send()
     }
 
@@ -77,11 +82,19 @@ public actor ActivitySyncCoordinator: ActivitySyncing {
             .sorted { $0.date < $1.date }
     }
 
+    /// Startet einen Upload, falls Werte ausstehen und gerade keiner läuft. Während eines Uploads geänderte Werte
+    /// bleiben ausstehend und gehen beim nächsten Anlass bzw. bei `flush()` raus.
     private func send() async {
-        guard !pending.isEmpty, !isSending else { return }
-        isSending = true
-        defer { isSending = false }
+        guard !pending.isEmpty, inFlight == nil else { return }
+        let task = Task {
+            await upload()
+            inFlight = nil
+        }
+        inFlight = task
+        await task.value
+    }
 
+    private func upload() async {
         let batch = pending
         let days = batch
             .map { DailyCompetitionSteps(date: $0.key, competitionSteps: $0.value) }

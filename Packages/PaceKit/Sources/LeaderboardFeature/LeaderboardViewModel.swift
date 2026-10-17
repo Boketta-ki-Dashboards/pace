@@ -85,16 +85,29 @@ public final class LeaderboardViewModel {
 
     /// Text für ein leeres Ranking bzw. wenn der Nutzer allein darin ist. `nil`, wenn es nichts zu erklären gibt.
     public var emptyStateText: String? {
-        guard let snapshot, let scope = scopeName(for: snapshot.query.regionID) else { return nil }
+        guard let snapshot, let region = scopes.first(where: { $0.id == snapshot.query.regionID }) else { return nil }
+        let place = Self.locative(region)
         if snapshot.isCurrentUserAlone {
-            return "Du bist der Erste in \(scope)."
+            return "Du bist der Erste \(place)."
         }
         if snapshot.isEmpty {
             return isParticipating
-                ? "Heute hat in \(scope) noch niemand Schritte gesammelt. Deine erscheinen, sobald sie synchronisiert sind."
-                : "Noch keine Pace-Nutzer in \(scope)."
+                ? "Heute hat \(place) noch niemand Schritte gesammelt. Deine erscheinen, sobald sie synchronisiert sind."
+                : "Heute tritt \(place) noch niemand an."
         }
         return nil
+    }
+
+    /// Ortsangabe mit passender Präposition: „in Pfungstadt“, „im Landkreis Darmstadt-Dieburg“, „im Saarland“.
+    static func locative(_ region: Region) -> String {
+        switch region.kind {
+        case .landkreis, .kreis, .stadtkreis:
+            return "im \(region.displayName)"
+        case .regionalverband:
+            return "im Regionalverband \(region.name)"
+        default:
+            return region.name == "Saarland" ? "im Saarland" : "in \(region.name)"
+        }
     }
 
     /// Lädt beim Erscheinen – nur wenn sich etwas geändert hat, der letzte Versuch fehlschlug oder die Daten älter
@@ -151,6 +164,10 @@ public final class LeaderboardViewModel {
         defer {
             if current == generation { inFlightKey = nil }
         }
+        // Andere Ebene, Gemeinde oder Teilnahme: Das alte Ranking passt nicht mehr und wird nicht weiter angezeigt.
+        if let loadedKey, loadedKey != key {
+            state = .loading
+        }
 
         do {
             try await store.loadHierarchyIfNeeded()
@@ -192,11 +209,6 @@ public final class LeaderboardViewModel {
 
     private var currentLoadKey: LoadKey {
         LoadKey(reloadKey: reloadKey, scopeID: selectedScopeID)
-    }
-
-    private func scopeName(for regionID: RegionID) -> String? {
-        guard let region = scopes.first(where: { $0.id == regionID }) else { return nil }
-        return region.level == .country ? region.name : region.displayName
     }
 
     static func message(for error: Error) -> String {

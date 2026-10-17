@@ -24,7 +24,9 @@ enum BackendErrorMapping {
                 if message.contains("display_name") { return .invalidDisplayName }
                 return .invalidUsername
             case "23503":
-                return .invalidRegion
+                // Ungültige Gemeinden fängt schon ein Trigger ab (23514). Ein Fremdschlüsselfehler auf die Auth-ID
+                // bedeutet, dass der Nutzer serverseitig nicht mehr existiert.
+                return message.contains("profiles_id_fkey") ? .notAuthenticated : .invalidRegion
             case "PGRST116":
                 // Kein Profil getroffen (z. B. fremde oder fehlende Zeile): wie eine fehlende Anmeldung behandeln.
                 return .notAuthenticated
@@ -75,7 +77,9 @@ enum BackendErrorMapping {
         case .unauthenticated, .permissionDenied:
             return .notAuthenticated
         case .database(let code, let message):
-            if code == "22023", message.contains("unknown_region") {
+            // `region_not_allowed`: Die Region gehört nicht (mehr) zur eigenen Gemeinde, z. B. nach einem
+            // Regionswechsel auf einem anderen Weg.
+            if code == "22023", message.contains("unknown_region") || message.contains("region_not_allowed") {
                 return .unknownRegion
             }
             return .unexpected("\(code): \(message)")

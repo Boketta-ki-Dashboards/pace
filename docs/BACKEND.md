@@ -98,7 +98,7 @@ Regionen werden nie über Namen identifiziert und nie als Freitext gespeichert.
 | `id` | = `auth.users.id` (nie öffentlich) |
 | `public_id` | zufällige öffentliche ID für Rankings |
 | `username` | 3–20 Zeichen `[A-Za-z0-9_]`, eindeutig **ohne Beachtung der Groß-/Kleinschreibung** (`unique index on lower(username)`), reservierte Namen gesperrt |
-| `display_name` | 1–30 Zeichen, ohne Steuerzeichen, ohne Leerzeichen am Rand |
+| `display_name` | 1–30 Unicode-Codepoints, ohne Steuer- und unsichtbare Formatzeichen (z. B. Zero-Width Space, Richtungswechsel), ohne Leerzeichen am Rand |
 | `municipality_id` | gewählte Gemeinde (Fremdschlüssel; Trigger lässt nur aktive Gemeinden zu) |
 | `regional_leaderboard_enabled` | ausdrückliche Zustimmung zu öffentlichen Regionalrankings, Standard `false` |
 | `created_at`, `updated_at` | vom Server gesetzt |
@@ -124,7 +124,8 @@ keine Quellen, keine Standorte.
   - `profiles`: nur die eigene Zeile lesen, anlegen, ändern. Fremde Profile sind nur über die Ranking-RPCs und nur
     mit öffentlichen Feldern sichtbar.
   - `daily_activity`: nur eigene Zeilen; anlegen/ändern nur für Tage im Fenster *heute (UTC) − 8* bis *+ 1*. Ältere
-    Tage lassen sich nachträglich nicht mehr ändern.
+    Tage lassen sich nachträglich nicht mehr ändern. Nutzer und Tag einer Zeile sind unveränderlich (Trigger), damit
+    sich alte Werte nicht in das Fenster verschieben lassen.
 - **Explizite, spaltengenaue Rechte.** `anon` hat auf keine Tabelle Zugriff. `authenticated` darf in `profiles` nur
   `username`, `display_name`, `municipality_id`, `regional_leaderboard_enabled` schreiben (nicht `public_id`,
   Zeitstempel) und in `daily_activity` nur `user_id`, `activity_date`, `competition_steps`. Die Migrationen setzen
@@ -149,6 +150,16 @@ keine Quellen, keine Standorte.
 
 Ranking-Einträge enthalten ausschließlich `rank`, `public_user_id`, `username`, `display_name`,
 `competition_steps`, `is_current_user`.
+
+Zugriffsregeln der Ranking-RPCs (`private.assert_leaderboard_access`):
+
+- Abrufbar sind nur die Rankings der **eigenen Regionen** – Gemeinde, Kreis, Bundesland und Land der eigenen
+  Gemeinde. Sonst ließe sich durch Abfragen aller Gemeinden ermitteln, wo andere Teilnehmer wohnen. Fremde Regionen:
+  `22023 region_not_allowed`; ohne gewählte Gemeinde gibt es keine Rankings.
+- Stichtag nur von *heute (UTC) − 14* bis *+ 1* (`22023 invalid_date`), damit keine vollständige Schritt-Historie
+  anderer abrufbar ist.
+- Bekannte Grenze: Wer seine Gemeinde wechselt, sieht danach die Rankings der neuen Region. Ein massenhaftes
+  Durchwechseln ist möglich, aber aufwendig; eine Wartezeit für Regionswechsel ist ein offener Punkt.
 
 ## Anmeldung (Milestone 2)
 
@@ -278,4 +289,5 @@ Repository.
 - Sign in with Apple (Kontoübertragung auf andere Geräte) und Konto-/Datenlöschung in der App.
 - Bereinigung verwaister anonymer Nutzer (z. B. ohne Profil nach 30 Tagen).
 - Plausibilitätsprüfungen über das harte Limit hinaus (Anti-Cheat), falls Rankings missbraucht werden.
+- Wartezeit für Regionswechsel (verhindert das Durchwechseln von Regionen, siehe Zugriffsregeln der Rankings).
 - Bei stark wachsender Nutzerzahl: Rankings materialisieren statt pro Anfrage berechnen.

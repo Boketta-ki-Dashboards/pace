@@ -6,9 +6,11 @@ import PaceCore
 ///
 /// Gespeichert wird von den Aufrufern ausschließlich die ID der gewählten Gemeinde; Kreis, Bundesland und Land
 /// ergeben sich aus der Hierarchie.
+///
+/// `Identifiable` über die Objektidentität, damit Aufrufer die Suche z. B. als Sheet-Item verwenden können.
 @MainActor
 @Observable
-public final class RegionSearchViewModel {
+public final class RegionSearchViewModel: Identifiable {
     public enum State: Equatable {
         case idle
         case searching

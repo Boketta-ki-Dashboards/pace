@@ -74,6 +74,12 @@ public final class ProfileSetupViewModel {
         }
     }
 
+    /// Dauerhafter Hinweis zu den Regeln für Benutzernamen.
+    public var usernameRulesHint: String {
+        "\(UsernameRules.minLength)–\(UsernameRules.maxLength) Zeichen: Buchstaben ohne Umlaute, Ziffern und _. "
+            + "Groß- und Kleinschreibung zählen nicht als Unterschied."
+    }
+
     /// Hinweis unter dem Anzeigenamen. Ein leeres Feld bekommt keinen Hinweis, nur einen deaktivierten Button.
     public var displayNameMessage: String? {
         switch DisplayNameRules.violation(for: displayName) {

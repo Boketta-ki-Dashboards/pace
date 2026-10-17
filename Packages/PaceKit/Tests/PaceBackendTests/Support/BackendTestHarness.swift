@@ -66,8 +66,9 @@ final class BackendTestHarness: Sendable {
         return try await backend.auth.signInAnonymously()
     }
 
-    /// Unsigniertes, syntaktisch gültiges JWT (nur für Tests).
-    static var accessToken: String {
+    /// Unsigniertes, syntaktisch gültiges JWT (nur für Tests). Einmal erzeugt, damit Anmeldung und Prüfung dasselbe
+    /// Token sehen – auch wenn ein langsamer CI-Lauf zwischen beiden eine Sekundengrenze überschreitet.
+    static let accessToken: String = {
         func base64URL(_ string: String) -> String {
             Data(string.utf8).base64EncodedString()
                 .replacingOccurrences(of: "+", with: "-")
@@ -75,10 +76,10 @@ final class BackendTestHarness: Sendable {
                 .replacingOccurrences(of: "=", with: "")
         }
         let header = base64URL(#"{"alg":"HS256","typ":"JWT"}"#)
-        let exp = Int(Date().timeIntervalSince1970) + 3_600
+        let exp = Int(Date().timeIntervalSince1970) + 86_400
         let payload = base64URL(#"{"sub":"\#(userID.uuidString.lowercased())","role":"authenticated","is_anonymous":true,"exp":\#(exp)}"#)
         return "\(header).\(payload).test"
-    }
+    }()
 
     /// Antwort von GoTrue auf `POST /auth/v1/signup` für eine anonyme Anmeldung.
     static func sessionJSON() -> String {

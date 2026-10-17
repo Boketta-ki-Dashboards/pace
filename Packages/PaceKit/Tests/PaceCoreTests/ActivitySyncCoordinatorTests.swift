@@ -50,6 +50,21 @@ struct ActivitySyncCoordinatorTests {
         #expect(await coordinator.pendingDays.isEmpty)
     }
 
+    /// Rankings rufen `flush()` vor dem Laden auf. Läuft gerade ein Upload (z. B. vom Home-Screen), muss `flush()`
+    /// darauf warten, sonst wäre der eigene Platz veraltet.
+    @Test func flushWaitsForRunningUpload() async throws {
+        let repository = SlowSyncRepository(delay: .milliseconds(80))
+        let coordinator = ActivitySyncCoordinator(repository: repository, userID: Fixtures.userID, now: { Fixtures.date(2026, 10, 16, 12) })
+
+        let submit = Task { await coordinator.submit(overview(steps: week), trigger: .appStart) }
+        try await Task.sleep(for: .milliseconds(10))
+        await coordinator.flush()
+
+        #expect(repository.uploads.current.count == 1)
+        #expect(await coordinator.pendingDays.isEmpty)
+        await submit.value
+    }
+
     @Test func unchangedValuesAreNotSentAgain() async {
         let (coordinator, repository) = makeCoordinator(clock: Locked(Fixtures.date(2026, 10, 16, 12)))
 
@@ -150,5 +165,16 @@ struct ActivitySyncCoordinatorTests {
 
         #expect(repository.state.current.uploads.isEmpty)
         #expect(await coordinator.status == .idle)
+    }
+}
+
+/// Upload mit Verzögerung, wie eine langsame Verbindung.
+private struct SlowSyncRepository: ActivitySyncRepository {
+    let delay: Duration
+    let uploads = Locked<[[DailyCompetitionSteps]]>([])
+
+    func upsert(_ days: [DailyCompetitionSteps], for userID: UserID) async throws {
+        try await Task.sleep(for: delay)
+        uploads.withLock { $0.append(days) }
     }
 }
