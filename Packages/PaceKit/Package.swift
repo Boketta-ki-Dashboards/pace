@@ -43,11 +43,18 @@ let package = Package(
         .target(name: "HealthPermissionFeature", dependencies: ["PaceCore", "DesignSystem"]),
         .target(name: "ActivityFeature", dependencies: ["PaceCore", "DesignSystem"]),
         .target(name: "HomeFeature", dependencies: ["PaceCore", "DesignSystem", "ActivityFeature"]),
+        .target(name: "RegionFeature", dependencies: ["PaceCore", "DesignSystem"]),
+        .target(name: "OnboardingFeature", dependencies: ["PaceCore", "DesignSystem", "RegionFeature"]),
+        .target(name: "LeaderboardFeature", dependencies: ["PaceCore", "DesignSystem"]),
+        .target(name: "ProfileFeature", dependencies: ["PaceCore", "DesignSystem", "RegionFeature"]),
 
-        // App-Routing und Zusammenbau der Features.
+        // App-Routing, Tab-Navigation und Zusammenbau der Features.
         .target(
             name: "AppFeature",
-            dependencies: ["PaceCore", "DesignSystem", "HealthPermissionFeature", "HomeFeature"]
+            dependencies: [
+                "PaceCore", "DesignSystem", "HealthPermissionFeature", "HomeFeature",
+                "OnboardingFeature", "LeaderboardFeature", "ProfileFeature",
+            ]
         ),
 
         // Test-Doubles, nur von Test-Targets verwendet.
@@ -61,6 +68,10 @@ let package = Package(
         ),
         .testTarget(name: "ActivityFeatureTests", dependencies: ["ActivityFeature", "PaceTestSupport"]),
         .testTarget(name: "HomeFeatureTests", dependencies: ["HomeFeature", "PaceTestSupport"]),
-        .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "PaceTestSupport"]),
+        .testTarget(name: "RegionFeatureTests", dependencies: ["RegionFeature", "PaceTestSupport"]),
+        .testTarget(name: "OnboardingFeatureTests", dependencies: ["OnboardingFeature", "PaceTestSupport"]),
+        .testTarget(name: "LeaderboardFeatureTests", dependencies: ["LeaderboardFeature", "PaceTestSupport"]),
+        .testTarget(name: "ProfileFeatureTests", dependencies: ["ProfileFeature", "PaceTestSupport"]),
+        .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "OnboardingFeature", "PaceTestSupport"]),
     ]
 )

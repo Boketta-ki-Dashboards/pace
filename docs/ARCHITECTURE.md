@@ -7,107 +7,145 @@ Modulen. Modulgrenzen werden vom Compiler erzwungen: Ein Feature kann nur verwen
 als Abhängigkeit deklariert.
 
 ```
-Pace (App-Target)            Composition Root: erzeugt konkrete Services, startet RootView
- ├── AppFeature              Routing (AppRouter), RootView, AppDependencies
+Pace (App-Target)            Composition Root: erzeugt HealthKitService + SupabaseBackend, startet RootView
+ ├── AppFeature              Routing (AppRouter), Tab-Navigation (MainTabView), AppDependencies
  │    ├── HealthPermissionFeature   Health-Permission-Flow
- │    ├── HomeFeature               Home-Screen mit heutiger Schrittzahl
+ │    ├── HomeFeature               Dashboard (Competition Steps, kcal, km) → ActivityFeature
+ │    │    └── ActivityFeature      Detail-Statistiken (Swift Charts)
+ │    ├── OnboardingFeature         Profil anlegen, Region wählen → RegionFeature
+ │    ├── LeaderboardFeature        Regionale Daily Rankings
+ │    ├── ProfileFeature            Profil/Einstellungen → RegionFeature
+ │    │    └── RegionFeature        Gemeindesuche (wiederverwendbar)
  │    ├── DesignSystem              Farben, Typografie, Abstände, Komponenten
- │    └── PaceCore                  Modelle, Service-Protokolle, Use Cases (nur Foundation)
- └── PaceHealth              HealthKitService (einzige Stelle mit `import HealthKit`)
-      └── PaceCore
+ │    └── PaceCore                  Modelle, Protokolle, Use Cases (nur Foundation + Observation)
+ ├── PaceHealth              HealthKitService (einziges Modul mit `import HealthKit`)
+ └── PaceBackend             Supabase (einziges Modul mit `import Auth`/`PostgREST`)
 ```
 
 Regeln:
 
-- **Features kennen nur Protokolle** aus `PaceCore` (`HealthAuthorizationProviding`, `StepCountProviding`),
-  nie konkrete Services. Konkrete Services werden ausschließlich in `Pace/AppDependencies+Live.swift` erzeugt.
-- **Keine Business-Logik in Views.** Jedes Feature hat ein `@Observable`-ViewModel ohne SwiftUI-Import.
-  Views rendern nur Zustand und leiten Aktionen weiter.
-- **Jeder Systemdienst bekommt ein eigenes Modul** (heute: `PaceHealth`; später z. B. `PaceBackend` für Supabase,
-  `PaceNotifications`, `PaceMotion`, `PaceWidgetData`).
+- **Features kennen nur Protokolle** aus `PaceCore` (`ActivityDataProviding`, `AuthProviding`,
+  `ProfileRepository`, `RegionRepository`, `ActivitySyncRepository`, `LeaderboardRepository`), nie konkrete
+  Services. Konkrete Services entstehen ausschließlich in `Pace/AppDependencies+Live.swift`.
+- **Keine Business-Logik in Views.** Jedes Feature hat `@Observable`-ViewModels ohne SwiftUI-Import. Views rendern
+  nur Zustand und leiten Aktionen weiter. Supabase wird nie aus Views oder ViewModels angesprochen.
+- **Jeder Systemdienst hat ein eigenes Modul** (`PaceHealth`, `PaceBackend`; später z. B. `PaceNotifications`,
+  `PaceMotion`, `PaceWidgetData`).
 - **Gemeinsame UI gehört ins `DesignSystem`**, nicht in Features.
-- **Swift 6 Sprachmodus** mit vollständiger Concurrency-Prüfung, Deployment Target **iOS 17**.
+- **Swift 6 Sprachmodus**, vollständige Concurrency-Prüfung, iOS 17. `@unchecked Sendable` nur mit Begründung im Code
+  (`HKHealthStore` ist threadsicher; Test-Doubles schützen ihren Zustand mit einem Lock).
+
+## App-Ablauf
+
+```
+App-Start
+  → Health verfügbar? (sonst Hinweis)
+  → Health-Abfrage nötig? → Permission-Screen
+  → Backend konfiguriert? (sonst Hinweis für Entwickler)
+  → Sitzung: gespeicherte nutzen, sonst anonym anmelden        (SessionBootstrapper)
+  → Profil: fehlt → Onboarding Profil → Onboarding Region
+            ohne Region → Onboarding Region
+            vollständig → Main App (Tabs: Heute · Rankings · Profil)
+```
+
+- Ein vollständiges Profil wird lokal zwischengespeichert (`UserDefaultsProfileCache`). Ist es vorhanden, startet
+  die App auch offline direkt in die Main App und gleicht das Profil im Hintergrund ab.
+- `AppRoute` besitzt das ViewModel des aktuellen Screens. Die Main App teilt einen `ProfileStore` (Profil + Region)
+  zwischen Rankings und Profil.
+- Weitere Tabs (z. B. Social) kommen als zusätzlicher Fall in `MainViewModel.Tab` mit eigenem Feature-Modul hinzu.
+
+## Datenfluss Bewegung → Ranking
+
+```
+HealthKit ──▶ HealthKitService (Tagessummen, dedupliziert)
+          ──▶ ActivitySummaryLoader (7 Tage → heute/gestern/Woche/7 Tage, nil statt Fake-0)
+          ──▶ HomeViewModel ──▶ Home + Statistiken
+                    └──▶ ActivitySyncCoordinator (nur Competition Steps, nur geänderte Tage, gedrosselt)
+                              └──▶ SupabaseActivitySyncRepository ──▶ daily_activity (Upsert)
+LeaderboardViewModel ──flush──▶ ActivitySyncCoordinator
+                     ──▶ LeaderboardLoader (Top 50 + eigene Position ± 1) ──▶ RPCs leaderboard_page/neighborhood
+```
+
+Details zu Gesundheitsdaten: [HEALTH_DATA.md](HEALTH_DATA.md). Backend, Schema, RLS und Regionen:
+[BACKEND.md](BACKEND.md).
 
 ## Dateistruktur
 
 ```
 pace/
-├── Pace.xcodeproj/                     Xcode-Projekt (synchronisierte Ordner, geteiltes Schema „Pace“)
+├── Pace.xcodeproj/                     Xcode-Projekt (synchronisierter Ordner Pace/, geteiltes Schema „Pace“)
 ├── Pace/                               App-Target – nur Einstieg und Komposition
-│   ├── PaceApp.swift                   @main, hält den AppRouter
-│   ├── AppDependencies+Live.swift      Composition Root (erzeugt HealthKitService)
-│   └── Resources/Assets.xcassets       App-Icon, Akzentfarbe
+│   ├── PaceApp.swift
+│   ├── AppDependencies+Live.swift      Composition Root
+│   └── Resources/Assets.xcassets
 ├── Config/
-│   └── Pace.entitlements               HealthKit-Entitlement
+│   ├── Base.xcconfig                   committet; bindet optional Pace.xcconfig ein
+│   ├── Pace.xcconfig.example           committet; nur Platzhalter
+│   ├── Pace.xcconfig                   lokal, gitignored (Supabase-URL + Publishable Key)
+│   ├── Info.plist                      reicht die xcconfig-Werte an die App weiter
+│   └── Pace.entitlements               HealthKit
 ├── Packages/PaceKit/
 │   ├── Package.swift
 │   ├── Sources/
 │   │   ├── PaceCore/
+│   │   │   ├── Time/                   LocalDate, ActivityCalendar
+│   │   │   ├── Activity/               DailyActivitySummary, Zeiträume, ActivitySummaryLoader
 │   │   │   ├── Health/                 HealthAuthorizationProviding, HealthDataError
-│   │   │   └── Steps/                  DailyStepCount, StepCountProviding, TodayStepsLoader
-│   │   ├── PaceHealth/
-│   │   │   └── HealthKitService.swift
+│   │   │   ├── Identity/               AuthProviding, UserID
+│   │   │   ├── Profile/                UserProfile, Regeln, Repository, Cache, Bootstrap, ProfileStore
+│   │   │   ├── Region/                 Region, RegionHierarchy, RegionRepository
+│   │   │   ├── Leaderboard/            Modelle, Repository, LeaderboardLoader
+│   │   │   └── Sync/                   DailyCompetitionSteps, ActivitySyncCoordinator
+│   │   ├── PaceHealth/                 HealthKitService, HealthMetricMapping
+│   │   ├── PaceBackend/                SupabaseBackend, Repositories, DTOs, BackendConfiguration
 │   │   ├── DesignSystem/
-│   │   │   ├── Tokens/                 PaceColor, PaceFont, PaceSpacing/PaceRadius
-│   │   │   └── Components/             Buttons, PaceCard, PaceStatusView, PaceLoadingView
 │   │   ├── HealthPermissionFeature/
-│   │   │   ├── HealthPermissionViewModel.swift
-│   │   │   └── Views/HealthPermissionView.swift
+│   │   ├── ActivityFeature/
 │   │   ├── HomeFeature/
-│   │   │   ├── HomeViewModel.swift
-│   │   │   └── Views/                  HomeView, HomeContentView, TodayStepsCard
+│   │   ├── RegionFeature/
+│   │   ├── OnboardingFeature/
+│   │   ├── LeaderboardFeature/
+│   │   ├── ProfileFeature/
 │   │   └── AppFeature/
-│   │       ├── AppDependencies.swift, AppRoute.swift, AppRouter.swift
-│   │       └── Views/                  RootView, HealthDataUnavailableView
-│   └── Tests/
-│       ├── PaceTestSupport/            HealthServiceStub, Fixtures (nur für Tests)
-│       ├── PaceCoreTests/
-│       ├── HealthPermissionFeatureTests/
-│       ├── HomeFeatureTests/
-│       └── AppFeatureTests/
-├── .github/workflows/ios.yml           CI: Build + Tests auf macOS mit Xcode
-└── docs/ARCHITECTURE.md
+│   └── Tests/                          ein Test-Target pro Modul + PaceTestSupport (Test-Doubles)
+├── Packages/PaceBackendIntegrationTests/   Swift-Tests gegen einen echten (lokalen) Supabase-Stack
+├── supabase/
+│   ├── config.toml                     lokale Supabase-CLI-Konfiguration
+│   ├── migrations/                     versionierte SQL-Migrationen (inkl. Regionsdaten)
+│   ├── seed/dev_seed.sql               NUR Entwicklung – wird nie in Produktion ausgeführt
+│   ├── scripts/import_regions.py       Import des amtlichen Gemeindeverzeichnisses
+│   └── tests/                          pgTAP-Tests (RLS, Profile, Sync, Rankings, Suche)
+├── .github/workflows/
+│   ├── ios.yml                         Xcode-Build, Warnungsprüfung, Tests
+│   └── backend.yml                     Secret-Scan, lokaler Supabase-Stack, pgTAP, Integrationstests
+└── docs/
+    ├── ARCHITECTURE.md
+    ├── BACKEND.md
+    └── HEALTH_DATA.md
 ```
 
-Neue Swift-Dateien im Ordner `Pace/` erkennt Xcode automatisch (synchronisierte Ordner). Neue Dateien in
+Neue Swift-Dateien im Ordner `Pace/` erkennt Xcode automatisch. Neue Dateien in
 `Packages/PaceKit/Sources/<Modul>/` gehören automatisch zum jeweiligen Modul.
 
 ## Routing
 
-`AppRouter` (in `AppFeature`) besitzt die aktuelle `AppRoute` und das ViewModel des jeweiligen Screens:
-
-| Route                   | Wann                                                                 |
-|-------------------------|----------------------------------------------------------------------|
-| `launching`             | App-Start, bis der Health-Status ermittelt ist                       |
-| `healthDataUnavailable` | Gerät unterstützt kein HealthKit                                     |
-| `healthPermission`      | Nutzer wurde noch nicht gefragt (oder Status unbekannt)              |
-| `home`                  | Zugriffsabfrage wurde bereits angezeigt                              |
-
-Nach Abschluss des Permission-Dialogs wechselt der Router zu `home`.
-
-## HealthKit: Datenschutz und Zugriffserkennung
-
-- Pace fordert **nur Lesezugriff auf `stepCount`** an und schreibt nichts in Health.
-- Die Tagessumme kommt aus einer `HKStatisticsQuery` mit `.cumulativeSum`. HealthKit dedupliziert dabei
-  überlappende Quellen (iPhone + Apple Watch), der Wert entspricht also dem der Health-App.
-- **HealthKit verrät nicht, ob Lesezugriff verweigert wurde.** Ohne Zugriff sind schlicht keine Daten sichtbar.
-  `TodayStepsLoader` behandelt das so:
-  1. Heute gibt es Samples → Schrittzahl anzeigen.
-  2. Heute keine Samples, aber irgendwann gab es welche → **0 Schritte** anzeigen.
-  3. Überhaupt keine Samples lesbar → Zustand **„Keine Schrittdaten lesbar“** mit Anleitung, wie man den Zugriff
-     in der Health-App aktiviert (und Hinweis auf „Fitness-Tracking“, falls der Zugriff bereits erlaubt ist).
-- Aktualisierung: beim Erscheinen, per Pull-to-Refresh, bei Rückkehr in den Vordergrund und live über eine
-  `HKObserverQuery`, solange der Home-Screen sichtbar ist.
-- Für das Backend (spätere Milestones) gilt: nur aggregierte Tageswerte (`DailyStepCount`), keine Rohdaten.
+| Route | Wann |
+|---|---|
+| `launching` | App-Start |
+| `healthDataUnavailable` | Gerät unterstützt kein HealthKit |
+| `healthPermission` | Health-Abfrage nötig (erstmals oder weil neue Datentypen hinzugekommen sind) |
+| `backendUnavailable` | `Config/Pace.xcconfig` fehlt oder ist ungültig (nur Entwicklung) |
+| `connecting` | Sitzung und Profil werden geprüft |
+| `connectionFailed` | keine Verbindung beim ersten Start (ohne Profil-Cache) – mit „Erneut versuchen“ |
+| `onboarding` | Profil oder Region fehlen |
+| `main` | Tabs Heute · Rankings · Profil |
 
 ## Tests
 
-Die Tests nutzen Swift Testing und laufen gegen `HealthServiceStub` statt HealthKit:
-
-- `TodayStepsLoaderTests` – Tagesintervall (inkl. Sommerzeitwechsel), 0 Schritte vs. kein Zugriff, Fehler
-- `HealthPermissionViewModelTests` – Erfolg, Fehler, erneuter Versuch
-- `HomeViewModelTests` – alle Zustände, Retry, Live-Aktualisierung, Beenden der Beobachtung
-- `AppRouterTests` – Routing je nach Health-Status, Übergang Permission → Home
-
-In Xcode: Schema **Pace**, ⌘U. Der HealthKit-Service selbst ist nur auf echten Geräten bzw. im Simulator
-sinnvoll prüfbar.
+- Swift Testing, Test-Doubles in `Tests/PaceTestSupport` (keine echten Services in Unit-Tests).
+- Die Logik (Core, ViewModels, Backend-Repositories mit URLProtocol-Stub) läuft auch unter Linux.
+- `ios.yml` baut die App mit Xcode, prüft auf Compiler-Warnungen in Pace-Code und führt alle Unit-Tests im
+  iOS-Simulator aus. CI benötigt keine Zugangsdaten.
+- `backend.yml` startet einen lokalen Supabase-Stack (keine Produktionsdaten, keine Zugangsdaten) und führt
+  pgTAP-Tests und Swift-Integrationstests aus.
+- HealthKit selbst lässt sich nur auf echten Geräten bzw. im Simulator mit eingetragenen Daten sinnvoll prüfen.

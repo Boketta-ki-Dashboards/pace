@@ -1,6 +1,6 @@
 import DesignSystem
 import HealthPermissionFeature
-import HomeFeature
+import OnboardingFeature
 import SwiftUI
 
 /// Wurzel der UI: rendert die aktuelle Route des `AppRouter`.
@@ -21,8 +21,19 @@ public struct RootView: View {
                 HealthDataUnavailableView()
             case .healthPermission(let viewModel):
                 HealthPermissionView(viewModel: viewModel)
-            case .home(let viewModel):
-                HomeView(viewModel: viewModel)
+            case .backendUnavailable(let message):
+                BackendUnavailableView(message: message)
+            case .connecting:
+                PaceLoadingView("Verbinde mit Pace …")
+                    .paceScreenBackground()
+            case .connectionFailed(let message):
+                ConnectionFailedView(message: message) {
+                    Task { await router.connect() }
+                }
+            case .onboarding(let viewModel):
+                OnboardingView(viewModel: viewModel)
+            case .main(let viewModel):
+                MainTabView(viewModel: viewModel)
             }
         }
         .animation(.default, value: router.route.kind)

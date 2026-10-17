@@ -1,16 +1,23 @@
 import Foundation
 import HealthPermissionFeature
 import HomeFeature
+import LeaderboardFeature
 import Observation
+import OnboardingFeature
 import PaceCore
+import ProfileFeature
 
 /// Entscheidet, welcher Screen gezeigt wird, und erzeugt die zugehörigen ViewModels.
+///
+/// Ablauf: Health-Abfrage → Sitzung (vorhandene nutzen, sonst anonym anmelden) → Profil prüfen →
+/// Onboarding (Profil, Region) → Main App.
 @MainActor
 @Observable
 public final class AppRouter {
     public private(set) var route: AppRoute = .launching
 
     @ObservationIgnored private let dependencies: AppDependencies
+    @ObservationIgnored private var isConnecting = false
 
     public init(dependencies: AppDependencies) {
         self.dependencies = dependencies
@@ -26,26 +33,100 @@ public final class AppRouter {
         }
 
         // Lässt sich der Status nicht ermitteln, zeigen wir den Permission-Screen. Eine erneute Anfrage ist
-        // unschädlich: HealthKit zeigt den Dialog nur, wenn noch nicht gefragt wurde.
+        // unschädlich: HealthKit zeigt den Dialog nur für Typen, nach denen noch nicht gefragt wurde.
         let status = try? await dependencies.healthAuthorization.authorizationRequestStatus()
         guard case .launching = route else { return }
 
         switch status {
         case .alreadyRequested:
-            showHome()
+            await connect()
         case .shouldRequest, .unknown, nil:
             showHealthPermission()
         }
     }
 
+    /// Prüft Sitzung und Profil und zeigt danach Onboarding oder Main App. Auch für „Erneut versuchen“.
+    public func connect() async {
+        guard !isConnecting else { return }
+        guard case .available(let services) = dependencies.backend else {
+            if case .unavailable(let reason) = dependencies.backend {
+                route = .backendUnavailable(message: reason)
+            }
+            return
+        }
+
+        isConnecting = true
+        defer { isConnecting = false }
+        route = .connecting
+
+        let bootstrapper = SessionBootstrapper(
+            auth: services.auth,
+            profiles: services.profiles,
+            cache: services.profileCache
+        )
+        do {
+            switch try await bootstrapper.run() {
+            case .needsProfile(let userID):
+                showOnboarding(.profile(userID), services: services)
+            case .needsRegion(let profile):
+                showOnboarding(.region(profile), services: services)
+            case .ready(let profile):
+                showMain(profile: profile, services: services)
+            }
+        } catch {
+            route = .connectionFailed(message: Self.message(for: error))
+        }
+    }
+
     private func showHealthPermission() {
         let viewModel = HealthPermissionViewModel(authorization: dependencies.healthAuthorization) { [weak self] in
-            self?.showHome()
+            Task { await self?.connect() }
         }
         route = .healthPermission(viewModel)
     }
 
-    private func showHome() {
-        route = .home(HomeViewModel(activityData: dependencies.activityData))
+    private func showOnboarding(_ start: OnboardingViewModel.Start, services: BackendServices) {
+        let viewModel = OnboardingViewModel(
+            start: start,
+            profiles: services.profiles,
+            regions: services.regions,
+            cache: services.profileCache
+        ) { [weak self] profile in
+            self?.showMain(profile: profile, services: services)
+        }
+        route = .onboarding(viewModel)
+    }
+
+    private func showMain(profile: UserProfile, services: BackendServices) {
+        let store = ProfileStore(
+            profile: profile,
+            profiles: services.profiles,
+            regions: services.regions,
+            cache: services.profileCache
+        )
+        let sync = ActivitySyncCoordinator(repository: services.activitySync, userID: profile.id)
+        let main = MainViewModel(
+            home: HomeViewModel(activityData: dependencies.activityData, syncing: sync),
+            leaderboard: LeaderboardViewModel(store: store, leaderboards: services.leaderboards, syncing: sync),
+            profile: ProfileViewModel(store: store, regions: services.regions),
+            store: store
+        )
+        route = .main(main)
+
+        // Start aus dem Cache: Profil und Region im Hintergrund mit dem Server abgleichen.
+        Task { [store] in
+            try? await store.refresh()
+        }
+    }
+
+    static func message(for error: Error) -> String {
+        switch error as? BootstrapError {
+        case .auth(.anonymousSignInDisabled):
+            "Die Anmeldung ist derzeit nicht möglich. Bitte versuche es später erneut."
+        case .auth(.network), .profile(.network):
+            "Keine Verbindung zu Pace. Prüfe deine Internetverbindung und versuche es erneut."
+        default:
+            "Pace konnte nicht gestartet werden. Bitte versuche es erneut."
+        }
     }
 }

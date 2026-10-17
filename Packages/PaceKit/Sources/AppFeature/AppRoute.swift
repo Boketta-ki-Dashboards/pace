@@ -1,19 +1,29 @@
 import Foundation
 import HealthPermissionFeature
-import HomeFeature
+import OnboardingFeature
 
 /// Oberste Navigationsebene der App. Jede Route besitzt das ViewModel ihres Screens.
 public enum AppRoute {
     case launching
     case healthDataUnavailable
     case healthPermission(HealthPermissionViewModel)
-    case home(HomeViewModel)
+    /// Das Backend ist nicht konfiguriert (Entwicklungsumgebung ohne `Config/Pace.xcconfig`).
+    case backendUnavailable(message: String)
+    /// Sitzung und Profil werden geprüft.
+    case connecting
+    case connectionFailed(message: String)
+    case onboarding(OnboardingViewModel)
+    case main(MainViewModel)
 
     public enum Kind: Hashable, Sendable {
         case launching
         case healthDataUnavailable
         case healthPermission
-        case home
+        case backendUnavailable
+        case connecting
+        case connectionFailed
+        case onboarding
+        case main
     }
 
     public var kind: Kind {
@@ -21,7 +31,11 @@ public enum AppRoute {
         case .launching: .launching
         case .healthDataUnavailable: .healthDataUnavailable
         case .healthPermission: .healthPermission
-        case .home: .home
+        case .backendUnavailable: .backendUnavailable
+        case .connecting: .connecting
+        case .connectionFailed: .connectionFailed
+        case .onboarding: .onboarding
+        case .main: .main
         }
     }
 }
