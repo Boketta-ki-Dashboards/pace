@@ -33,6 +33,8 @@ struct OnboardingStepHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.xs) {
+            PaceWordmark(height: 30)
+                .padding(.bottom, PaceSpacing.s)
             Text("Schritt \(step) von \(OnboardingViewModel.stepCount)")
                 .font(PaceFont.caption.weight(.semibold))
                 .foregroundStyle(PaceColor.accent)

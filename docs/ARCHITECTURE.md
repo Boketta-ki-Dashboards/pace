@@ -8,12 +8,13 @@ als Abhängigkeit deklariert.
 
 ```
 Pace (App-Target)            Composition Root: erzeugt HealthKitService + SupabaseBackend, startet RootView
- ├── AppFeature              Routing (AppRouter), Tab-Navigation (MainTabView), AppDependencies
+ ├── AppFeature              Routing (AppRouter), Tabs Home · Rankings · Social · Profil (MainTabView)
  │    ├── HealthPermissionFeature   Health-Permission-Flow
- │    ├── HomeFeature               Dashboard (Competition Steps, kcal, km) → ActivityFeature
+ │    ├── HomeFeature               anpassbares Home-Dashboard → ActivityFeature
  │    │    └── ActivityFeature      Detail-Statistiken (Swift Charts)
  │    ├── OnboardingFeature         Profil anlegen, Region wählen → RegionFeature
  │    ├── LeaderboardFeature        Regionale Daily Rankings
+ │    ├── SocialFeature             Social-Bereich (Freunde, Gruppen, Einladungen – vorbereitet)
  │    ├── ProfileFeature            Profil/Einstellungen → RegionFeature
  │    │    └── RegionFeature        Gemeindesuche (wiederverwendbar)
  │    ├── DesignSystem              Farben, Typografie, Abstände, Komponenten
@@ -45,14 +46,40 @@ App-Start
   → Sitzung: gespeicherte nutzen, sonst anonym anmelden        (SessionBootstrapper)
   → Profil: fehlt → Onboarding Profil → Onboarding Region
             ohne Region → Onboarding Region
-            vollständig → Main App (Tabs: Heute · Rankings · Profil)
+            vollständig → Main App (Tabs: Home · Rankings · Social · Profil)
 ```
 
 - Ein vollständiges Profil wird lokal zwischengespeichert (`UserDefaultsProfileCache`). Ist es vorhanden, startet
   die App auch offline direkt in die Main App und gleicht das Profil im Hintergrund ab.
 - `AppRoute` besitzt das ViewModel des aktuellen Screens. Die Main App teilt einen `ProfileStore` (Profil + Region)
   zwischen Rankings und Profil.
-- Weitere Tabs (z. B. Social) kommen als zusätzlicher Fall in `MainViewModel.Tab` mit eigenem Feature-Modul hinzu.
+- Weitere Tabs kommen als zusätzlicher Fall in `MainViewModel.Tab` mit eigenem Feature-Modul hinzu. Home wechselt
+  über Callbacks in andere Tabs (z. B. eine Ranking-Karte → Rankings mit dieser Ebene), ohne die Main App zu kennen.
+
+## Home-Dashboard
+
+- `HomeDashboardViewModel` setzt das Dashboard aus eigenständigen Bereichen (`HomeSection`) zusammen: Platzierungen,
+  Schritte heute, Woche, Umfeld, Freunde, Gruppen. Reihenfolge und Sichtbarkeit wählt der Nutzer über „Anpassen“
+  (`HomeSettings`, lokal in den `UserDefaults`); „Deine Schritte heute“ bleibt immer sichtbar. Ein neuer Bereich ist
+  ein neuer `HomeSection`-Fall plus eine View.
+- Das Tagesziel ist eine lokale Einstellung und beeinflusst keine Rankings.
+- Platzierungen und Umfeld (`RegionalStandingsViewModel`) nutzen die bestehenden Ranking-RPCs (eigene Position
+  ± Nachbarn je Ebene); es gibt dafür keine neue Backend-Funktion.
+- Freunde und Gruppen haben noch kein Backend und zeigen ehrliche Leerzustände; der Social-Tab ist strukturell
+  vorbereitet.
+- Darstellung: Komponenten in `HomeFeature/Views/Dashboard/`, gemeinsame Bausteine im `DesignSystem` (Karten, Kacheln,
+  Fortschrittsring, Avatar, Wortmarke).
+
+## Aktualisierung der Schritte
+
+- HealthKit-Observer (`HKObserverQuery`) für alle gelesenen Typen: neue Samples lösen sofort ein Neuladen aus.
+- Zusätzlich, solange die App im Vordergrund ist, alle 15 Sekunden eine lokale Abfrage aus Apple Health (kein
+  Netzwerk), falls Meldungen verzögert oder gebündelt ankommen.
+- Sofortiges Neuladen bei Rückkehr in die App sowie bei Tages-, Zeitzonen- und Sommerzeitwechsel.
+- Grenze: iOS schreibt die Schritte des iPhones gebündelt nach Apple Health. Schneller als Health selbst kann Pace die
+  Werte daher nicht anzeigen. Echtes Live-Zählen ginge nur über CoreMotion (eigene Berechtigung) und ist bewusst nicht
+  eingebaut.
+- Die Auslöser hängen an der ganzen Main App (`activityUpdates(_:)`), nicht an einem Tab.
 
 ## Datenfluss Bewegung → Ranking
 
@@ -106,6 +133,7 @@ pace/
 │   │   ├── OnboardingFeature/
 │   │   ├── LeaderboardFeature/
 │   │   ├── ProfileFeature/
+│   │   ├── SocialFeature/
 │   │   └── AppFeature/
 │   └── Tests/                          ein Test-Target pro Modul mit Logik + PaceTestSupport (Test-Doubles);
 │                                       DesignSystem (reine Darstellung) hat keine eigenen Tests
@@ -119,6 +147,7 @@ pace/
 ├── .github/workflows/
 │   ├── ios.yml                         Xcode-Build, Warnungsprüfung, Tests
 │   └── backend.yml                     Secret-Scan, lokaler Supabase-Stack, pgTAP, Integrationstests
+├── Branding/                           Wortmarke (Quelle) + Generator für App-Icon, Startbildschirm, Wortmarke
 └── docs/
     ├── ARCHITECTURE.md
     ├── BACKEND.md
@@ -139,7 +168,7 @@ Neue Swift-Dateien im Ordner `Pace/` erkennt Xcode automatisch. Neue Dateien in
 | `connecting` | Sitzung und Profil werden geprüft |
 | `connectionFailed` | keine Verbindung beim ersten Start (ohne Profil-Cache) – mit „Erneut versuchen“ |
 | `onboarding` | Profil oder Region fehlen |
-| `main` | Tabs Heute · Rankings · Profil |
+| `main` | Tabs Home · Rankings · Social · Profil |
 
 ## Tests
 

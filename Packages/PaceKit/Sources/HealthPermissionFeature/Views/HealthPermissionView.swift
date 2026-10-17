@@ -53,11 +53,14 @@ public struct HealthPermissionView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.m) {
+            PaceWordmark(height: 34)
+                .padding(.bottom, PaceSpacing.xs)
+
             Image(systemName: "figure.walk")
                 .font(.system(size: 32, weight: .bold))
                 .foregroundStyle(PaceColor.onAccent)
                 .frame(width: 72, height: 72)
-                .background(PaceColor.accent, in: RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous))
+                .background(PaceColor.accentStrong, in: RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous))
                 .accessibilityHidden(true)
 
             Text("Deine Schritte zählen")

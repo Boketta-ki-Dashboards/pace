@@ -64,7 +64,8 @@ struct RegionSearchViewModelTests {
 
     @Test func rapidTypingOnlySearchesTheLatestQuery() async throws {
         let regions = RegionRepositoryStub()
-        let viewModel = makeViewModel(regions, debounce: .milliseconds(50))
+        // Großzügige Wartezeit, damit der Abbruch auch auf einer ausgelasteten CI sicher davor liegt.
+        let viewModel = makeViewModel(regions, debounce: .milliseconds(500))
 
         // Wie `.task(id:)`: Jede neue Eingabe bricht die vorige Suche ab.
         let first = Task { await viewModel.search("Fra") }

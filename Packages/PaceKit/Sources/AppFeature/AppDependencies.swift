@@ -1,4 +1,5 @@
 import Foundation
+import HomeFeature
 import PaceCore
 
 /// Alle Services, die die Features benötigen – ausschließlich als Protokolle.
@@ -13,15 +14,19 @@ public struct AppDependencies: Sendable {
     public let healthAuthorization: any HealthAuthorizationProviding
     public let activityData: any ActivityDataProviding
     public let backend: Backend
+    /// Tagesziel und Aufbau des Home-Dashboards (nur auf dem Gerät).
+    public let homePreferences: any HomePreferencesStoring
 
     public init(
         healthAuthorization: any HealthAuthorizationProviding,
         activityData: any ActivityDataProviding,
-        backend: Backend
+        backend: Backend,
+        homePreferences: any HomePreferencesStoring = UserDefaultsHomePreferencesStore()
     ) {
         self.healthAuthorization = healthAuthorization
         self.activityData = activityData
         self.backend = backend
+        self.homePreferences = homePreferences
     }
 }
 

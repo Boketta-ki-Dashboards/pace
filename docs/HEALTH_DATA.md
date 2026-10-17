@@ -90,6 +90,14 @@ Das betrifft nur die Statistik der letzten 7 Tage.
 - Geladen werden immer die letzten 7 Tage. Daraus ergeben sich „heute“, „gestern“, „aktuelle Woche“ und
   „letzte 7 Tage“.
 
+## Wann gelesen wird
+
+- Beim Start, bei Rückkehr in die App, per Pull-to-Refresh und bei Tages-/Zeitzonenwechsel.
+- Sofort, wenn HealthKit neue Samples meldet (`HKObserverQuery`).
+- Zusätzlich alle 15 Sekunden, solange die App im Vordergrund ist – nur lokal aus Apple Health, ohne Netzwerk.
+- Schneller als Apple Health selbst geht es nicht: iOS schreibt die Schritte des iPhones gebündelt nach Health.
+  Pace bietet bewusst keine Möglichkeit, Schritte manuell einzutragen.
+
 ## Was ins Backend geht
 
 Tabelle `daily_activity` (siehe `docs/BACKEND.md`):

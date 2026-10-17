@@ -37,8 +37,8 @@ let package = Package(
             ]
         ),
 
-        // Farben, Typografie, Abstände und wiederverwendbare UI-Komponenten.
-        .target(name: "DesignSystem"),
+        // Farben, Typografie, Abstände, Wortmarke und wiederverwendbare UI-Komponenten.
+        .target(name: "DesignSystem", resources: [.process("Resources")]),
 
         // Features: jeweils ViewModel (ohne SwiftUI) + Views.
         .target(name: "HealthPermissionFeature", dependencies: ["PaceCore", "DesignSystem"]),
@@ -48,13 +48,14 @@ let package = Package(
         .target(name: "OnboardingFeature", dependencies: ["PaceCore", "DesignSystem", "RegionFeature"]),
         .target(name: "LeaderboardFeature", dependencies: ["PaceCore", "DesignSystem"]),
         .target(name: "ProfileFeature", dependencies: ["PaceCore", "DesignSystem", "RegionFeature"]),
+        .target(name: "SocialFeature", dependencies: ["DesignSystem"]),
 
         // App-Routing, Tab-Navigation und Zusammenbau der Features.
         .target(
             name: "AppFeature",
             dependencies: [
                 "PaceCore", "DesignSystem", "HealthPermissionFeature", "HomeFeature",
-                "OnboardingFeature", "LeaderboardFeature", "ProfileFeature",
+                "OnboardingFeature", "LeaderboardFeature", "ProfileFeature", "SocialFeature",
             ]
         ),
 
@@ -75,6 +76,15 @@ let package = Package(
         .testTarget(name: "OnboardingFeatureTests", dependencies: ["OnboardingFeature", "PaceTestSupport"]),
         .testTarget(name: "LeaderboardFeatureTests", dependencies: ["LeaderboardFeature", "PaceTestSupport"]),
         .testTarget(name: "ProfileFeatureTests", dependencies: ["ProfileFeature", "PaceTestSupport"]),
-        .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "OnboardingFeature", "PaceTestSupport"]),
+        .testTarget(name: "SocialFeatureTests", dependencies: ["SocialFeature"]),
+        // Rendert Screens als Bilder für die visuelle Kontrolle (nur mit PACE_SNAPSHOT_DIR, siehe ios.yml).
+        .testTarget(
+            name: "PaceSnapshotTests",
+            dependencies: [
+                "PaceCore", "DesignSystem", "ActivityFeature", "HomeFeature", "LeaderboardFeature",
+                "ProfileFeature", "SocialFeature", "PaceTestSupport",
+            ]
+        ),
+        .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "HomeFeature", "OnboardingFeature", "PaceTestSupport"]),
     ]
 )

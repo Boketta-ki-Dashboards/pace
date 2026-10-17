@@ -1,35 +1,94 @@
 import ActivityFeature
 import DesignSystem
+import PaceCore
 import SwiftUI
 
-/// Home-Screen: verbindet das ViewModel mit der Darstellung. Die Aktualisierungs-Auslöser hängen an der ganzen
-/// Main App (`activityUpdates(_:)`), damit sie auch laufen, während ein anderer Tab offen ist.
+/// Home-Dashboard: Wortmarke und Begrüßung, danach die vom Nutzer gewählten Bereiche in seiner Reihenfolge.
+///
+/// Die Aktualisierungs-Auslöser für Bewegungsdaten hängen an der ganzen Main App (`activityUpdates(_:)`), damit sie
+/// auch laufen, während ein anderer Tab offen ist.
 public struct HomeView: View {
-    private let viewModel: HomeViewModel
-    private let formatter: ActivityFormatter
+    @Bindable private var viewModel: HomeDashboardViewModel
 
-    public init(viewModel: HomeViewModel, formatter: ActivityFormatter = ActivityFormatter()) {
+    @Environment(\.scenePhase) private var scenePhase
+
+    public init(viewModel: HomeDashboardViewModel) {
         self.viewModel = viewModel
-        self.formatter = formatter
     }
 
     public var body: some View {
         NavigationStack {
-            HomeContentView(
-                state: viewModel.state,
-                manualStepsNote: viewModel.manualStepsNote,
-                formatter: formatter,
-                onRetry: { Task { await viewModel.retry() } }
-            ) {
-                ActivityDetailsView(source: viewModel, formatter: formatter)
+            ScrollView {
+                VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                    HomeHeaderView(
+                        greeting: viewModel.greeting,
+                        onCustomize: { viewModel.present(.customize) },
+                        onNotifications: { viewModel.present(.notifications) }
+                    )
+                    .padding(.bottom, PaceSpacing.xxs)
+
+                    ForEach(viewModel.visibleSections) { section in
+                        sectionView(section)
+                    }
+                }
+                .padding(.horizontal, PaceSpacing.m)
+                .padding(.bottom, PaceSpacing.l)
             }
             .refreshable { [viewModel] in await viewModel.refresh() }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    PaceWordmark()
-                }
+            .paceScreenBackground()
+            .toolbar(.hidden, for: .navigationBar)
+        }
+        .task(id: viewModel.standingsReloadKey) { [viewModel] in
+            await viewModel.loadIfNeeded()
+        }
+        .onChange(of: viewModel.stepsToday?.steps) {
+            Task { await viewModel.stepsDidChange() }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            // Zurück in der App: Platzierungen auffrischen, falls sie älter als eine Minute sind.
+            guard newPhase == .active else { return }
+            Task { await viewModel.stepsDidChange() }
+        }
+        .sheet(item: $viewModel.presentedSheet) { sheet in
+            switch sheet {
+            case .customize:
+                HomeCustomizeSheet(settings: viewModel.settings)
+            case .stepGoal:
+                StepGoalSheet(settings: viewModel.settings)
+            case .notifications:
+                NotificationsSheet()
             }
+        }
+    }
+
+    @ViewBuilder
+    private func sectionView(_ section: HomeSection) -> some View {
+        switch section {
+        case .regionRanks:
+            RegionRankCardsView(standings: viewModel.standings) { scope in
+                viewModel.openRankings(scope)
+            }
+        case .stepsToday:
+            StepsTodayCardView(
+                state: viewModel.activity.state,
+                summary: viewModel.stepsToday,
+                onEditGoal: { viewModel.present(.stepGoal) },
+                onRetry: { Task { await viewModel.activity.retry() } }
+            ) {
+                ActivityDetailsView(source: viewModel.activity)
+            }
+        case .week:
+            WeekOverviewCardView(week: viewModel.week) {
+                ActivityDetailsView(source: viewModel.activity)
+            }
+        case .neighborhood:
+            NeighborhoodCardView(standings: viewModel.standings) { scope in
+                viewModel.openRankings(scope)
+            }
+        case .friends:
+            FriendsPreviewCardView { viewModel.openSocial() }
+        case .groups:
+            GroupsPreviewCardView { viewModel.openSocial() }
         }
     }
 }

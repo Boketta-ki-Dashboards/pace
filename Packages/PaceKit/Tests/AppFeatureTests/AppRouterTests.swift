@@ -1,5 +1,6 @@
 import AppFeature
 import Foundation
+import HomeFeature
 import OnboardingFeature
 import PaceCore
 import PaceTestSupport
@@ -32,7 +33,8 @@ struct AppRouterTests {
         let dependencies = AppDependencies(
             healthAuthorization: health,
             activityData: health,
-            backend: backend ?? .available(services)
+            backend: backend ?? .available(services),
+            homePreferences: InMemoryHomePreferencesStore()
         )
         return (AppRouter(dependencies: dependencies), Environment(health: health, auth: auth, profiles: profiles, cache: cache))
     }
@@ -172,6 +174,30 @@ struct AppRouterTests {
         }
         #expect(main.selectedTab == .home)
         #expect(main.store.profile == Fixtures.profile())
+    }
+
+    @Test func mainAppHasFourTabsAndHomeOpensRankingsAndSocial() async {
+        let profiles = ProfileRepositoryStub { $0.profiles[Fixtures.userID] = Fixtures.profile(regionalLeaderboardEnabled: true) }
+        let (router, _) = makeRouter(auth: AuthStub(storedSession: session), profiles: profiles)
+        await router.start()
+        guard case .main(let main) = router.route else {
+            Issue.record("Expected main, got \(router.route.kind)")
+            return
+        }
+        try? await main.store.loadHierarchyIfNeeded()
+
+        await main.openRankings(scope: Fixtures.hessen)
+        #expect(main.selectedTab == .rankings)
+        #expect(main.leaderboard.selectedScope?.id == Fixtures.hessen.id)
+
+        main.openSocial()
+        #expect(main.selectedTab == .social)
+
+        // Home leitet über dieselbe Navigation weiter.
+        main.dashboard.openRankings(nil)
+        try? await waitUntil { main.selectedTab == .rankings }
+        #expect(main.selectedTab == .rankings)
+        #expect(main.home === main.dashboard.activity)
     }
 
     @Test func cachedProfileOpensMainAppWithoutNetwork() async {

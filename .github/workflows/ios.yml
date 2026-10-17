@@ -92,11 +92,21 @@ jobs:
       - name: Test
         run: |
           set -o pipefail
-          xcodebuild test \
+          # PACE_SNAPSHOT_DIR: PaceSnapshotTests rendert damit Screens als Bilder (Artefakt „snapshots“).
+          TEST_RUNNER_PACE_SNAPSHOT_DIR="$GITHUB_WORKSPACE/snapshots" xcodebuild test \
             -project Pace.xcodeproj \
             -scheme Pace \
             -destination "id=${{ steps.simulator.outputs.udid }}" \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log
+
+      - name: Upload screen snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: snapshots/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Backend integration tests build on macOS
         # Ohne Supabase-Umgebung werden die Integrationstests übersprungen (sie laufen in backend.yml gegen einen

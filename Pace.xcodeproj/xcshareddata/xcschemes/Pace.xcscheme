@@ -134,6 +134,26 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "PaceSnapshotTests"
+               BuildableName = "PaceSnapshotTests"
+               BlueprintName = "PaceSnapshotTests"
+               ReferencedContainer = "container:Packages/PaceKit">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "SocialFeatureTests"
+               BuildableName = "SocialFeatureTests"
+               BlueprintName = "SocialFeatureTests"
+               ReferencedContainer = "container:Packages/PaceKit">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "ProfileFeatureTests"
                BuildableName = "ProfileFeatureTests"
                BlueprintName = "ProfileFeatureTests"

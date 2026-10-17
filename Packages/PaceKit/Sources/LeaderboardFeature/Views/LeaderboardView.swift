@@ -13,7 +13,7 @@ public struct LeaderboardView: View {
     public var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: PaceSpacing.m) {
+                VStack(alignment: .leading, spacing: PaceSpacing.s) {
                     if !viewModel.scopes.isEmpty {
                         ScopePicker(
                             scopes: viewModel.scopes,
@@ -29,9 +29,10 @@ public struct LeaderboardView: View {
 
                     content
                 }
-                .padding(PaceSpacing.m)
+                .padding(.horizontal, PaceSpacing.m)
+                .padding(.bottom, PaceSpacing.l)
             }
-            .refreshable { await viewModel.refresh() }
+            .refreshable { [viewModel] in await viewModel.refresh() }
             .navigationTitle("Rankings")
             .paceScreenBackground()
         }
@@ -44,47 +45,60 @@ public struct LeaderboardView: View {
     private var content: some View {
         switch viewModel.state {
         case .loading:
-            PaceLoadingView("Ranking wird geladen …")
-                .frame(minHeight: 240)
+            PaceCard {
+                PaceLoadingView("Ranking wird geladen …")
+                    .frame(minHeight: 220)
+            }
 
         case .failed(let message):
-            PaceStatusView(
-                systemImage: "wifi.exclamationmark",
-                title: "Ranking nicht verfügbar",
-                message: message,
-                tint: PaceColor.warning
-            ) {
-                Button("Erneut versuchen") {
-                    Task { await viewModel.retry() }
+            PaceCard {
+                PaceStatusView(
+                    systemImage: "wifi.exclamationmark",
+                    title: "Ranking nicht verfügbar",
+                    message: message,
+                    tint: PaceColor.warning
+                ) {
+                    Button("Erneut versuchen") {
+                        Task { await viewModel.retry() }
+                    }
+                    .buttonStyle(.pacePrimary)
                 }
-                .buttonStyle(.pacePrimary)
             }
 
         case .loaded(let snapshot):
-            LeaderboardList(snapshot: snapshot, emptyStateText: viewModel.emptyStateText)
+            PaceCard {
+                VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                    LeaderboardList(
+                        title: viewModel.selectedScope?.displayName ?? "Heute",
+                        snapshot: snapshot,
+                        emptyStateText: viewModel.emptyStateText
+                    )
 
-            if viewModel.canLoadMore || viewModel.isLoadingMore {
-                Button {
-                    Task { await viewModel.loadMore() }
-                } label: {
-                    if viewModel.isLoadingMore {
-                        ProgressView().tint(PaceColor.accent)
-                    } else {
-                        Text("Weitere Plätze laden")
+                    if viewModel.canLoadMore || viewModel.isLoadingMore {
+                        Button {
+                            Task { await viewModel.loadMore() }
+                        } label: {
+                            if viewModel.isLoadingMore {
+                                ProgressView().tint(PaceColor.accentStrong)
+                            } else {
+                                Text("Weitere Plätze laden")
+                            }
+                        }
+                        .buttonStyle(.paceSecondary)
+                        .disabled(viewModel.isLoadingMore)
+                    }
+                    if let error = viewModel.loadMoreError {
+                        Text(error)
+                            .font(PaceFont.caption)
+                            .foregroundStyle(PaceColor.danger)
                     }
                 }
-                .buttonStyle(.paceSecondary)
-                .disabled(viewModel.isLoadingMore)
-            }
-            if let error = viewModel.loadMoreError {
-                Text(error)
-                    .font(PaceFont.caption)
-                    .foregroundStyle(PaceColor.danger)
             }
 
-            Text("Es zählen nur Wettbewerbsschritte – manuell eingetragene Schritte nicht.")
+            Label("Es zählen nur Wettbewerbsschritte – manuell eingetragene Schritte nicht.", systemImage: "checkmark.shield")
                 .font(PaceFont.caption)
                 .foregroundStyle(PaceColor.textSecondary)
+                .padding(.horizontal, PaceSpacing.xxs)
         }
     }
 }
@@ -106,15 +120,17 @@ private struct ScopePicker: View {
                         Text(scope.displayName)
                             .font(PaceFont.callout.weight(.semibold))
                             .lineLimit(1)
-                            .padding(.horizontal, PaceSpacing.s)
-                            .padding(.vertical, PaceSpacing.xs)
+                            .padding(.horizontal, PaceSpacing.m)
+                            .padding(.vertical, PaceSpacing.xs + 2)
                             .foregroundStyle(isSelected ? PaceColor.onAccent : PaceColor.textPrimary)
-                            .background(isSelected ? PaceColor.accent : PaceColor.surface, in: Capsule())
+                            .background(isSelected ? PaceColor.accentStrong : PaceColor.surface, in: Capsule())
+                            .overlay(Capsule().strokeBorder(isSelected ? Color.clear : PaceColor.border, lineWidth: 1))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pacePressable)
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
+            .padding(.vertical, 2)
         }
     }
 }
@@ -126,13 +142,23 @@ private struct ParticipationBanner: View {
     var body: some View {
         PaceCard {
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                Label("Du erscheinst noch nicht in regionalen Rankings.", systemImage: "eye.slash")
-                    .font(PaceFont.headline)
-                    .foregroundStyle(PaceColor.textPrimary)
-                Text("Wenn du regional antrittst, sehen andere deinen Anzeigenamen, deinen Benutzernamen und deine Wettbewerbsschritte.")
-                    .font(PaceFont.callout)
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .top, spacing: PaceSpacing.s) {
+                    Image(systemName: "eye.slash")
+                        .font(.headline)
+                        .foregroundStyle(PaceColor.accentStrong)
+                        .frame(width: 36, height: 36)
+                        .background(PaceColor.accentSoft, in: Circle())
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
+                        Text("Du erscheinst noch nicht in regionalen Rankings.")
+                            .font(PaceFont.headline)
+                            .foregroundStyle(PaceColor.textPrimary)
+                        Text("Wenn du regional antrittst, sehen andere deinen Anzeigenamen, deinen Benutzernamen und deine Wettbewerbsschritte.")
+                            .font(PaceFont.callout)
+                            .foregroundStyle(PaceColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
                 if let error = viewModel.participationError {
                     Text(error)
                         .font(PaceFont.caption)
@@ -156,40 +182,46 @@ private struct ParticipationBanner: View {
 
 /// Die Plätze eines Rankings.
 private struct LeaderboardList: View {
+    let title: String
     let snapshot: LeaderboardSnapshot
     let emptyStateText: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
-            PaceSectionHeader("Heute", detail: participantsText)
-
-            if let emptyStateText {
-                PaceCard {
-                    Label(emptyStateText, systemImage: snapshot.isCurrentUserAlone ? "flag.checkered" : "person.2")
-                        .font(PaceFont.callout)
-                        .foregroundStyle(PaceColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(PaceFont.cardTitle)
+                    .foregroundStyle(PaceColor.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: PaceSpacing.xs)
+                Text("Heute · \(participantsText)")
+                    .font(PaceFont.caption)
+                    .foregroundStyle(PaceColor.textSecondary)
             }
 
-            if !snapshot.rows.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(snapshot.rows) { row in
-                        switch row {
-                        case .entry(let entry):
-                            LeaderboardEntryRow(entry: entry)
-                        case .gap:
-                            Text("…")
-                                .font(PaceFont.headline)
-                                .foregroundStyle(PaceColor.textSecondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, PaceSpacing.xxs)
-                                .accessibilityLabel("Weitere Plätze ausgelassen")
-                        }
+            if let emptyStateText {
+                Label(emptyStateText, systemImage: snapshot.isCurrentUserAlone ? "flag.checkered" : "person.2")
+                    .font(PaceFont.callout)
+                    .foregroundStyle(PaceColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, PaceSpacing.xxs)
+            }
+
+            VStack(spacing: PaceSpacing.xs) {
+                ForEach(snapshot.rows) { row in
+                    switch row {
+                    case .entry(let entry):
+                        LeaderboardEntryRow(entry: entry)
+                    case .gap:
+                        Image(systemName: "ellipsis")
+                            .font(.headline)
+                            .foregroundStyle(PaceColor.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, PaceSpacing.xxs)
+                            .accessibilityLabel("Weitere Plätze ausgelassen")
                     }
                 }
-                .background(PaceColor.surface)
-                .clipShape(RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous))
             }
         }
     }
@@ -203,44 +235,59 @@ private struct LeaderboardEntryRow: View {
     let entry: LeaderboardEntry
 
     var body: some View {
-        HStack(spacing: PaceSpacing.s) {
-            Text("\(entry.rank)")
-                .font(PaceFont.headline.monospacedDigit())
-                .foregroundStyle(entry.rank <= 3 ? PaceColor.accent : PaceColor.textSecondary)
-                .frame(minWidth: 32, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: PaceSpacing.xxs) {
-                    Text(entry.displayName)
-                        .font(PaceFont.headline)
+        PaceTile(isHighlighted: entry.isCurrentUser) {
+            HStack(spacing: PaceSpacing.s) {
+                rank
+                PaceAvatar(
+                    name: entry.displayName,
+                    seed: entry.publicUserID.uuidString,
+                    size: 36,
+                    isHighlighted: entry.isCurrentUser
+                )
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(entry.isCurrentUser ? "DU" : entry.displayName)
+                        .font(.system(.headline, weight: entry.isCurrentUser ? .bold : .semibold))
                         .foregroundStyle(PaceColor.textPrimary)
                         .lineLimit(1)
-                    if entry.isCurrentUser {
-                        Text("Du")
-                            .font(PaceFont.caption.weight(.bold))
-                            .foregroundStyle(PaceColor.onAccent)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .background(PaceColor.accent, in: Capsule())
-                    }
+                    Text("@\(entry.username)")
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .lineLimit(1)
                 }
-                Text("@\(entry.username)")
-                    .font(PaceFont.caption)
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .lineLimit(1)
+                Spacer(minLength: PaceSpacing.xs)
+                Text(entry.competitionSteps.formatted(.number))
+                    .font(.system(.headline, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(PaceColor.textPrimary)
             }
-
-            Spacer(minLength: PaceSpacing.xs)
-
-            Text(entry.competitionSteps.formatted(.number))
-                .font(PaceFont.headline.monospacedDigit())
-                .foregroundStyle(PaceColor.textPrimary)
+            .padding(.vertical, 2)
         }
-        .padding(.horizontal, PaceSpacing.m)
-        .padding(.vertical, PaceSpacing.s)
-        .background(entry.isCurrentUser ? PaceColor.accent.opacity(0.12) : Color.clear)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
+    }
+
+    @ViewBuilder
+    private var rank: some View {
+        if entry.rank <= 3 {
+            Image(systemName: "\(entry.rank).circle.fill")
+                .font(.title2)
+                .foregroundStyle(Self.medalColor(entry.rank))
+                .frame(minWidth: 40, alignment: .leading)
+        } else {
+            Text("#\(entry.rank)")
+                .font(.system(.headline, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(PaceColor.textPrimary)
+                .frame(minWidth: 40, alignment: .leading)
+        }
+    }
+
+    private static func medalColor(_ rank: Int) -> Color {
+        switch rank {
+        case 1: Color(red: 0.86, green: 0.65, blue: 0.13)
+        case 2: Color(red: 0.6, green: 0.62, blue: 0.66)
+        default: Color(red: 0.72, green: 0.45, blue: 0.24)
+        }
     }
 
     private var accessibilityText: String {

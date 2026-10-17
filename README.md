@@ -9,9 +9,15 @@ Native iOS-App, die tägliche Bewegung zu einem Social Game macht: **Wer bewegt 
 - Home-Dashboard (Competition Steps groß, kcal und km klein) und Detail-Statistiken (heute, letzte 7 Tage, Swift Charts)
 - Supabase-Backend: anonyme MVP-Identität, Profile, deutsches Regionensystem nach amtlichem Gemeindeverzeichnis,
   Sync der täglichen Competition Steps, regionale Daily Rankings (Gemeinde, Kreis, Bundesland, Deutschland)
-- Onboarding (Profil + Region mit ausdrücklicher Zustimmung zu Regionalrankings), Tabs Heute · Rankings · Profil
+- Onboarding (Profil + Region mit ausdrücklicher Zustimmung zu Regionalrankings)
+- Pace-Design (grüne Markenidentität, Light/Dark): anpassbares Home-Dashboard mit Platzierungen, Tagesziel, Woche und
+  Umfeld; Tabs Home · Rankings · Social · Profil; Social-Bereich vorbereitet
 
-Noch nicht enthalten: Freunde, Gruppen, Challenges, Streaks, Widgets, Benachrichtigungen, Karte, Chat.
+Noch nicht enthalten: Freunde, Gruppen, Challenges, Streaks, Widgets, Benachrichtigungen, Karte, Chat
+(Freunde und Gruppen sind im Social-Tab und auf Home als „bald verfügbar“ vorbereitet).
+
+App-Icon, Startbildschirm-Logo und Wortmarke entstehen aus `Branding/source/pace-wordmark.jpg`:
+`python3 -I Branding/generate_assets.py` (benötigt Pillow).
 
 ## Voraussetzungen
 

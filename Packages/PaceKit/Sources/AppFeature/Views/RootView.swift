@@ -15,7 +15,9 @@ public struct RootView: View {
         Group {
             switch router.route {
             case .launching:
-                PaceLoadingView()
+                // Wie der Startbildschirm: Wortmarke auf ruhigem Hintergrund.
+                PaceWordmark(height: 52)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .paceScreenBackground()
             case .healthDataUnavailable:
                 HealthDataUnavailableView()

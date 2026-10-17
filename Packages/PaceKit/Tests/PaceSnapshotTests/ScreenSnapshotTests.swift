@@ -1,0 +1,171 @@
+import ActivityFeature
+import DesignSystem
+import Foundation
+@testable import HomeFeature
+import LeaderboardFeature
+import PaceCore
+import PaceTestSupport
+import ProfileFeature
+import SocialFeature
+import SwiftUI
+import Testing
+import UIKit
+
+/// Rendert die wichtigsten Screens mit Beispieldaten als PNG – zur visuellen Kontrolle in der CI (Artefakt
+/// „snapshots“). Läuft nur, wenn `PACE_SNAPSHOT_DIR` gesetzt ist, und prüft nichts: Es entstehen nur Bilder.
+@MainActor
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["PACE_SNAPSHOT_DIR"] != nil))
+struct ScreenSnapshotTests {
+    private let width: CGFloat = 393
+
+    @Test func homeDashboard() async throws {
+        let (dashboard, _) = try await makeDashboard()
+        let content = VStack(alignment: .leading, spacing: PaceSpacing.s) {
+            HomeHeaderView(greeting: dashboard.greeting, onCustomize: {}, onNotifications: {})
+            RegionRankCardsView(standings: dashboard.standings) { _ in }
+            StepsTodayCardView(
+                state: dashboard.activity.state,
+                summary: dashboard.stepsToday,
+                onEditGoal: {},
+                onRetry: {}
+            ) { EmptyView() }
+            WeekOverviewCardView(week: dashboard.week) { EmptyView() }
+            NeighborhoodCardView(standings: dashboard.standings) { _ in }
+            FriendsPreviewCardView {}
+            GroupsPreviewCardView {}
+        }
+        .padding(.horizontal, PaceSpacing.m)
+        .padding(.vertical, PaceSpacing.m)
+        try render(content, name: "home")
+    }
+
+    @Test func tabsInWindow() async throws {
+        let (dashboard, store) = try await makeDashboard()
+        let leaderboard = LeaderboardViewModel(
+            store: store,
+            leaderboards: Self.leaderboards(),
+            syncing: nil,
+            calendar: Fixtures.activityCalendar,
+            now: { Fixtures.date(2026, 10, 16, 12) }
+        )
+        await leaderboard.loadIfNeeded()
+        let profile = ProfileViewModel(store: store, regions: RegionRepositoryStub())
+        await profile.load()
+
+        try snapshotInWindow(HomeView(viewModel: dashboard), name: "tab-home")
+        try snapshotInWindow(LeaderboardView(viewModel: leaderboard), name: "tab-rankings")
+        try snapshotInWindow(SocialView(viewModel: SocialViewModel()), name: "tab-social")
+        try snapshotInWindow(ProfileView(viewModel: profile), name: "tab-profile")
+    }
+
+    // MARK: Beispieldaten (nur für Bilder)
+
+    private func makeDashboard() async throws -> (HomeDashboardViewModel, ProfileStore) {
+        let profile = Fixtures.profile(displayName: "Niklas", regionalLeaderboardEnabled: true)
+        let profiles = ProfileRepositoryStub { $0.profiles[profile.id] = profile }
+        let store = ProfileStore(profile: profile, profiles: profiles, regions: RegionRepositoryStub(), cache: InMemoryProfileCache())
+        try await store.loadHierarchyIfNeeded()
+
+        let calendar = Fixtures.activityCalendar
+        let today = Fixtures.day(2026, 10, 16)
+        let week = [6_210, 8_904, 5_480, 6_020, 8_432]
+        let health = HealthServiceStub { configuration in
+            for (offset, steps) in week.enumerated() {
+                let day = calendar.adding(offset - 4, to: today)
+                configuration.setSteps(steps, on: day)
+                configuration.set(.walkingRunningDistance, Double(steps) * 0.72, on: day)
+                configuration.set(.activeEnergy, Double(steps) * 0.0384, on: day)
+            }
+            configuration.setSteps(4_100, on: calendar.adding(-5, to: today))
+            configuration.setSteps(3_900, on: calendar.adding(-6, to: today))
+        }
+        let activity = HomeViewModel(activityData: health, calendar: calendar, now: { Fixtures.date(2026, 10, 16, 18) })
+        await activity.loadIfNeeded()
+
+        let standings = RegionalStandingsViewModel(
+            store: store,
+            leaderboards: Self.leaderboards(),
+            syncing: nil,
+            calendar: calendar,
+            now: { Fixtures.date(2026, 10, 16, 18) }
+        )
+        await standings.load()
+
+        let dashboard = HomeDashboardViewModel(
+            activity: activity,
+            standings: standings,
+            settings: HomeSettings(store: InMemoryHomePreferencesStore()),
+            store: store,
+            calendar: calendar,
+            formatter: ActivityFormatter(locale: Locale(identifier: "de_DE"), calendar: calendar)
+        )
+        return (dashboard, store)
+    }
+
+    private static func leaderboards() -> LeaderboardRepositoryStub {
+        let names = ["Leon", "Flavio", "Mia", "Jonas", "Emma", "Ben", "Lina", "Paul", "Lea", "Finn", "Leon", "Niklas", "Flavio"]
+        func ranking(count: Int, me: Int, myRankSteps: Int) -> [LeaderboardEntry] {
+            (1...count).map { rank in
+                let steps = myRankSteps + (me - rank) * 140 + (rank == me - 1 ? 139 : 0)
+                return LeaderboardEntry(
+                    rank: rank,
+                    publicUserID: UUID(uuidString: String(format: "30000000-0000-4000-8000-%012d", rank))!,
+                    username: rank == me ? "niklas" : "nutzer\(rank)",
+                    displayName: rank == me ? "Niklas" : names[(rank - 1) % names.count],
+                    competitionSteps: max(steps, 0),
+                    isCurrentUser: rank == me
+                )
+            }
+        }
+        return LeaderboardRepositoryStub {
+            $0.rankings[Fixtures.pfungstadt.id] = ranking(count: 30, me: 12, myRankSteps: 8_432)
+            $0.rankings[Fixtures.darmstadtDieburg.id] = ranking(count: 160, me: 148, myRankSteps: 8_432)
+            $0.rankings[Fixtures.hessen.id] = ranking(count: 2_500, me: 2_410, myRankSteps: 8_432)
+            $0.rankings[Fixtures.germany.id] = ranking(count: 18_600, me: 18_520, myRankSteps: 8_432)
+        }
+    }
+
+    // MARK: Rendern
+
+    private var directory: URL {
+        URL(fileURLWithPath: ProcessInfo.processInfo.environment["PACE_SNAPSHOT_DIR"] ?? NSTemporaryDirectory())
+    }
+
+    /// Rendert reine SwiftUI-Inhalte (ohne ScrollView/Navigation) in Hell und Dunkel.
+    private func render(_ content: some View, name: String) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for scheme in [ColorScheme.light, .dark] {
+            let view = content
+                .frame(width: width)
+                .background(PaceColor.background)
+                .environment(\.colorScheme, scheme)
+                .environment(\.locale, Locale(identifier: "de_DE"))
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2
+            renderer.proposedSize = ProposedViewSize(width: width, height: nil)
+            let image = try #require(renderer.uiImage)
+            try #require(image.pngData()).write(to: directory.appendingPathComponent("\(name)-\(scheme == .dark ? "dark" : "light").png"))
+        }
+    }
+
+    /// Ganze Tabs in einem Fenster (inklusive ScrollView und Navigation). Bleibt das Bild leer, ist das kein Fehler.
+    private func snapshotInWindow(_ content: some View, name: String) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let controller = UIHostingController(rootView: content.environment(\.locale, Locale(identifier: "de_DE")))
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 852))
+            window.overrideUserInterfaceStyle = style
+            window.rootViewController = controller
+            window.makeKeyAndVisible()
+            controller.view.setNeedsLayout()
+            controller.view.layoutIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.5))
+            let renderer = UIGraphicsImageRenderer(bounds: window.bounds)
+            let image = renderer.image { _ in
+                window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+            }
+            try #require(image.pngData()).write(to: directory.appendingPathComponent("\(name)-\(style == .dark ? "dark" : "light").png"))
+            window.isHidden = true
+        }
+    }
+}

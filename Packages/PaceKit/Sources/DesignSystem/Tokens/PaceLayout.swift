@@ -13,6 +13,8 @@ public enum PaceSpacing {
 
 /// Eckenradien.
 public enum PaceRadius {
+    /// Kleine Kacheln und Zeilen innerhalb von Karten.
+    public static let tile: CGFloat = 14
     public static let button: CGFloat = 14
-    public static let card: CGFloat = 22
+    public static let card: CGFloat = 20
 }

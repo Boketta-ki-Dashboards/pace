@@ -1,22 +1,49 @@
 import SwiftUI
 import UIKit
 
-/// Farbpalette von Pace. Alle Farben unterstützen Light und Dark Mode.
+/// Farbpalette von Pace (grüne Markenidentität). Alle Farben passen sich an Light und Dark Mode an.
 public enum PaceColor {
-    /// Markenfarbe für primäre Aktionen und Hervorhebungen.
-    public static var accent: Color { Color(light: 0xE5482A, dark: 0xFF7452) }
-    /// Vordergrund auf `accent`-Flächen.
-    public static var onAccent: Color { .white }
+    // MARK: Marke
 
-    public static var background: Color { Color(uiColor: .systemGroupedBackground) }
-    public static var surface: Color { Color(uiColor: .secondarySystemGroupedBackground) }
+    /// Farbe der Wortmarke und großer Markenflächen: tiefes Grün, im Dark Mode Mint.
+    public static var brand: Color { Color(light: 0x072D20, dark: 0xC9F7DA) }
+    /// Akzent für Fortschritt, Links und Symbole.
+    public static var accent: Color { Color(light: 0x1C7A4E, dark: 0xB4F5CC) }
+    /// Gefüllte Buttons, ausgewählte Elemente, Fortschrittsring.
+    public static var accentStrong: Color { Color(light: 0x0A4A31, dark: 0xBDF8D2) }
+    /// Vordergrund auf `accentStrong`- und `accent`-Flächen.
+    public static var onAccent: Color { Color(light: 0xFFFFFF, dark: 0x0A1A14) }
+    /// Zarte Hervorhebung, z. B. die eigene Zeile im Ranking.
+    public static var accentSoft: Color { Color(light: 0xE4F6EA, dark: 0x1C352C) }
 
-    public static var textPrimary: Color { Color(uiColor: .label) }
-    public static var textSecondary: Color { Color(uiColor: .secondaryLabel) }
+    // MARK: Flächen
 
-    public static var success: Color { Color(light: 0x1E9E57, dark: 0x3DD17F) }
-    public static var warning: Color { Color(light: 0xC77A00, dark: 0xFFB940) }
-    public static var danger: Color { Color(light: 0xD32F2F, dark: 0xFF6B66) }
+    public static var background: Color { Color(light: 0xF8F9F7, dark: 0x0E1618) }
+    /// Karten.
+    public static var surface: Color { Color(light: 0xFFFFFF, dark: 0x131D1F) }
+    /// Flächen innerhalb von Karten (Kacheln, Zeilen).
+    public static var surfaceSecondary: Color { Color(light: 0xFFFFFF, dark: 0x172325) }
+    /// Feine Ränder um Karten und Kacheln.
+    public static var border: Color { Color(light: 0xE7EAE6, dark: 0x243033) }
+    /// Hintergrund von Fortschrittsbalken und -ringen.
+    public static var track: Color { Color(light: 0xE1E4E2, dark: 0x343C3E) }
+
+    // MARK: Text
+
+    public static var textPrimary: Color { Color(light: 0x0B120F, dark: 0xF3F7F5) }
+    /// Sekundärer Text mit leichtem Blaustich, wie im Pace-Design.
+    public static var textSecondary: Color { Color(light: 0x4A4D69, dark: 0xA4ACAE) }
+
+    // MARK: Diagramme
+
+    /// Schwächste Stufe in Wochenübersichten; die stärkste ist `accentStrong`.
+    public static var chartLow: Color { Color(light: 0xA7D8B4, dark: 0x5E8F72) }
+
+    // MARK: Status
+
+    public static var success: Color { Color(light: 0x1E8A50, dark: 0x6EE7A0) }
+    public static var warning: Color { Color(light: 0xB86E00, dark: 0xFFB940) }
+    public static var danger: Color { Color(light: 0xC62828, dark: 0xFF6B66) }
 }
 
 extension Color {

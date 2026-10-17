@@ -13,7 +13,7 @@ public struct PacePrimaryButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity, minHeight: 52)
             .padding(.horizontal, PaceSpacing.m)
             .background(
-                PaceColor.accent.opacity(isEnabled ? 1 : 0.45),
+                PaceColor.accentStrong.opacity(isEnabled ? 1 : 0.45),
                 in: RoundedRectangle(cornerRadius: PaceRadius.button, style: .continuous)
             )
             .opacity(configuration.isPressed ? 0.85 : 1)
@@ -31,16 +31,52 @@ public struct PaceSecondaryButtonStyle: ButtonStyle {
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(PaceFont.headline)
-            .foregroundStyle(PaceColor.accent)
+            .foregroundStyle(PaceColor.accentStrong)
             .frame(maxWidth: .infinity, minHeight: 52)
             .padding(.horizontal, PaceSpacing.m)
             .background(
-                PaceColor.accent.opacity(0.12),
+                PaceColor.accentSoft,
                 in: RoundedRectangle(cornerRadius: PaceRadius.button, style: .continuous)
             )
             .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
+}
+
+/// Kompakter gefüllter Button, z. B. „Anpassen“ im Home-Header.
+public struct PaceCompactButtonStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(PaceFont.headline)
+            .foregroundStyle(PaceColor.onAccent)
+            .padding(.horizontal, PaceSpacing.m)
+            .padding(.vertical, PaceSpacing.xs + 2)
+            .background(PaceColor.accentStrong, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+/// Karte oder Zeile als Button: ohne eigene Optik, mit leichtem Feedback beim Drücken.
+public struct PacePressableStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+public extension ButtonStyle where Self == PaceCompactButtonStyle {
+    static var paceCompact: PaceCompactButtonStyle { PaceCompactButtonStyle() }
+}
+
+public extension ButtonStyle where Self == PacePressableStyle {
+    static var pacePressable: PacePressableStyle { PacePressableStyle() }
 }
 
 public extension ButtonStyle where Self == PacePrimaryButtonStyle {

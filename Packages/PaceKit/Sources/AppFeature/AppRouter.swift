@@ -6,6 +6,7 @@ import Observation
 import OnboardingFeature
 import PaceCore
 import ProfileFeature
+import SocialFeature
 
 /// Entscheidet, welcher Screen gezeigt wird, und erzeugt die zugehörigen ViewModels.
 ///
@@ -106,17 +107,29 @@ public final class AppRouter {
         )
         let sync = ActivitySyncCoordinator(repository: services.activitySync, userID: profile.id)
         let home = HomeViewModel(activityData: dependencies.activityData, syncing: sync)
+        let leaderboard = LeaderboardViewModel(
+            store: store,
+            leaderboards: services.leaderboards,
+            syncing: sync,
+            refreshActivity: { [weak home] in await home?.refreshForRanking() }
+        )
+        let navigation = MainNavigation()
+        let dashboard = HomeDashboardViewModel(
+            activity: home,
+            standings: RegionalStandingsViewModel(store: store, leaderboards: services.leaderboards, syncing: sync),
+            settings: HomeSettings(store: dependencies.homePreferences),
+            store: store,
+            onOpenRankings: { [navigation] scope in navigation.openRankings(scope) },
+            onOpenSocial: { [navigation] in navigation.openSocial() }
+        )
         let main = MainViewModel(
-            home: home,
-            leaderboard: LeaderboardViewModel(
-                store: store,
-                leaderboards: services.leaderboards,
-                syncing: sync,
-                refreshActivity: { [weak home] in await home?.refreshForRanking() }
-            ),
+            dashboard: dashboard,
+            leaderboard: leaderboard,
+            social: SocialViewModel(),
             profile: ProfileViewModel(store: store, regions: services.regions),
             store: store
         )
+        navigation.main = main
         route = .main(main)
 
         // Start aus dem Cache: Profil und Region im Hintergrund mit dem Server abgleichen.
@@ -134,5 +147,20 @@ public final class AppRouter {
         default:
             "Pace konnte nicht gestartet werden. Bitte versuche es erneut."
         }
+    }
+}
+
+/// Verbindet Aktionen auf Home mit dem Tab-Wechsel, ohne dass Home die Main App kennt.
+@MainActor
+private final class MainNavigation {
+    weak var main: MainViewModel?
+
+    func openRankings(_ scope: Region?) {
+        guard let main else { return }
+        Task { await main.openRankings(scope: scope) }
+    }
+
+    func openSocial() {
+        main?.openSocial()
     }
 }
