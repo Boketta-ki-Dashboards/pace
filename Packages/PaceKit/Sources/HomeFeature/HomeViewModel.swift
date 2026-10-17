@@ -1,3 +1,4 @@
+import ActivityFeature
 import Foundation
 import Observation
 import PaceCore
@@ -16,11 +17,35 @@ public final class HomeViewModel {
 
     public private(set) var state: State = .loading
 
-    /// Die zuletzt geladenen Werte, auch während eines erneuten Ladevorgangs.
+    /// Die aktuell angezeigten Werte; `nil` während des Ladens, bei Fehlern und ohne Lesezugriff.
     public var overview: ActivityOverview? {
         guard case .loaded(let overview) = state else { return nil }
         return overview
     }
+
+    /// Hinweis unter der Schrittzahl, wenn heute Schritte in Apple Health nicht für Rankings zählen.
+    public var manualStepsNote: String? {
+        guard let overview, overview.today.hasNonCompetitionSteps else { return nil }
+        return ActivityStatsViewModel.manualStepsNote
+    }
+
+    /// Zustand der Detailansicht. Scheitert eine spätere Aktualisierung, bleiben die zuletzt geladenen Werte mit
+    /// Hinweis sichtbar, statt dass die Ansicht leer wird.
+    public var detailsState: ActivityDetailsState {
+        switch state {
+        case .loaded(let overview):
+            return .loaded(overview, notice: nil)
+        case .loading:
+            return lastLoadedOverview.map { .loaded($0, notice: nil) } ?? .loading
+        case .failed(let message):
+            return lastLoadedOverview.map { .loaded($0, notice: message) } ?? .unavailable(message: message)
+        case .noReadAccess:
+            return .unavailable(message: "Pace hat keinen Zugriff auf deine Schritte. Prüfe den Zugriff in der Health-App.")
+        }
+    }
+
+    /// Zuletzt erfolgreich geladene Werte (für die Detailansicht).
+    private var lastLoadedOverview: ActivityOverview?
 
     @ObservationIgnored private let loader: ActivitySummaryLoader
     @ObservationIgnored private let activityData: any ActivityDataProviding
@@ -92,6 +117,7 @@ public final class HomeViewModel {
             switch try await loader.load() {
             case .available(let overview):
                 state = .loaded(overview)
+                lastLoadedOverview = overview
                 submitForSync(overview, trigger: trigger)
             case .noReadAccess:
                 state = .noReadAccess

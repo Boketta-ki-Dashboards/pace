@@ -6,6 +6,7 @@ import SwiftUI
 /// Die heutige Wettbewerbs-Schrittzahl als dominanter Wert, darunter kompakte Nebenwerte mit Link zu den Details.
 struct HomeStepsHero<Details: View>: View {
     let today: DailyActivitySummary
+    let manualStepsNote: String?
     let formatter: ActivityFormatter
     @ViewBuilder let details: () -> Details
 
@@ -38,6 +39,13 @@ struct HomeStepsHero<Details: View>: View {
                     .font(PaceFont.headline.weight(.heavy))
                     .tracking(1.5)
                     .foregroundStyle(PaceColor.accent)
+
+                if let manualStepsNote {
+                    Label(manualStepsNote, systemImage: "info.circle")
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .padding(.top, PaceSpacing.xxs)
+                }
 
                 Divider()
                     .padding(.vertical, PaceSpacing.s)

@@ -6,6 +6,7 @@ import SwiftUI
 /// Reine Darstellung des Home-Zustands – ohne Logik, dadurch einfach in Previews prüfbar.
 struct HomeContentView<Details: View>: View {
     let state: HomeViewModel.State
+    var manualStepsNote: String? = nil
     let formatter: ActivityFormatter
     let onRetry: () -> Void
     @ViewBuilder let details: () -> Details
@@ -19,7 +20,12 @@ struct HomeContentView<Details: View>: View {
 
             case .loaded(let overview):
                 VStack(alignment: .leading, spacing: PaceSpacing.m) {
-                    HomeStepsHero(today: overview.today, formatter: formatter, details: details)
+                    HomeStepsHero(
+                        today: overview.today,
+                        manualStepsNote: manualStepsNote,
+                        formatter: formatter,
+                        details: details
+                    )
                     Text("Aktualisiert um \(formatter.time(overview.updatedAt))")
                         .font(PaceFont.caption)
                         .foregroundStyle(PaceColor.textSecondary)
@@ -91,6 +97,7 @@ private func previewOverview(health: Int, competition: Int) -> ActivityOverview 
     NavigationStack {
         HomeContentView(
             state: .loaded(previewOverview(health: 9_120, competition: 8_742)),
+            manualStepsNote: ActivityStatsViewModel.manualStepsNote,
             formatter: previewFormatter,
             onRetry: {}
         ) {

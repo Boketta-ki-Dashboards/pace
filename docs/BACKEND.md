@@ -7,9 +7,13 @@ Grundsätze:
 
 - In die App gelangt **nur der Publishable Key** (`sb_publishable_…`). Er ist laut Supabase für Apps gedacht und
   allein kein Schutz. Die Sicherheit entsteht durch **Auth + Row Level Security + serverseitige SQL-Funktionen**.
-- **Secret Keys (`sb_secret_…`) und `service_role`-Keys kommen nie in die App oder ins Repository.** Die App
-  verweigert den Start, wenn ein solcher Schlüssel konfiguriert ist (`BackendConfiguration`). Die CI sucht bei jedem
-  Push nach Schlüsseln.
+- **Secret Keys (`sb_secret_…`) und `service_role`-Keys kommen nie in die App oder ins Repository.** Drei Sperren:
+  1. Der Build bricht ab, wenn ein solcher Schlüssel in `Config/Pace.xcconfig` steht (Build-Phase „Check Supabase
+     Key“ → `Config/check_supabase_key.sh`), damit er nie in einer Info.plist, einem Archiv oder TestFlight landet.
+  2. Die App verweigert zusätzlich den Start mit einem solchen Schlüssel (`BackendConfiguration`).
+  3. Die CI (`backend.yml`, Job „Secret scan“) sucht bei Pushes auf `main` und `claude/**` sowie in Pull Requests
+     nach Schlüsseln und prüft, dass `Config/Pace.xcconfig` nicht committet ist. Pushes auf andere Branches ohne
+     Pull Request werden nicht gescannt.
 - Das Backend speichert nur, was Social- und Wettbewerbsfunktionen brauchen. Gesundheitsdaten: ausschließlich die
   täglichen Competition Steps (siehe [HEALTH_DATA.md](HEALTH_DATA.md)).
 - Supabase wird nur im Modul `PaceBackend` angesprochen, nie aus Views oder ViewModels.
@@ -180,7 +184,8 @@ Zugriffsregeln der Ranking-RPCs (`private.assert_leaderboard_access`):
 ## Synchronisierung der Tageswerte
 
 - Quelle: `ActivitySyncCoordinator` (PaceCore) erhält jede erfolgreich geladene `ActivityOverview` vom Home-Screen.
-- Anlässe: App-Start, Rückkehr in den Vordergrund, Pull-to-Refresh, HealthKit-Update (Observer). **Kein Polling.**
+- Anlässe: App-Start, Rückkehr in den Vordergrund, Pull-to-Refresh, HealthKit-Update (Observer) sowie Tageswechsel
+  bzw. Zeitzonenwechsel (`significantTimeChangeNotification`), damit „heute“ stimmt. **Kein Polling.**
   HealthKit-Updates werden gedrosselt (höchstens einmal pro Minute), zurückgehaltene Werte werden spätestens vor dem
   Laden eines Rankings gesendet (`flush`).
 - Gesendet werden nur geänderte Tage der letzten 7 Tage: `upsert` auf `(user_id, activity_date)` mit

@@ -64,6 +64,23 @@ jobs:
             echo "NSHealthUpdateUsageDescription darf nicht gesetzt sein"; exit 1
           fi
 
+      - name: Build-time key check rejects secret keys
+        # Config/check_supabase_key.sh läuft als Build-Phase; hier wird geprüft, dass sie geheime Keys erkennt.
+        run: |
+          b64url() { printf '%s' "$1" | base64 | tr '+/' '-_' | tr -d '=\n'; }
+          sh Config/check_supabase_key.sh
+          SUPABASE_PUBLISHABLE_KEY=sb_publishable_example sh Config/check_supabase_key.sh
+          ANON="$(b64url '{"alg":"HS256"}').$(b64url '{"role":"anon"}').test"
+          SUPABASE_PUBLISHABLE_KEY="$ANON" sh Config/check_supabase_key.sh
+          SERVICE="$(b64url '{"alg":"HS256"}').$(b64url '{"role":"service_role"}').test"
+          for key in sb_secret_test "$SERVICE"; do
+            if SUPABASE_PUBLISHABLE_KEY="$key" sh Config/check_supabase_key.sh 2>/dev/null; then
+              echo "::error::Geheimer Key wurde nicht abgelehnt"
+              exit 1
+            fi
+          done
+          echo "Key-Prüfung erkennt Secret- und service_role-Keys."
+
       - name: Select simulator
         id: simulator
         run: |

@@ -32,6 +32,7 @@ Implementiert in `Packages/PaceKit/Sources/PaceHealth` – dem einzigen Modul mi
 | Bedeutung | persönliche Schrittzahl wie in der Health-App | Schritte, die für Rankings und spätere Challenges gelten |
 | Manuell eingetragene Schritte | enthalten | **nicht** enthalten |
 | Anzeige | in den Statistiken, wenn sie abweichen („In Apple Health: …“) | große Zahl auf Home, Rankings |
+| Hinweis | „Manuell eingetragene Schritte zählen nicht für Rankings.“ – auf Home unter der Schrittzahl, wenn die Werte heute abweichen; in den Statistiken, wenn sie an einem der letzten 7 Tage abweichen | |
 | Backend | nein | ja, ein Wert pro Tag |
 
 ### Wie gezählt wird

@@ -67,7 +67,7 @@ let package = Package(
             dependencies: ["HealthPermissionFeature", "PaceTestSupport"]
         ),
         .testTarget(name: "ActivityFeatureTests", dependencies: ["ActivityFeature", "PaceTestSupport"]),
-        .testTarget(name: "HomeFeatureTests", dependencies: ["HomeFeature", "PaceTestSupport"]),
+        .testTarget(name: "HomeFeatureTests", dependencies: ["HomeFeature", "ActivityFeature", "PaceTestSupport"]),
         .testTarget(name: "RegionFeatureTests", dependencies: ["RegionFeature", "PaceTestSupport"]),
         .testTarget(name: "OnboardingFeatureTests", dependencies: ["OnboardingFeature", "PaceTestSupport"]),
         .testTarget(name: "LeaderboardFeatureTests", dependencies: ["LeaderboardFeature", "PaceTestSupport"]),

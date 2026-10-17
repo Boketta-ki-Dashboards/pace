@@ -1,3 +1,4 @@
+import ActivityFeature
 import Foundation
 import HomeFeature
 import PaceCore
@@ -42,6 +43,57 @@ struct HomeViewModelTests {
         #expect(overview?.today.activeEnergyKilocalories == 382)
         #expect(overview?.today.walkingRunningDistanceMeters == 6_400)
         #expect(overview?.updatedAt == now)
+    }
+
+    @Test func manualStepsNoteAppearsOnlyWhenHealthStepsDiffer() async {
+        let service = HealthServiceStub { $0.setSteps(4_300, competition: 4_200, on: today) }
+        let viewModel = makeViewModel(service)
+
+        await viewModel.loadIfNeeded()
+        #expect(viewModel.manualStepsNote == "Manuell eingetragene Schritte zählen nicht für Rankings.")
+
+        service.update { $0.setSteps(4_300, competition: 4_300, on: today) }
+        await viewModel.refresh()
+        #expect(viewModel.manualStepsNote == nil)
+    }
+
+    @Test func detailsKeepLastValuesWithNoticeWhenRefreshFails() async {
+        let service = HealthServiceStub { $0.setSteps(4_300, competition: 4_200, on: today) }
+        let viewModel = makeViewModel(service)
+        #expect(viewModel.detailsState == .loading)
+
+        await viewModel.loadIfNeeded()
+        guard case .loaded(let loaded, nil) = viewModel.detailsState else {
+            Issue.record("Expected loaded details, got \(viewModel.detailsState)")
+            return
+        }
+
+        service.update { $0.dailyTotalsError = .queryFailed(reason: "Test") }
+        await viewModel.refresh()
+
+        guard case .loaded(let kept, let notice?) = viewModel.detailsState else {
+            Issue.record("Expected kept details with notice, got \(viewModel.detailsState)")
+            return
+        }
+        #expect(kept == loaded)
+        #expect(notice.contains("nicht geladen"))
+    }
+
+    @Test func detailsWithoutValuesShowWhyNot() async {
+        let failing = makeViewModel(HealthServiceStub { $0.dailyTotalsError = .queryFailed(reason: "Test") })
+        await failing.loadIfNeeded()
+        guard case .unavailable = failing.detailsState else {
+            Issue.record("Expected unavailable details, got \(failing.detailsState)")
+            return
+        }
+
+        let noAccess = makeViewModel(HealthServiceStub())
+        await noAccess.loadIfNeeded()
+        guard case .unavailable(let message) = noAccess.detailsState else {
+            Issue.record("Expected unavailable details, got \(noAccess.detailsState)")
+            return
+        }
+        #expect(message.contains("Zugriff"))
     }
 
     @Test func showsMissingReadAccess() async {

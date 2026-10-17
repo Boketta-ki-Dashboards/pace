@@ -14,10 +14,32 @@ public struct ActivityDetailsView: View {
 
     public var body: some View {
         Group {
-            if let overview = source.overview {
-                ActivityDetailsContent(stats: ActivityStatsViewModel(overview: overview, formatter: formatter))
-            } else {
-                PaceLoadingView("Statistiken werden geladen …")
+            switch source.detailsState {
+            case .loading:
+                ScrollView {
+                    PaceLoadingView("Statistiken werden geladen …")
+                        .containerRelativeFrame(.vertical)
+                }
+            case .loaded(let overview, let notice):
+                ActivityDetailsContent(
+                    stats: ActivityStatsViewModel(overview: overview, formatter: formatter),
+                    notice: notice
+                )
+            case .unavailable(let message):
+                ScrollView {
+                    PaceStatusView(
+                        systemImage: "exclamationmark.triangle.fill",
+                        title: "Keine Statistiken",
+                        message: message,
+                        tint: PaceColor.warning
+                    ) {
+                        Button("Erneut versuchen") {
+                            Task { await source.refresh() }
+                        }
+                        .buttonStyle(.pacePrimary)
+                    }
+                    .containerRelativeFrame(.vertical)
+                }
             }
         }
         .paceScreenBackground()
@@ -30,12 +52,20 @@ public struct ActivityDetailsView: View {
 /// Reine Darstellung der Statistiken.
 struct ActivityDetailsContent: View {
     let stats: ActivityStatsViewModel
+    /// Hinweis über den Statistiken, z. B. dass die letzte Aktualisierung fehlschlug.
+    var notice: String?
 
     private let columns = [GridItem(.flexible(), spacing: PaceSpacing.s), GridItem(.flexible(), spacing: PaceSpacing.s)]
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: PaceSpacing.xl) {
+                if let notice {
+                    Label(notice, systemImage: "exclamationmark.triangle.fill")
+                        .font(PaceFont.callout)
+                        .foregroundStyle(PaceColor.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 todaySection
                 weekSection
                 if let note = stats.manualStepsNote {

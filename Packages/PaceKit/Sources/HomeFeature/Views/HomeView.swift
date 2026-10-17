@@ -1,6 +1,7 @@
 import ActivityFeature
 import DesignSystem
 import SwiftUI
+import UIKit
 
 /// Home-Screen: verbindet das ViewModel mit der Darstellung und den Aktualisierungs-Auslösern.
 public struct HomeView: View {
@@ -18,6 +19,7 @@ public struct HomeView: View {
         NavigationStack {
             HomeContentView(
                 state: viewModel.state,
+                manualStepsNote: viewModel.manualStepsNote,
                 formatter: formatter,
                 onRetry: { Task { await viewModel.retry() } }
             ) {
@@ -36,6 +38,10 @@ public struct HomeView: View {
         .onChange(of: scenePhase) { _, newPhase in
             // Zurück aus dem Hintergrund oder aus den Einstellungen: Werte und Zugriff erneut prüfen.
             guard newPhase == .active else { return }
+            Task { await viewModel.refresh(trigger: .foreground) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            // Mitternacht, Zeitzonen- oder Sommerzeitwechsel: „Heute“ und die letzten 7 Tage neu bestimmen.
             Task { await viewModel.refresh(trigger: .foreground) }
         }
     }
