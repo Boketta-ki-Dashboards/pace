@@ -12,17 +12,26 @@ public struct SocialView: View {
     public var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                    intro
-                    ForEach(viewModel.sections) { section in
-                        SocialSectionCard(section: section)
-                    }
-                }
-                .padding(.horizontal, PaceSpacing.m)
-                .padding(.bottom, PaceSpacing.l)
+                SocialContent(viewModel: viewModel)
+                    .padding(.horizontal, PaceSpacing.m)
+                    .padding(.bottom, PaceSpacing.l)
             }
             .paceScreenBackground()
             .navigationTitle("Social")
+        }
+    }
+}
+
+/// Inhalt des Social-Tabs (ohne Navigation und Scrollen).
+struct SocialContent: View {
+    let viewModel: SocialViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PaceSpacing.s) {
+            intro
+            ForEach(viewModel.sections) { section in
+                SocialSectionCard(section: section)
+            }
         }
     }
 

@@ -62,6 +62,10 @@ private struct RankCard: View {
     let rank: String
     let name: String
 
+    private var isSingleWord: Bool {
+        !name.contains(" ") && !name.contains("-")
+    }
+
     var body: some View {
         VStack(spacing: 3) {
             Image(systemName: icon)
@@ -89,8 +93,10 @@ private struct RankCard: View {
                 .font(PaceFont.caption)
                 .foregroundStyle(PaceColor.textSecondary)
                 .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
+                // Ein einzelnes Wort („Deutschland“) wird verkleinert statt getrennt, zusammengesetzte Namen
+                // („Darmstadt-Dieburg“) dürfen zweizeilig sein.
+                .lineLimit(isSingleWord ? 1 : 2)
+                .minimumScaleFactor(isSingleWord ? 0.65 : 0.8)
                 .frame(minHeight: 34, alignment: .top)
         }
         .padding(.horizontal, PaceSpacing.xs)

@@ -13,14 +13,9 @@ public struct ProfileView: View {
     public var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                    header
-                    regionCard
-                    rankingsCard
-                    dataCard
-                }
-                .padding(.horizontal, PaceSpacing.m)
-                .padding(.bottom, PaceSpacing.l)
+                ProfileContent(viewModel: viewModel)
+                    .padding(.horizontal, PaceSpacing.m)
+                    .padding(.bottom, PaceSpacing.l)
             }
             .refreshable { [viewModel] in await viewModel.load() }
             .paceScreenBackground()
@@ -29,6 +24,30 @@ public struct ProfileView: View {
         .task { [viewModel] in await viewModel.load() }
         .sheet(item: regionSheetBinding) { search in
             RegionChangeSheet(viewModel: viewModel, search: search)
+        }
+    }
+
+    /// Mit `sheet(item:)` behält SwiftUI den Inhalt während der Schließen-Animation.
+    private var regionSheetBinding: Binding<RegionSearchViewModel?> {
+        Binding(
+            get: { viewModel.regionSearch },
+            set: { search in
+                if search == nil { viewModel.cancelRegionChange() }
+            }
+        )
+    }
+}
+
+/// Inhalt des Profil-Tabs (ohne Navigation und Scrollen).
+struct ProfileContent: View {
+    let viewModel: ProfileViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PaceSpacing.s) {
+            header
+            regionCard
+            rankingsCard
+            dataCard
         }
     }
 
@@ -133,16 +152,6 @@ public struct ProfileView: View {
             get: { viewModel.regionalLeaderboardEnabled },
             set: { enabled in
                 Task { await viewModel.setRegionalLeaderboardEnabled(enabled) }
-            }
-        )
-    }
-
-    /// Mit `sheet(item:)` behält SwiftUI den Inhalt während der Schließen-Animation.
-    private var regionSheetBinding: Binding<RegionSearchViewModel?> {
-        Binding(
-            get: { viewModel.regionSearch },
-            set: { search in
-                if search == nil { viewModel.cancelRegionChange() }
             }
         )
     }

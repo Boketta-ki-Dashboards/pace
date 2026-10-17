@@ -13,24 +13,9 @@ public struct LeaderboardView: View {
     public var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                    if !viewModel.scopes.isEmpty {
-                        ScopePicker(
-                            scopes: viewModel.scopes,
-                            selectedID: viewModel.selectedScope?.id
-                        ) { scope in
-                            Task { await viewModel.select(scope) }
-                        }
-                    }
-
-                    if !viewModel.isParticipating {
-                        ParticipationBanner(viewModel: viewModel)
-                    }
-
-                    content
-                }
-                .padding(.horizontal, PaceSpacing.m)
-                .padding(.bottom, PaceSpacing.l)
+                LeaderboardContent(viewModel: viewModel)
+                    .padding(.horizontal, PaceSpacing.m)
+                    .padding(.bottom, PaceSpacing.l)
             }
             .refreshable { [viewModel] in await viewModel.refresh() }
             .navigationTitle("Rankings")
@@ -38,6 +23,30 @@ public struct LeaderboardView: View {
         }
         .task(id: viewModel.reloadKey) { [viewModel] in
             await viewModel.loadIfNeeded()
+        }
+    }
+}
+
+/// Inhalt des Rankings-Tabs (ohne Navigation und Scrollen).
+struct LeaderboardContent: View {
+    let viewModel: LeaderboardViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PaceSpacing.s) {
+            if !viewModel.scopes.isEmpty {
+                ScopePicker(
+                    scopes: viewModel.scopes,
+                    selectedID: viewModel.selectedScope?.id
+                ) { scope in
+                    Task { await viewModel.select(scope) }
+                }
+            }
+
+            if !viewModel.isParticipating {
+                ParticipationBanner(viewModel: viewModel)
+            }
+
+            content
         }
     }
 

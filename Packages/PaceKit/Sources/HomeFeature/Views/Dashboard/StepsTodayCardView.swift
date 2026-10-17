@@ -10,7 +10,7 @@ struct StepsTodayCardView<Details: View>: View {
     @ViewBuilder let details: () -> Details
 
     @ScaledMetric(relativeTo: .largeTitle) private var metricSize: CGFloat = 64
-    @ScaledMetric(relativeTo: .largeTitle) private var ringSize: CGFloat = 108
+    @ScaledMetric(relativeTo: .largeTitle) private var ringSize: CGFloat = 96
 
     var body: some View {
         PaceCard {
@@ -19,12 +19,17 @@ struct StepsTodayCardView<Details: View>: View {
                     Text("Deine Schritte heute")
                         .font(PaceFont.cardTitle)
                         .foregroundStyle(PaceColor.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .layoutPriority(1)
                         .accessibilityAddTraits(.isHeader)
                     Spacer(minLength: PaceSpacing.xs)
                     Button(action: onEditGoal) {
                         Label("Tagesziel ändern", systemImage: "scope")
                             .font(PaceFont.callout)
                             .foregroundStyle(PaceColor.accent)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                     .buttonStyle(.pacePressable)
                 }
@@ -77,8 +82,10 @@ struct StepsTodayCardView<Details: View>: View {
                 PaceProgressBar(progress: summary.progress)
                     .padding(.top, PaceSpacing.xxs)
                 Text(summary.remainingText)
-                    .font(PaceFont.callout)
+                    .font(.subheadline)
                     .foregroundStyle(summary.isGoalReached ? PaceColor.accent : PaceColor.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             PaceProgressRing(progress: summary.progress, label: summary.percentText)
                 .frame(width: ringSize, height: ringSize)
@@ -103,7 +110,7 @@ struct StepsTodayCardView<Details: View>: View {
                     if summary.distanceText != nil, summary.energyText != nil {
                         Divider()
                             .frame(height: 32)
-                            .padding(.horizontal, PaceSpacing.s)
+                            .padding(.horizontal, PaceSpacing.xs)
                     }
                     if let energy = summary.energyText {
                         NavigationLink(destination: details) {
@@ -148,22 +155,27 @@ private struct MetricLink: View {
     let caption: String?
 
     var body: some View {
-        HStack(spacing: PaceSpacing.s) {
+        HStack(spacing: PaceSpacing.xs) {
             Image(systemName: systemImage)
                 .font(.title3)
                 .foregroundStyle(PaceColor.accent)
-                .frame(width: 28)
+                .frame(width: 26)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 0) {
                 Text(value)
                     .font(.system(.headline, weight: .bold))
                     .foregroundStyle(PaceColor.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                 if let caption {
                     Text(caption)
                         .font(PaceFont.caption)
                         .foregroundStyle(PaceColor.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
             }
+            .layoutPriority(1)
             Spacer(minLength: PaceSpacing.xxs)
             Image(systemName: "chevron.right")
                 .font(.footnote.weight(.semibold))

@@ -2,17 +2,20 @@ import ActivityFeature
 import DesignSystem
 import Foundation
 @testable import HomeFeature
-import LeaderboardFeature
+@testable import LeaderboardFeature
 import PaceCore
 import PaceTestSupport
-import ProfileFeature
-import SocialFeature
+@testable import ProfileFeature
+@testable import SocialFeature
 import SwiftUI
 import Testing
 import UIKit
 
 /// Rendert die wichtigsten Screens mit Beispieldaten als PNG – zur visuellen Kontrolle in der CI (Artefakt
 /// „snapshots“). Läuft nur, wenn `PACE_SNAPSHOT_DIR` gesetzt ist, und prüft nichts: Es entstehen nur Bilder.
+///
+/// Gerendert werden die Inhalte ohne Navigation und Scrollen (`ImageRenderer` kann keine UIKit-Container zeichnen);
+/// systemeigene Controls wie Schalter erscheinen dabei als Platzhalter.
 @MainActor
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["PACE_SNAPSHOT_DIR"] != nil))
 struct ScreenSnapshotTests {
@@ -39,23 +42,23 @@ struct ScreenSnapshotTests {
         try render(content, name: "home")
     }
 
-    @Test func tabsInWindow() async throws {
-        let (dashboard, store) = try await makeDashboard()
+    @Test func otherTabs() async throws {
+        let (_, store) = try await makeDashboard()
         let leaderboard = LeaderboardViewModel(
             store: store,
             leaderboards: Self.leaderboards(),
             syncing: nil,
             calendar: Fixtures.activityCalendar,
-            now: { Fixtures.date(2026, 10, 16, 12) }
+            now: { Fixtures.date(2026, 10, 16, 12) },
+            topLimit: 8
         )
         await leaderboard.loadIfNeeded()
         let profile = ProfileViewModel(store: store, regions: RegionRepositoryStub())
         await profile.load()
 
-        try snapshotInWindow(HomeView(viewModel: dashboard), name: "tab-home")
-        try snapshotInWindow(LeaderboardView(viewModel: leaderboard), name: "tab-rankings")
-        try snapshotInWindow(SocialView(viewModel: SocialViewModel()), name: "tab-social")
-        try snapshotInWindow(ProfileView(viewModel: profile), name: "tab-profile")
+        try render(LeaderboardContent(viewModel: leaderboard).padding(PaceSpacing.m), name: "rankings")
+        try render(SocialContent(viewModel: SocialViewModel()).padding(PaceSpacing.m), name: "social")
+        try render(ProfileContent(viewModel: profile).padding(PaceSpacing.m), name: "profile")
     }
 
     // MARK: Beispieldaten (nur für Bilder)
@@ -145,27 +148,6 @@ struct ScreenSnapshotTests {
             renderer.proposedSize = ProposedViewSize(width: width, height: nil)
             let image = try #require(renderer.uiImage)
             try #require(image.pngData()).write(to: directory.appendingPathComponent("\(name)-\(scheme == .dark ? "dark" : "light").png"))
-        }
-    }
-
-    /// Ganze Tabs in einem Fenster (inklusive ScrollView und Navigation). Bleibt das Bild leer, ist das kein Fehler.
-    private func snapshotInWindow(_ content: some View, name: String) throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        for style in [UIUserInterfaceStyle.light, .dark] {
-            let controller = UIHostingController(rootView: content.environment(\.locale, Locale(identifier: "de_DE")))
-            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 852))
-            window.overrideUserInterfaceStyle = style
-            window.rootViewController = controller
-            window.makeKeyAndVisible()
-            controller.view.setNeedsLayout()
-            controller.view.layoutIfNeeded()
-            RunLoop.main.run(until: Date().addingTimeInterval(0.5))
-            let renderer = UIGraphicsImageRenderer(bounds: window.bounds)
-            let image = renderer.image { _ in
-                window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
-            }
-            try #require(image.pngData()).write(to: directory.appendingPathComponent("\(name)-\(style == .dark ? "dark" : "light").png"))
-            window.isHidden = true
         }
     }
 }
