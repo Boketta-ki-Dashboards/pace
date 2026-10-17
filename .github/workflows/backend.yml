@@ -74,10 +74,18 @@ jobs:
           KEY="${PUBLISHABLE_KEY:-$ANON_KEY}"
           # --allow-shlib-undefined: libswiftObservation.so der Linux-Toolchain 6.2 referenziert ein Symbol, das keine
           # Laufzeitbibliothek exportiert (Packaging-Fehler der Toolchain, betrifft nur Linux).
+          set -o pipefail
           docker run --rm --network host \
             -v "$PWD":/work -w /work/Packages/PaceBackendIntegrationTests \
             -e PACE_SUPABASE_URL="$API_URL" -e PACE_SUPABASE_PUBLISHABLE_KEY="$KEY" \
-            swift:6.2 swift test -Xlinker --allow-shlib-undefined
+            swift:6.2 swift test -Xlinker --allow-shlib-undefined 2>&1 | tee integration.log
+          # Keine Warnungen in eigenem Code (Abhängigkeiten unter .build/ ausgenommen).
+          grep -E "^/work/Packages/[^:]+:[0-9]+:[0-9]+: warning:" integration.log | grep -v "/.build/" | sort -u > warnings.txt || true
+          if [ -s warnings.txt ]; then
+            cat warnings.txt
+            echo "::error::$(wc -l < warnings.txt) Compiler-Warnung(en) in Pace-Code (Linux)"
+            exit 1
+          fi
 
       - name: Stop Supabase
         if: always()

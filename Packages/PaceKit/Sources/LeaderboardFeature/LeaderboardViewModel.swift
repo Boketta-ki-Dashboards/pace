@@ -26,6 +26,8 @@ public final class LeaderboardViewModel {
     public let period: LeaderboardPeriod = .daily
     public private(set) var isUpdatingParticipation = false
     public private(set) var participationError: String?
+    public private(set) var isLoadingMore = false
+    public private(set) var loadMoreError: String?
 
     /// Vom Nutzer gewählte Ebene; `nil` bedeutet die Gemeinde.
     private var selectedScopeID: RegionID?
@@ -33,6 +35,7 @@ public final class LeaderboardViewModel {
     @ObservationIgnored private let store: ProfileStore
     @ObservationIgnored private let loader: LeaderboardLoader
     @ObservationIgnored private let syncing: (any ActivitySyncing)?
+    @ObservationIgnored private let refreshActivity: (@MainActor () async -> Void)?
     @ObservationIgnored private let calendar: ActivityCalendar
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private let maximumAge: Duration
@@ -43,11 +46,13 @@ public final class LeaderboardViewModel {
 
     /// - Parameters:
     ///   - syncing: Sendet zurückgehaltene Schritte vor dem Laden, damit der eigene Platz aktuell ist.
+    ///   - refreshActivity: Liest bei Pull-to-Refresh zuerst die eigenen Schritte neu (in der App: aus Apple Health).
     ///   - maximumAge: Nach dieser Zeit lädt `loadIfNeeded()` beim nächsten Erscheinen neu.
     public init(
         store: ProfileStore,
         leaderboards: any LeaderboardRepository,
         syncing: (any ActivitySyncing)?,
+        refreshActivity: (@MainActor () async -> Void)? = nil,
         calendar: ActivityCalendar = ActivityCalendar(),
         now: @escaping @Sendable () -> Date = { Date() },
         topLimit: Int = 50,
@@ -55,6 +60,7 @@ public final class LeaderboardViewModel {
     ) {
         self.store = store
         self.syncing = syncing
+        self.refreshActivity = refreshActivity
         self.calendar = calendar
         self.now = now
         self.maximumAge = maximumAge
@@ -86,7 +92,7 @@ public final class LeaderboardViewModel {
     /// Text für ein leeres Ranking bzw. wenn der Nutzer allein darin ist. `nil`, wenn es nichts zu erklären gibt.
     public var emptyStateText: String? {
         guard let snapshot, let region = scopes.first(where: { $0.id == snapshot.query.regionID }) else { return nil }
-        let place = Self.locative(region)
+        let place = region.locative
         if snapshot.isCurrentUserAlone {
             return "Du bist der Erste \(place)."
         }
@@ -96,18 +102,6 @@ public final class LeaderboardViewModel {
                 : "Heute tritt \(place) noch niemand an."
         }
         return nil
-    }
-
-    /// Ortsangabe mit passender Präposition: „in Pfungstadt“, „im Landkreis Darmstadt-Dieburg“, „im Saarland“.
-    static func locative(_ region: Region) -> String {
-        switch region.kind {
-        case .landkreis, .kreis, .stadtkreis:
-            return "im \(region.displayName)"
-        case .regionalverband:
-            return "im Regionalverband \(region.name)"
-        default:
-            return region.name == "Saarland" ? "im Saarland" : "in \(region.name)"
-        }
     }
 
     /// Lädt beim Erscheinen – nur wenn sich etwas geändert hat, der letzte Versuch fehlschlug oder die Daten älter
@@ -129,8 +123,9 @@ public final class LeaderboardViewModel {
         await load()
     }
 
-    /// Pull-to-Refresh: lädt neu, ohne die aktuelle Anzeige vorher zu verwerfen.
+    /// Pull-to-Refresh: liest die eigenen Schritte neu und lädt das Ranking, ohne die Anzeige vorher zu verwerfen.
     public func refresh() async {
+        await refreshActivity?()
         await load()
     }
 
@@ -138,6 +133,30 @@ public final class LeaderboardViewModel {
     public func retry() async {
         state = .loading
         await load()
+    }
+
+    /// Ob unter den angezeigten Plätzen weitere geladen werden können.
+    public var canLoadMore: Bool {
+        snapshot?.canLoadMore == true
+    }
+
+    /// „Weitere Plätze laden“: die nächsten Plätze nach den lückenlos angezeigten.
+    public func loadMore() async {
+        guard let current = snapshot, current.canLoadMore, !isLoadingMore else { return }
+        let generationAtStart = generation
+        isLoadingMore = true
+        loadMoreError = nil
+        defer { isLoadingMore = false }
+
+        do {
+            let extended = try await loader.loadMore(after: current)
+            // Wurde inzwischen neu geladen (andere Ebene, Pull-to-Refresh), passt das Ergebnis nicht mehr.
+            guard generationAtStart == generation, snapshot == current else { return }
+            state = .loaded(extended)
+        } catch {
+            guard generationAtStart == generation else { return }
+            loadMoreError = Self.message(for: error)
+        }
     }
 
     /// Ausdrückliche Zustimmung, in regionalen Rankings zu erscheinen.

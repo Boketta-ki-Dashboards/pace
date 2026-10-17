@@ -96,6 +96,16 @@ struct HomeViewModelTests {
         #expect(message.contains("Zugriff"))
     }
 
+    @Test func refreshForRankingWaitsUntilValuesReachTheSync() async {
+        let service = HealthServiceStub { $0.setSteps(5_000, on: today) }
+        let syncing = ActivitySyncingSpy()
+        let viewModel = makeViewModel(service, syncing: syncing)
+
+        await viewModel.refreshForRanking()
+
+        #expect(syncing.triggers == [.pullToRefresh])
+    }
+
     @Test func showsMissingReadAccess() async {
         let viewModel = makeViewModel(HealthServiceStub())
 

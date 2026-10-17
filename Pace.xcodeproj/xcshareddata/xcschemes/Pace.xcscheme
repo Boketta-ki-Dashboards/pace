@@ -44,6 +44,16 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "PaceHealthTests"
+               BuildableName = "PaceHealthTests"
+               BlueprintName = "PaceHealthTests"
+               ReferencedContainer = "container:Packages/PaceKit">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "HealthPermissionFeatureTests"
                BuildableName = "HealthPermissionFeatureTests"
                BlueprintName = "HealthPermissionFeatureTests"

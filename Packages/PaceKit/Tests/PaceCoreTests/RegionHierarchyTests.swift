@@ -43,16 +43,46 @@ struct RegionHierarchyTests {
     }
 
     @Test(arguments: [
-        (RegionKind.landkreis, "Landkreis Musterkreis"),
-        (.kreis, "Kreis Musterkreis"),
-        (.stadtkreis, "Stadtkreis Musterkreis"),
-        (.regionalverband, "Musterkreis"),
-        (.kreisfreieStadt, "Musterkreis"),
+        (RegionKind.landkreis, "Landkreis Musterland"),
+        (.kreis, "Kreis Musterland"),
+        (.stadtkreis, "Stadtkreis Musterland"),
+        (.regionalverband, "Musterland"),
+        (.kreisfreieStadt, "Musterland"),
     ])
     func districtDisplayNameIncludesKind(kind: RegionKind, expected: String) {
-        let region = Region(id: "DE:99999", code: "99999", name: "Musterkreis", level: .district, kind: kind, parentID: "DE:99", municipalityCount: 5)
+        let region = Region(id: "DE:99999", code: "99999", name: "Musterland", level: .district, kind: kind, parentID: "DE:99", municipalityCount: 5)
 
         #expect(region.displayName == expected)
+    }
+
+    /// Echte Namen aus dem GV100AD, die ihre Art schon enthalten, und die passende Präposition.
+    @Test(arguments: [
+        ("Darmstadt-Dieburg", RegionKind.landkreis, "Landkreis Darmstadt-Dieburg", "im Landkreis Darmstadt-Dieburg"),
+        ("Main-Kinzig-Kreis", .landkreis, "Main-Kinzig-Kreis", "im Main-Kinzig-Kreis"),
+        ("Landkreis Rostock", .landkreis, "Landkreis Rostock", "im Landkreis Rostock"),
+        ("Region Hannover", .landkreis, "Region Hannover", "in der Region Hannover"),
+        ("Städteregion Aachen", .kreis, "Städteregion Aachen", "in der Städteregion Aachen"),
+        ("Rhein-Kreis Neuss", .kreis, "Rhein-Kreis Neuss", "im Rhein-Kreis Neuss"),
+        ("Oberbergischer Kreis", .kreis, "Oberbergischer Kreis", "im Oberbergischen Kreis"),
+        ("Rheinisch-Bergischer Kreis", .kreis, "Rheinisch-Bergischer Kreis", "im Rheinisch-Bergischen Kreis"),
+        ("Nordfriesland", .kreis, "Kreis Nordfriesland", "im Kreis Nordfriesland"),
+        ("Eifelkreis Bitburg-Prüm", .landkreis, "Eifelkreis Bitburg-Prüm", "im Eifelkreis Bitburg-Prüm"),
+        ("Regionalverband Saarbrücken", .regionalverband, "Regionalverband Saarbrücken", "im Regionalverband Saarbrücken"),
+    ])
+    func realDistrictNames(name: String, kind: RegionKind, displayName: String, locative: String) {
+        let region = Region(id: "DE:99999", code: "99999", name: name, level: .district, kind: kind, parentID: "DE:99", municipalityCount: 5)
+
+        #expect(region.displayName == displayName)
+        #expect(region.locative == locative)
+    }
+
+    @Test func locativeForOtherLevels() {
+        let saarland = Region(id: "DE:10", code: "10", name: "Saarland", level: .state, kind: .state, parentID: "DE", municipalityCount: 52)
+
+        #expect(Fixtures.pfungstadt.locative == "in Pfungstadt")
+        #expect(Fixtures.hessen.locative == "in Hessen")
+        #expect(saarland.locative == "im Saarland")
+        #expect(Fixtures.germany.locative == "in Deutschland")
     }
 
     @Test func regionIDIsCodableAsPlainString() throws {

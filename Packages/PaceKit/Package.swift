@@ -3,7 +3,8 @@ import PackageDescription
 
 let package = Package(
     name: "PaceKit",
-    platforms: [.iOS(.v17)],
+    // macOS nur, damit PaceCore und PaceBackend für die Integrationstests auf dem Mac bauen (die App ist iOS-only).
+    platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         // Wird von der App eingebunden (Routing + Features).
         .library(name: "AppFeature", targets: ["AppFeature"]),
@@ -62,6 +63,8 @@ let package = Package(
 
         .testTarget(name: "PaceCoreTests", dependencies: ["PaceCore", "PaceTestSupport"]),
         .testTarget(name: "PaceBackendTests", dependencies: ["PaceBackend", "PaceTestSupport"]),
+        // Nur auf Apple-Plattformen (HealthKit); läuft in der CI im iOS-Simulator.
+        .testTarget(name: "PaceHealthTests", dependencies: ["PaceHealth", "PaceCore"]),
         .testTarget(
             name: "HealthPermissionFeatureTests",
             dependencies: ["HealthPermissionFeature", "PaceTestSupport"]

@@ -1,14 +1,12 @@
 import ActivityFeature
 import DesignSystem
 import SwiftUI
-import UIKit
 
-/// Home-Screen: verbindet das ViewModel mit der Darstellung und den Aktualisierungs-Auslösern.
+/// Home-Screen: verbindet das ViewModel mit der Darstellung. Die Aktualisierungs-Auslöser hängen an der ganzen
+/// Main App (`activityUpdates(_:)`), damit sie auch laufen, während ein anderer Tab offen ist.
 public struct HomeView: View {
     private let viewModel: HomeViewModel
     private let formatter: ActivityFormatter
-
-    @Environment(\.scenePhase) private var scenePhase
 
     public init(viewModel: HomeViewModel, formatter: ActivityFormatter = ActivityFormatter()) {
         self.viewModel = viewModel
@@ -32,17 +30,6 @@ public struct HomeView: View {
                     PaceWordmark()
                 }
             }
-        }
-        .task { [viewModel] in await viewModel.loadIfNeeded() }
-        .task { [viewModel] in await viewModel.observeActivityChanges() }
-        .onChange(of: scenePhase) { _, newPhase in
-            // Zurück aus dem Hintergrund oder aus den Einstellungen: Werte und Zugriff erneut prüfen.
-            guard newPhase == .active else { return }
-            Task { await viewModel.refresh(trigger: .foreground) }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
-            // Mitternacht, Zeitzonen- oder Sommerzeitwechsel: „Heute“ und die letzten 7 Tage neu bestimmen.
-            Task { await viewModel.refresh(trigger: .foreground) }
         }
     }
 }

@@ -23,6 +23,42 @@ struct LeaderboardLoaderTests {
         #expect(repository.state.current.pageRequests.map(\.limit) == [50])
     }
 
+    @Test func loadMoreAppendsNextPageAndKeepsOwnPosition() async throws {
+        let (loader, repository) = makeLoader(Fixtures.ranking(count: 30, currentUserRank: 25), topLimit: 10)
+        let first = try await loader.load(query)
+        #expect(first.loadedTopCount == 10)
+        #expect(first.canLoadMore)
+
+        let second = try await loader.loadMore(after: first)
+
+        #expect(repository.state.current.pageRequests.last?.offset == 10)
+        #expect(second.loadedTopCount == 20)
+        #expect(second.rows.contains(.gap(afterRank: 20)))
+        #expect(second.entries.suffix(3).map(\.rank) == [24, 25, 26])
+        #expect(second.currentUserEntry?.rank == 25)
+        #expect(second.canLoadMore)
+    }
+
+    @Test func loadMoreClosesTheGapToOwnPosition() async throws {
+        let (loader, _) = makeLoader(Fixtures.ranking(count: 30, currentUserRank: 15), topLimit: 10)
+        let first = try await loader.load(query)
+        #expect(first.rows.contains(.gap(afterRank: 10)))
+
+        let second = try await loader.loadMore(after: first)
+
+        #expect(!second.rows.contains { if case .gap = $0 { true } else { false } })
+        #expect(second.entries.map(\.rank) == Array(1...20))
+        #expect(Set(second.entries.map(\.publicUserID)).count == second.entries.count)
+    }
+
+    @Test func nothingMoreToLoadWhenEverythingIsShown() async throws {
+        let (loader, _) = makeLoader(Fixtures.ranking(count: 8, currentUserRank: 2), topLimit: 10)
+
+        let snapshot = try await loader.load(query)
+
+        #expect(!snapshot.canLoadMore)
+    }
+
     @Test func currentUserBelowTopIsAppendedWithNeighborsAndGap() async throws {
         let (loader, _) = makeLoader(Fixtures.ranking(count: 500, currentUserRank: 383))
 

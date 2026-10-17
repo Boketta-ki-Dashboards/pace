@@ -15,7 +15,7 @@ Noch nicht enthalten: Freunde, Gruppen, Challenges, Streaks, Widgets, Benachrich
 
 ## Voraussetzungen
 
-- Xcode 16.3 oder neuer (CI: Xcode 26.3)
+- Xcode 16.3 oder neuer (CI: neueste stabile Xcode-Version des GitHub-Runners `macos-15`)
 - iOS 17 oder neuer
 - Für echte Schrittdaten ein iPhone. Im Simulator in der Health-App unter „Schritte“ → „Daten hinzufügen“ Werte
   anlegen. Achtung: Das sind manuelle Einträge – sie erscheinen als Health Steps, aber nicht als Competition Steps.

@@ -53,6 +53,8 @@ public final class HomeViewModel {
     @ObservationIgnored private var isLoading = false
     @ObservationIgnored private var needsReload = false
     @ObservationIgnored private var pendingTrigger: ActivitySyncTrigger?
+    /// Letzte Übergabe an den Sync. Übergaben laufen nacheinander, damit `refreshForRanking()` auf sie warten kann.
+    @ObservationIgnored private var lastSubmission: Task<Void, Never>?
 
     /// - Parameter syncing: Nimmt neue Tageswerte für das Backend entgegen. `nil`, wenn kein Backend verfügbar ist.
     public init(
@@ -132,9 +134,17 @@ public final class HomeViewModel {
     /// Übergibt die Werte an den Sync, ohne die Anzeige zu blockieren. Fehler behandelt der Sync selbst.
     private func submitForSync(_ overview: ActivityOverview, trigger: ActivitySyncTrigger) {
         guard let syncing else { return }
-        Task { [syncing] in
+        lastSubmission = Task { [syncing, previous = lastSubmission] in
+            await previous?.value
             await syncing.submit(overview, trigger: trigger)
         }
+    }
+
+    /// Für Pull-to-Refresh in den Rankings: liest die Werte neu aus Apple Health und wartet, bis sie an den Sync
+    /// übergeben sind – danach kann das Ranking mit dem eigenen aktuellen Stand geladen werden.
+    public func refreshForRanking() async {
+        await refresh(trigger: .pullToRefresh)
+        await lastSubmission?.value
     }
 
     /// Ein gedrosselter HealthKit-Anlass soll einen sofortigen Anlass (z. B. Pull-to-Refresh) nicht überschreiben.

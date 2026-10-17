@@ -1,5 +1,5 @@
 import Foundation
-@testable import LeaderboardFeature
+import LeaderboardFeature
 import PaceCore
 import PaceTestSupport
 import Testing
@@ -182,6 +182,48 @@ struct LeaderboardViewModelTests {
         #expect(viewModel.snapshot?.query.regionID == Fixtures.germany.id)
     }
 
+    @Test func loadMoreShowsFurtherPlaces() async {
+        let leaderboards = LeaderboardRepositoryStub {
+            $0.rankings[Fixtures.pfungstadt.id] = Fixtures.ranking(count: 25, currentUserRank: 3)
+        }
+        let (viewModel, _) = makeViewModel(leaderboards: leaderboards, topLimit: 10)
+        await viewModel.loadIfNeeded()
+        #expect(viewModel.canLoadMore)
+
+        await viewModel.loadMore()
+        #expect(viewModel.snapshot?.entries.count == 20)
+
+        await viewModel.loadMore()
+        #expect(viewModel.snapshot?.entries.count == 25)
+        #expect(!viewModel.canLoadMore)
+        #expect(!viewModel.isLoadingMore)
+    }
+
+    @Test func pullToRefreshReadsOwnStepsBeforeLoading() async {
+        let refreshes = Locked(0)
+        let leaderboards = LeaderboardRepositoryStub()
+        let profile = Fixtures.profile(regionalLeaderboardEnabled: true)
+        let profiles = ProfileRepositoryStub { $0.profiles[profile.id] = profile }
+        let store = ProfileStore(profile: profile, profiles: profiles, regions: RegionRepositoryStub(), cache: InMemoryProfileCache())
+        let viewModel = LeaderboardViewModel(
+            store: store,
+            leaderboards: leaderboards,
+            syncing: ActivitySyncingSpy(),
+            refreshActivity: {
+                // Beim Neu-Einlesen ist noch keine Ranking-Anfrage dieses Durchgangs gestellt.
+                #expect(leaderboards.state.current.pageRequests.count == refreshes.current)
+                refreshes.withLock { $0 += 1 }
+            },
+            calendar: Fixtures.activityCalendar,
+            now: { [now = Self.now] in now }
+        )
+
+        await viewModel.refresh()
+
+        #expect(refreshes.current == 1)
+        #expect(leaderboards.state.current.pageRequests.count == 1)
+    }
+
     // MARK: Leere Rankings & Teilnahme
 
     @Test func aloneInRankingSaysFirst() async {
@@ -243,19 +285,6 @@ struct LeaderboardViewModelTests {
             Issue.record("Expected failed state, got \(viewModel.state)")
             return
         }
-    }
-
-    @Test(arguments: [
-        (Fixtures.pfungstadt, "in Pfungstadt"),
-        (Fixtures.darmstadtDieburg, "im Landkreis Darmstadt-Dieburg"),
-        (Region(id: "DE:05554", code: "05554", name: "Borken", level: .district, kind: .kreis, parentID: "DE:05", municipalityCount: 17), "im Kreis Borken"),
-        (Region(id: "DE:10041", code: "10041", name: "Saarbrücken", level: .district, kind: .regionalverband, parentID: "DE:10", municipalityCount: 10), "im Regionalverband Saarbrücken"),
-        (Region(id: "DE:10", code: "10", name: "Saarland", level: .state, kind: .state, parentID: "DE", municipalityCount: 52), "im Saarland"),
-        (Fixtures.hessen, "in Hessen"),
-        (Fixtures.germany, "in Deutschland"),
-    ])
-    func locativeUsesTheRightPreposition(region: Region, expected: String) {
-        #expect(LeaderboardViewModel.locative(region) == expected)
     }
 
     @Test func failedParticipationUpdateShowsError() async {

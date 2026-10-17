@@ -1,6 +1,6 @@
 -- Pace: Profile – eigene Zeile, Benutzernamen, Anzeigenamen, Gemeinde.
 begin;
-select plan(21);
+select plan(22);
 
 insert into auth.users (id, aud, role, is_anonymous) values
   ('11111111-1111-4111-8111-111111111111', 'authenticated', 'authenticated', true),
@@ -81,6 +81,16 @@ select is_empty(
   $$update public.profiles set display_name = 'Gekapert' where id = '11111111-1111-4111-8111-111111111111' returning id$$,
   'fremdes Profil nicht änderbar'
 );
+
+-- updated_at setzt der Server bei jeder Änderung.
+reset role;
+alter table public.profiles disable trigger profiles_set_updated_at;
+update public.profiles set updated_at = '2000-01-01 00:00+00' where id = '22222222-2222-4222-8222-222222222222';
+alter table public.profiles enable trigger profiles_set_updated_at;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated","is_anonymous":true}';
+update public.profiles set display_name = 'Jürgen' where id = '22222222-2222-4222-8222-222222222222';
+select is((select updated_at from public.profiles), now(), 'updated_at bei Änderung vom Server gesetzt');
 
 reset role;
 select * from finish();

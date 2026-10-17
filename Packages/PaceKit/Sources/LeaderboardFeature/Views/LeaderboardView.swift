@@ -62,6 +62,29 @@ public struct LeaderboardView: View {
 
         case .loaded(let snapshot):
             LeaderboardList(snapshot: snapshot, emptyStateText: viewModel.emptyStateText)
+
+            if viewModel.canLoadMore || viewModel.isLoadingMore {
+                Button {
+                    Task { await viewModel.loadMore() }
+                } label: {
+                    if viewModel.isLoadingMore {
+                        ProgressView().tint(PaceColor.accent)
+                    } else {
+                        Text("Weitere Plätze laden")
+                    }
+                }
+                .buttonStyle(.paceSecondary)
+                .disabled(viewModel.isLoadingMore)
+            }
+            if let error = viewModel.loadMoreError {
+                Text(error)
+                    .font(PaceFont.caption)
+                    .foregroundStyle(PaceColor.danger)
+            }
+
+            Text("Es zählen nur Wettbewerbsschritte – manuell eingetragene Schritte nicht.")
+                .font(PaceFont.caption)
+                .foregroundStyle(PaceColor.textSecondary)
         }
     }
 }
@@ -168,10 +191,6 @@ private struct LeaderboardList: View {
                 .background(PaceColor.surface)
                 .clipShape(RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous))
             }
-
-            Text("Es zählen nur Wettbewerbsschritte – manuell eingetragene Schritte nicht.")
-                .font(PaceFont.caption)
-                .foregroundStyle(PaceColor.textSecondary)
         }
     }
 

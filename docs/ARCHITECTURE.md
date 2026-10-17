@@ -107,7 +107,8 @@ pace/
 │   │   ├── LeaderboardFeature/
 │   │   ├── ProfileFeature/
 │   │   └── AppFeature/
-│   └── Tests/                          ein Test-Target pro Modul + PaceTestSupport (Test-Doubles)
+│   └── Tests/                          ein Test-Target pro Modul mit Logik + PaceTestSupport (Test-Doubles);
+│                                       DesignSystem (reine Darstellung) hat keine eigenen Tests
 ├── Packages/PaceBackendIntegrationTests/   Swift-Tests gegen einen echten (lokalen) Supabase-Stack
 ├── supabase/
 │   ├── config.toml                     lokale Supabase-CLI-Konfiguration
@@ -143,9 +144,11 @@ Neue Swift-Dateien im Ordner `Pace/` erkennt Xcode automatisch. Neue Dateien in
 ## Tests
 
 - Swift Testing, Test-Doubles in `Tests/PaceTestSupport` (keine echten Services in Unit-Tests).
-- Die Logik (Core, ViewModels, Backend-Repositories mit URLProtocol-Stub) läuft auch unter Linux.
-- `ios.yml` baut die App mit Xcode, prüft auf Compiler-Warnungen in Pace-Code und führt alle Unit-Tests im
-  iOS-Simulator aus. CI benötigt keine Zugangsdaten.
+- `PaceCore` und `PaceBackend` bauen auch unter Linux und auf macOS (Integrationstests in der CI). Die Feature-Module
+  enthalten SwiftUI-Views und werden deshalb im iOS-Simulator getestet; `PaceHealthTests` prüft dort die
+  HealthKit-Abfragen (u. a. den Filter gegen manuell eingetragene Schritte).
+- `ios.yml` baut die App mit Xcode, führt alle Unit-Tests im iOS-Simulator aus, baut die Integrationstests auf macOS
+  und bricht bei Compiler-Warnungen in App-, Paket- oder Test-Code ab. CI benötigt keine Zugangsdaten.
 - `backend.yml` startet einen lokalen Supabase-Stack (keine Produktionsdaten, keine Zugangsdaten) und führt
   pgTAP-Tests und Swift-Integrationstests aus.
 - HealthKit selbst lässt sich nur auf echten Geräten bzw. im Simulator mit eingetragenen Daten sinnvoll prüfen.

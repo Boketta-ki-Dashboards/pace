@@ -135,10 +135,13 @@ keine Quellen, keine Standorte.
   Zeitstempel) und in `daily_activity` nur `user_id`, `activity_date`, `competition_steps`. Die Migrationen setzen
   alle Rechte selbst und hängen nicht von Supabase-Standardrechten ab (Supabase vergibt für neue Tabellen ab dem
   30.10.2026 keine Data-API-Rechte mehr automatisch).
-- **Funktionen**: öffentliche RPCs sind `security definer` mit `set search_path = ''`, prüfen `auth.uid()` und geben
-  nur öffentliche Felder zurück. `execute` ist für `public`/`anon` entzogen. Interne Funktionen liegen im Schema
-  `private`, das über die Data API nicht erreichbar ist.
-- **Fehlercodes**: `42501` ohne Anmeldung, `22023` für unbekannte Region / ungültigen Zeitraum, `23505` vergebener
+- **Funktionen**: öffentliche RPCs sind `security definer` mit `set search_path = ''` und geben nur öffentliche Felder
+  zurück. `execute` haben nur angemeldete Nutzer (`authenticated`); für `public`/`anon` ist es entzogen. Die
+  Ranking-RPCs prüfen zusätzlich `auth.uid()`, die Zugehörigkeit zur eigenen Region und das Datumsfenster; Suche,
+  Hierarchie und Namensprüfung liefern nur nicht personenbezogene bzw. ja/nein-Daten. Interne Funktionen liegen im
+  Schema `private`, das über die Data API nicht erreichbar ist.
+- **Fehlercodes**: `42501` ohne Anmeldung, `22023` für unbekannte bzw. fremde Region, ungültigen Zeitraum oder
+  Stichtag, `23505` vergebener
   Benutzername, `23514` ungültige Werte (z. B. `invalid_municipality`).
 - CI: `supabase db lint --fail-on error` und `supabase db advisors --fail-on warn` gegen den lokalen Stack.
 
@@ -224,15 +227,20 @@ Zugriffsregeln der Ranking-RPCs (`private.assert_leaderboard_access`):
 Aktualisierung auf einen neuen Gebietsstand:
 
 ```sh
-# 1. Neue Quartalsausgabe (ZIP) von Destatis herunterladen, z. B. nach ~/Downloads/GV100AD4Q.zip
+# 1. Neue Ausgabe (ZIP) von Destatis herunterladen, z. B. nach ~/Downloads/<datei>.zip
+#    Quartalsausgaben gibt es zum 31.03., 30.06. und 30.09.; zum 31.12. erscheint die Jahresausgabe.
 # 2. Neue Migration erzeugen (Stand im Namen anpassen)
 supabase migration new region_data_gv100ad_TTMMJJJJ
-python3 -I supabase/scripts/import_regions.py ~/Downloads/GV100AD4Q.zip \
+python3 -I supabase/scripts/import_regions.py ~/Downloads/<datei>.zip \
+  --source-url "<URL der Download-Seite bei Destatis>" \
   --output supabase/migrations/<timestamp>_region_data_gv100ad_TTMMJJJJ.sql
 # 3. Importer-Tests und Datenbanktests
 python3 -I supabase/scripts/test_import_regions.py
 supabase db reset && supabase test db
 ```
+
+`--source-url` landet im Kopf der Migration als Quellenangabe. Für Quartalsausgaben leitet das Skript die URL
+selbst ab; für die Jahresausgabe (Stand 31.12.) muss sie angegeben werden, sonst bricht das Skript ab.
 
 Neue Regionen werden ergänzt, geänderte aktualisiert (Upsert über die feste ID). Regionen, die im neuen Stand
 fehlen (Gemeindefusionen), werden **deaktiviert, nicht gelöscht**, weil Profile auf sie verweisen können. Erwartete
@@ -250,10 +258,15 @@ supabase db lint --fail-on error
 supabase db advisors --fail-on warn
 python3 -I supabase/scripts/test_import_regions.py
 
-# Integrationstests (Swift) gegen den lokalen Stack:
+# Integrationstests (Swift) gegen den lokalen Stack – auf dem Mac:
 eval "$(supabase status -o env)"
 cd Packages/PaceBackendIntegrationTests
 PACE_SUPABASE_URL="$API_URL" PACE_SUPABASE_PUBLISHABLE_KEY="${PUBLISHABLE_KEY:-$ANON_KEY}" swift test
+
+# … oder wie in der CI unter Linux im Container (aus dem Repository-Wurzelverzeichnis):
+docker run --rm --network host -v "$PWD":/work -w /work/Packages/PaceBackendIntegrationTests \
+  -e PACE_SUPABASE_URL="$API_URL" -e PACE_SUPABASE_PUBLISHABLE_KEY="${PUBLISHABLE_KEY:-$ANON_KEY}" \
+  swift:6.2 swift test -Xlinker --allow-shlib-undefined
 ```
 
 Ohne die beiden Umgebungsvariablen werden die Integrationstests übersprungen. Die CI (`.github/workflows/backend.yml`)

@@ -96,13 +96,36 @@ public struct Region: Hashable, Sendable, Identifiable {
         self.municipalityCount = municipalityCount
     }
 
-    /// Name mit Art der Gebietseinheit, z. B. `Landkreis Darmstadt-Dieburg`.
+    /// Name mit Art der Gebietseinheit, z. B. `Landkreis Darmstadt-Dieburg`. Namen, die die Art schon enthalten
+    /// (`Main-Kinzig-Kreis`, `Landkreis Rostock`, `Region Hannover`, `Regionalverband Saarbrücken`), bleiben unverändert.
     public var displayName: String {
+        guard !nameIncludesKind else { return name }
         switch kind {
-        case .landkreis: "Landkreis \(name)"
-        case .kreis: "Kreis \(name)"
-        case .stadtkreis: "Stadtkreis \(name)"
-        default: name
+        case .landkreis: return "Landkreis \(name)"
+        case .kreis: return "Kreis \(name)"
+        case .stadtkreis: return "Stadtkreis \(name)"
+        default: return name
         }
+    }
+
+    /// Ortsangabe mit Präposition für Sätze wie „Du bist der Erste …“: `in Pfungstadt`, `im Landkreis
+    /// Darmstadt-Dieburg`, `im Oberbergischen Kreis`, `in der Region Hannover`, `im Saarland`.
+    public var locative: String {
+        if name.hasPrefix("Region ") || name.hasPrefix("Städteregion ") {
+            return "in der \(name)"
+        }
+        switch kind {
+        case .landkreis, .kreis, .stadtkreis, .regionalverband:
+            // Adjektivische Namen werden gebeugt: „Oberbergischer Kreis“ → „im Oberbergischen Kreis“.
+            let dative = displayName.replacingOccurrences(of: "er Kreis", with: "en Kreis")
+            return "im \(dative)"
+        default:
+            return name == "Saarland" ? "im Saarland" : "in \(name)"
+        }
+    }
+
+    private var nameIncludesKind: Bool {
+        name.localizedCaseInsensitiveContains("kreis")
+            || ["Region ", "Städteregion ", "Regionalverband "].contains { name.hasPrefix($0) }
     }
 }

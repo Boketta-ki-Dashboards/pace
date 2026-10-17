@@ -96,4 +96,23 @@ jobs:
             -project Pace.xcodeproj \
             -scheme Pace \
             -destination "id=${{ steps.simulator.outputs.udid }}" \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log
+
+      - name: Backend integration tests build on macOS
+        # Ohne Supabase-Umgebung werden die Integrationstests übersprungen (sie laufen in backend.yml gegen einen
+        # lokalen Stack). Hier wird geprüft, dass das Paket auf dem Mac baut, wie in docs/BACKEND.md beschrieben.
+        run: |
+          set -o pipefail
+          cd Packages/PaceBackendIntegrationTests
+          swift test 2>&1 | tee "$GITHUB_WORKSPACE/integration-macos.log"
+
+      - name: No compiler warnings in test code
+        run: |
+          grep -hE "^$GITHUB_WORKSPACE/(Pace|Packages)/[^:]+:[0-9]+:[0-9]+: warning:" test.log integration-macos.log \
+            | grep -v "/.build/" | sort -u > test-warnings.txt || true
+          if [ -s test-warnings.txt ]; then
+            cat test-warnings.txt
+            echo "::error::$(wc -l < test-warnings.txt) Compiler-Warnung(en) in Test-Code"
+            exit 1
+          fi
+          echo "Keine Warnungen in Test-Code."

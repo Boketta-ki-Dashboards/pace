@@ -38,6 +38,21 @@ public struct LeaderboardSnapshot: Equatable, Sendable {
 
     public var isEmpty: Bool { totalParticipants == 0 }
 
+    /// Anzahl der lückenlos geladenen Plätze ab Platz 1.
+    public var loadedTopCount: Int {
+        var count = 0
+        for entry in entries {
+            guard entry.rank == count + 1 else { break }
+            count += 1
+        }
+        return count
+    }
+
+    /// Ob es nach den lückenlos geladenen Plätzen weitere gibt, die noch nicht angezeigt werden.
+    public var canLoadMore: Bool {
+        loadedTopCount < totalParticipants && entries.count < totalParticipants
+    }
+
     /// Nur der Nutzer selbst ist im Ranking.
     public var isCurrentUserAlone: Bool {
         totalParticipants == 1 && currentUserEntry != nil
@@ -79,6 +94,39 @@ public struct LeaderboardLoader: Sendable {
             rows: rows,
             totalParticipants: top.totalParticipants,
             currentUserEntry: currentUser
+        )
+    }
+
+    /// Lädt die nächsten Plätze nach den lückenlos geladenen und fügt sie ein. Schließt sich dabei die Lücke zur
+    /// eigenen Position, verschwindet sie.
+    public func loadMore(after snapshot: LeaderboardSnapshot) async throws -> LeaderboardSnapshot {
+        let page = try await repository.page(for: snapshot.query, offset: snapshot.loadedTopCount, limit: topLimit)
+
+        // Neuere Werte gewinnen; je Platz und je Nutzer nur ein Eintrag.
+        var byRank: [Int: LeaderboardEntry] = [:]
+        for entry in snapshot.entries + page.entries {
+            byRank[entry.rank] = entry
+        }
+        var seenUsers: Set<UUID> = []
+        let merged = byRank.values
+            .sorted { $0.rank < $1.rank }
+            .filter { seenUsers.insert($0.publicUserID).inserted }
+
+        var rows: [LeaderboardRow] = []
+        var previousRank = 0
+        for entry in merged {
+            if entry.rank > previousRank + 1 {
+                rows.append(.gap(afterRank: previousRank))
+            }
+            rows.append(.entry(entry))
+            previousRank = entry.rank
+        }
+
+        return LeaderboardSnapshot(
+            query: snapshot.query,
+            rows: rows,
+            totalParticipants: page.totalParticipants,
+            currentUserEntry: merged.first(where: \.isCurrentUser) ?? snapshot.currentUserEntry
         )
     }
 }

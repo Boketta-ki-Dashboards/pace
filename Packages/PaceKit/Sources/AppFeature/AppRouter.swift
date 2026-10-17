@@ -105,9 +105,15 @@ public final class AppRouter {
             cache: services.profileCache
         )
         let sync = ActivitySyncCoordinator(repository: services.activitySync, userID: profile.id)
+        let home = HomeViewModel(activityData: dependencies.activityData, syncing: sync)
         let main = MainViewModel(
-            home: HomeViewModel(activityData: dependencies.activityData, syncing: sync),
-            leaderboard: LeaderboardViewModel(store: store, leaderboards: services.leaderboards, syncing: sync),
+            home: home,
+            leaderboard: LeaderboardViewModel(
+                store: store,
+                leaderboards: services.leaderboards,
+                syncing: sync,
+                refreshActivity: { [weak home] in await home?.refreshForRanking() }
+            ),
             profile: ProfileViewModel(store: store, regions: services.regions),
             store: store
         )

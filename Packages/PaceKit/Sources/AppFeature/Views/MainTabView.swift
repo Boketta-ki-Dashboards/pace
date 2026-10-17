@@ -22,5 +22,7 @@ struct MainTabView: View {
                 .tabItem { Label("Profil", systemImage: "person.crop.circle") }
                 .tag(MainViewModel.Tab.profile)
         }
+        // Bewegungsdaten und Sync laufen für die ganze Main App, nicht nur, solange der Heute-Tab offen ist.
+        .activityUpdates(viewModel.home)
     }
 }
