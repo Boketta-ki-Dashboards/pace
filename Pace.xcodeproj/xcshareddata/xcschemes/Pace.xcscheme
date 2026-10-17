@@ -80,6 +80,16 @@
                ReferencedContainer = "container:Packages/PaceKit">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "PaceBackendTests"
+               BuildableName = "PaceBackendTests"
+               BlueprintName = "PaceBackendTests"
+               ReferencedContainer = "container:Packages/PaceKit">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

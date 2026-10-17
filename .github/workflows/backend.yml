@@ -1,0 +1,81 @@
+name: Backend
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Local config is not committed
+        run: |
+          if git ls-files --error-unmatch Config/Pace.xcconfig >/dev/null 2>&1; then
+            echo "::error::Config/Pace.xcconfig darf nicht committet werden"
+            exit 1
+          fi
+
+      - name: No Supabase keys or JWTs in the repository
+        run: |
+          # Echte Schlüssel haben lange Zufallsteile; Platzhalter wie sb_publishable_example nicht.
+          if git grep -nE 'sb_(secret|publishable)_[A-Za-z0-9_-]{20,}'; then
+            echo "::error::Supabase-Schlüssel im Repository gefunden"
+            exit 1
+          fi
+          # Signierte JWTs (z. B. service_role-Keys). Test-Fixtures mit unsignierten Tokens sind ausgenommen.
+          if git grep -nE 'eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}' -- ':!Packages/PaceKit/Tests'; then
+            echo "::error::JWT im Repository gefunden"
+            exit 1
+          fi
+
+  database:
+    name: Database & integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.121.0
+
+      - name: Region importer tests
+        run: python3 -I supabase/scripts/test_import_regions.py
+
+      - name: Start local Supabase (Postgres, Auth, REST)
+        # Nur die Dienste, die Pace nutzt. Migrationen und der Dev-Seed werden dabei lokal angewendet.
+        run: supabase start -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+
+      - name: Database tests (pgTAP)
+        run: supabase test db
+
+      - name: Database lint
+        run: supabase db lint --local --fail-on error
+
+      - name: Security & performance advisors
+        run: supabase db advisors --local --fail-on warn
+
+      - name: Backend integration tests (Swift on Linux)
+        run: |
+          eval "$(supabase status -o env)"
+          KEY="${PUBLISHABLE_KEY:-$ANON_KEY}"
+          # --allow-shlib-undefined: libswiftObservation.so der Linux-Toolchain 6.2 referenziert ein Symbol, das keine
+          # Laufzeitbibliothek exportiert (Packaging-Fehler der Toolchain, betrifft nur Linux).
+          docker run --rm --network host \
+            -v "$PWD":/work -w /work/Packages/PaceBackendIntegrationTests \
+            -e PACE_SUPABASE_URL="$API_URL" -e PACE_SUPABASE_PUBLISHABLE_KEY="$KEY" \
+            swift:6.2 swift test -Xlinker --allow-shlib-undefined
+
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop --no-backup

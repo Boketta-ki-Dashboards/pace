@@ -1,0 +1,4 @@
+# Temporäre Dateien der Supabase CLI
+.branches
+.temp
+.env*

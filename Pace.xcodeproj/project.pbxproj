@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		A10000000000000000000013 /* AppFeature in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000011 /* AppFeature */; };
 		A10000000000000000000014 /* PaceHealth in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000012 /* PaceHealth */; };
+		A1000000000000000000001D /* PaceBackend in Frameworks */ = {isa = PBXBuildFile; productRef = A1000000000000000000001C /* PaceBackend */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +36,7 @@
 			files = (
 				A10000000000000000000013 /* AppFeature in Frameworks */,
 				A10000000000000000000014 /* PaceHealth in Frameworks */,
+				A1000000000000000000001D /* PaceBackend in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -100,6 +102,7 @@
 			packageProductDependencies = (
 				A10000000000000000000011 /* AppFeature */,
 				A10000000000000000000012 /* PaceHealth */,
+				A1000000000000000000001C /* PaceBackend */,
 			);
 			productName = Pace;
 			productReference = A10000000000000000000004 /* Pace.app */;
@@ -396,6 +399,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A10000000000000000000010 /* XCLocalSwiftPackageReference "Packages/PaceKit" */;
 			productName = PaceHealth;
+		};
+		A1000000000000000000001C /* PaceBackend */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A10000000000000000000010 /* XCLocalSwiftPackageReference "Packages/PaceKit" */;
+			productName = PaceBackend;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
