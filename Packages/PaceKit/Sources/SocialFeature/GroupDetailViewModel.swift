@@ -20,6 +20,10 @@ public final class GroupDetailViewModel: Identifiable {
     public private(set) var period: LeaderboardPeriod = .daily
 
     public private(set) var ranking: GroupRanking?
+    /// Zeitraum, zu dem `ranking` gehört.
+    public private(set) var rankingPeriod: LeaderboardPeriod?
+    /// Die neueste Ranking-Anfrage ist fehlgeschlagen.
+    public private(set) var rankingFailed = false
     public private(set) var days: [GroupDay] = []
     public private(set) var outgoingInvitations: [OutgoingGroupInvitation] = []
     public private(set) var notice: SocialViewModel.Notice?
@@ -30,9 +34,11 @@ public final class GroupDetailViewModel: Identifiable {
     @ObservationIgnored private nonisolated let groupID: UUID
     @ObservationIgnored private let repository: any SocialRepository
     @ObservationIgnored private weak var social: SocialViewModel?
-    /// Zählt Ranking-Anfragen. Nur die zuletzt gestartete darf `ranking` setzen – sonst überschriebe eine langsame
-    /// ältere Antwort (z. B. „Heute“) die gerade gewählte Ansicht („Diese Woche“).
+    /// Zählt Ranking-Anfragen. Eine Antwort gilt nur für den noch gewählten Zeitraum und nur, wenn keine später
+    /// gestartete schon angewendet wurde – sonst überschriebe eine langsame ältere Antwort (z. B. „Heute“) die gerade
+    /// gewählte Ansicht („Diese Woche“). Scheitert die neueste Anfrage, bleibt eine gültige ältere so erhalten.
     @ObservationIgnored private var rankingGeneration = 0
+    @ObservationIgnored private var appliedRankingGeneration = 0
     @ObservationIgnored private var loadErrorNotice: SocialViewModel.Notice?
 
     public init(group: GroupSummary, repository: any SocialRepository, social: SocialViewModel?) {
@@ -40,6 +46,11 @@ public final class GroupDetailViewModel: Identifiable {
         groupID = group.id
         self.repository = repository
         self.social = social
+    }
+
+    /// Das Ranking des gewählten Zeitraums; `nil`, solange es lädt oder nur das des anderen Zeitraums da ist.
+    public var currentRanking: GroupRanking? {
+        rankingPeriod == period ? ranking : nil
     }
 
     /// Freunde, die noch nicht in der Gruppe sind und eingeladen werden können.
@@ -62,6 +73,7 @@ public final class GroupDetailViewModel: Identifiable {
             state = .loading
         }
         rankingGeneration += 1
+        rankingFailed = false
         let generation = rankingGeneration
         let requestedPeriod = period
         do {
@@ -71,9 +83,7 @@ public final class GroupDetailViewModel: Identifiable {
             async let invitations = repository.outgoingInvitations(for: groupID)
             let loaded = try await (summary, ranking, days, invitations)
             group = loaded.0
-            if generation == rankingGeneration {
-                self.ranking = loaded.1
-            }
+            applyRanking(loaded.1, period: requestedPeriod, generation: generation)
             self.days = loaded.2
             outgoingInvitations = loaded.3
             state = .loaded
@@ -86,6 +96,9 @@ public final class GroupDetailViewModel: Identifiable {
         } catch is CancellationError {
             return
         } catch {
+            if generation == rankingGeneration {
+                rankingFailed = true
+            }
             if state == .loaded {
                 let notice = SocialViewModel.Notice(text: SocialViewModel.message(for: error), isError: true)
                 self.notice = notice
@@ -103,20 +116,36 @@ public final class GroupDetailViewModel: Identifiable {
         await loadRanking()
     }
 
+    /// Lädt das Ranking des gewählten Zeitraums erneut (z. B. nach einem Fehler).
+    public func reloadRanking() async {
+        await loadRanking()
+    }
+
     private func loadRanking() async {
         rankingGeneration += 1
+        rankingFailed = false
         let generation = rankingGeneration
         let requestedPeriod = period
         do {
             let result = try await repository.groupRanking(groupID, period: requestedPeriod)
-            guard generation == rankingGeneration else { return }
-            ranking = result
+            applyRanking(result, period: requestedPeriod, generation: generation)
         } catch is CancellationError {
             return
         } catch {
             guard generation == rankingGeneration else { return }
-            notice = .init(text: SocialViewModel.message(for: error), isError: true)
+            rankingFailed = true
+            let notice = SocialViewModel.Notice(text: SocialViewModel.message(for: error), isError: true)
+            self.notice = notice
+            loadErrorNotice = notice
         }
+    }
+
+    private func applyRanking(_ result: GroupRanking, period requestedPeriod: LeaderboardPeriod, generation: Int) {
+        guard requestedPeriod == period, generation > appliedRankingGeneration else { return }
+        ranking = result
+        rankingPeriod = requestedPeriod
+        appliedRankingGeneration = generation
+        rankingFailed = false
     }
 
     // MARK: Einladen
@@ -150,11 +179,11 @@ public final class GroupDetailViewModel: Identifiable {
     public func update(name: String, description: String, kind: GroupKind) async -> Bool {
         let draft = GroupDraft(name: name, description: description, kind: kind)
         guard let validName = draft.validName else {
-            notice = .init(text: SocialError.invalidName.message, isError: true)
+            show(SocialViewModel.Notice(text: SocialError.invalidName.message, isError: true))
             return false
         }
         guard let validDescription = draft.validDescription else {
-            notice = .init(text: SocialError.invalidDescription.message, isError: true)
+            show(SocialViewModel.Notice(text: SocialError.invalidDescription.message, isError: true))
             return false
         }
         return await perform {
@@ -201,7 +230,13 @@ public final class GroupDetailViewModel: Identifiable {
     }
 
     public func dismissNotice() {
-        notice = nil
+        show(nil)
+    }
+
+    /// Hinweis einer Aktion; ein späteres erfolgreiches Laden entfernt ihn nicht (siehe `SocialViewModel.show`).
+    private func show(_ notice: SocialViewModel.Notice?) {
+        self.notice = notice
+        loadErrorNotice = nil
     }
 
     @discardableResult
@@ -210,11 +245,12 @@ public final class GroupDetailViewModel: Identifiable {
         isWorking = true
         defer { isWorking = false }
         do {
-            notice = .init(text: try await action(), isError: false)
+            let text = try await action()
+            show(SocialViewModel.Notice(text: text, isError: false))
             if reload { await load() }
             return true
         } catch {
-            notice = .init(text: SocialViewModel.message(for: error), isError: true)
+            show(SocialViewModel.Notice(text: SocialViewModel.message(for: error), isError: true))
             if reload { await load() }
             return false
         }

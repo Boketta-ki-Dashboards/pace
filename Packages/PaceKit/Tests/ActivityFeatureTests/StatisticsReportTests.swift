@@ -330,5 +330,7 @@ struct StatisticsReportTests {
         #expect(formatter.signedPercent(0.001) == "±0 %")
         #expect(formatter.percent(0.8742) == "87 %")
         #expect(formatter.percent(0.996) == "99 %") // nicht „100 %“, solange das Ziel fehlt
+        #expect(formatter.percent(5_700.0 / 10_000) == "57 %") // 56,999… durch Rundungsfehler
+        #expect(formatter.percent(9_200.0 / 8_000) == "115 %")
     }
 }

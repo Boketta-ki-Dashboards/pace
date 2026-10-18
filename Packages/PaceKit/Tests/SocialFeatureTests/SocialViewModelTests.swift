@@ -145,6 +145,24 @@ struct SocialViewModelTests {
         #expect(viewModel.notice == nil)
     }
 
+    @Test func anActionErrorStaysAfterTheReload() async {
+        let request = FriendRequest(id: UUID(), direction: .incoming, profile: ben, createdAt: .distantPast)
+        let repository = SocialRepositoryStub { $0.requests = [request] }
+        let viewModel = makeViewModel(repository)
+        await viewModel.load()
+        repository.state.withLock { $0.error = .network }
+        await viewModel.load() // Ladefehler mit demselben Text wie gleich die Aktion
+        repository.state.withLock { state in
+            state.error = nil
+            state.actionError = .network
+        }
+
+        await viewModel.respond(to: request, accept: true)
+
+        // Das anschließende Neuladen klappt, der Fehler der Aktion bleibt trotzdem stehen.
+        #expect(viewModel.notice == .init(text: SocialError.network.message, isError: true))
+    }
+
     @Test func aRepeatedAcceptAfterALostAnswerCountsAsJoined() async {
         let group = SocialRepositoryStub.group(name: "Laufteam")
         let invitation = GroupInvitation(
@@ -257,13 +275,44 @@ struct GroupDetailViewModelTests {
         let load = Task { await detail.load() }
         try await waitUntil { repository.gate.waitingCount("groupRanking:daily") == 1 }
         await detail.select(.weekly)
-        #expect(detail.ranking == weekly)
+        #expect(detail.currentRanking == weekly)
 
         repository.gate.open("groupRanking:daily")
         await load.value
         #expect(detail.period == .weekly)
-        #expect(detail.ranking == weekly)
+        #expect(detail.currentRanking == weekly)
         #expect(detail.state == .loaded)
+    }
+
+    @Test func aFailedRankingOfTheOtherPeriodIsNotHiddenBehindTheOldOne() async {
+        let group = SocialRepositoryStub.group()
+        func ranking(_ steps: Int) -> GroupRanking {
+            GroupRanking(
+                totalParticipants: 1,
+                groupToday: Fixtures.day(2026, 10, 16),
+                dailyGoal: 8_000,
+                entries: [GroupRankingEntry(rank: 1, profile: mia, competitionSteps: steps, isCurrentUser: false, role: .member, reachedGoalToday: true)]
+            )
+        }
+        let daily = ranking(9_000), weekly = ranking(52_000)
+        let repository = SocialRepositoryStub { state in
+            state.groups = [group]
+            state.groupRankings[group.id] = daily
+            state.weeklyGroupRankings[group.id] = weekly
+        }
+        let detail = GroupDetailViewModel(group: group, repository: repository, social: nil)
+        await detail.load()
+        #expect(detail.currentRanking == daily)
+
+        repository.state.withLock { $0.error = .network }
+        await detail.select(.weekly)
+        #expect(detail.currentRanking == nil) // keine Tageswerte unter „Diese Woche“
+        #expect(detail.rankingFailed)
+
+        repository.state.withLock { $0.error = nil }
+        await detail.reloadRanking()
+        #expect(detail.currentRanking == weekly)
+        #expect(!detail.rankingFailed)
     }
 
     @Test func retryingAfterAnErrorShowsTheLoadingState() async throws {

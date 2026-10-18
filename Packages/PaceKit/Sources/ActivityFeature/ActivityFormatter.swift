@@ -50,7 +50,13 @@ public struct ActivityFormatter: Sendable {
     /// Anteil am Ziel als Prozent, abgerundet wie auf Home, z. B. `87 %` – 99,6 % erscheinen nicht als „100 %“,
     /// solange das Ziel nicht erreicht ist.
     public func percent(_ fraction: Double) -> String {
-        "\(Int((fraction * 100).rounded(.down)).formatted(.number.locale(locale))) %"
+        "\(Self.wholePercent(fraction).formatted(.number.locale(locale))) %"
+    }
+
+    /// Ganze Prozent, abgerundet. Der kleine Zuschlag gleicht Rundungsfehler aus (5.700 / 10.000 · 100 ergibt
+    /// 56,999…), damit dort 57 % stehen und nicht 56 %.
+    public static func wholePercent(_ fraction: Double) -> Int {
+        Int((fraction * 100 + 1e-9).rounded(.down))
     }
 
     /// Veränderung als Prozent mit Vorzeichen, z. B. `+12 %`, `−8 %`, `±0 %`

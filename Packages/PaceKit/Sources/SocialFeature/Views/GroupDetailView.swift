@@ -232,7 +232,7 @@ struct GroupDetailContent: View {
                     Text("Diese Woche").tag(LeaderboardPeriod.weekly)
                 }
                 .pickerStyle(.segmented)
-                if let ranking = viewModel.ranking {
+                if let ranking = viewModel.currentRanking {
                     ForEach(ranking.entries) { member in
                         RankingRow(
                             entry: LeaderboardEntry(
@@ -258,6 +258,15 @@ struct GroupDetailContent: View {
                             .font(PaceFont.micro)
                             .foregroundStyle(PaceColor.textSecondary)
                     }
+                } else if viewModel.rankingFailed {
+                    VStack(spacing: PaceSpacing.xs) {
+                        Text("Das Ranking konnte nicht geladen werden.")
+                            .font(PaceFont.callout)
+                            .foregroundStyle(PaceColor.textSecondary)
+                        Button("Erneut versuchen") { Task { await viewModel.reloadRanking() } }
+                            .buttonStyle(.paceSecondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 60)
                 } else {
                     ProgressView()
                         .frame(maxWidth: .infinity, minHeight: 60)

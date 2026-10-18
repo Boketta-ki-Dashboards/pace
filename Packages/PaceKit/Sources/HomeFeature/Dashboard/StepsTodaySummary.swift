@@ -31,7 +31,7 @@ public struct StepsTodaySummary: Equatable, Sendable {
         stepsText = formatter.steps(today.competitionSteps)
         goalText = "von \(formatter.steps(goal)) Schritten"
         progress = Double(today.competitionSteps) / Double(goal)
-        percentText = "\(Int((progress * 100).rounded(.down)))%"
+        percentText = "\(ActivityFormatter.wholePercent(progress))%"
         isGoalReached = today.competitionSteps >= goal
         remainingText = isGoalReached
             ? "Tagesziel erreicht!"

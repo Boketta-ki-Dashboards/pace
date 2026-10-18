@@ -127,10 +127,12 @@ public final class SocialViewModel {
                 self.reloadRequested = false
                 await self.performLoad()
             } while self.reloadRequested
+            // Noch in der Aufgabe freigeben: Ein frischer Aufruf direkt danach startet sonst kein neues Laden,
+            // sondern schlösse sich der bereits beendeten Aufgabe an.
+            self.loadTask = nil
         }
         loadTask = task
         await task.value
-        loadTask = nil
     }
 
     private func performLoad() async {
@@ -260,16 +262,16 @@ public final class SocialViewModel {
         guard let repository else { return nil }
         let code = inviteCode.uppercased().filter { !$0.isWhitespace && $0 != "-" }
         guard (6...12).contains(code.count) else {
-            notice = Notice(text: SocialError.invalidInviteCode.message, isError: true)
+            show(Notice(text: SocialError.invalidInviteCode.message, isError: true))
             return nil
         }
         do {
             let group = try await repository.joinGroup(inviteCode: code)
-            notice = Notice(text: "Du bist „\(group.name)“ beigetreten.", isError: false)
+            show(Notice(text: "Du bist „\(group.name)“ beigetreten.", isError: false))
             await load()
             return group
         } catch {
-            notice = Notice(text: Self.message(for: error), isError: true)
+            show(Notice(text: Self.message(for: error), isError: true))
             return nil
         }
     }
@@ -278,11 +280,11 @@ public final class SocialViewModel {
     public func createGroup(_ draft: GroupDraft) async -> GroupSummary? {
         guard let repository else { return nil }
         guard let name = draft.validName else {
-            notice = Notice(text: SocialError.invalidName.message, isError: true)
+            show(Notice(text: SocialError.invalidName.message, isError: true))
             return nil
         }
         guard let description = draft.validDescription else {
-            notice = Notice(text: SocialError.invalidDescription.message, isError: true)
+            show(Notice(text: SocialError.invalidDescription.message, isError: true))
             return nil
         }
         var cleaned = draft
@@ -290,17 +292,17 @@ public final class SocialViewModel {
         cleaned.description = description
         do {
             let group = try await repository.createGroup(cleaned, timeZone: calendar.timeZone.identifier)
-            notice = Notice(text: "Gruppe „\(group.name)“ erstellt.", isError: false)
+            show(Notice(text: "Gruppe „\(group.name)“ erstellt.", isError: false))
             await load()
             return group
         } catch {
-            notice = Notice(text: Self.message(for: error), isError: true)
+            show(Notice(text: Self.message(for: error), isError: true))
             return nil
         }
     }
 
     public func dismissNotice() {
-        notice = nil
+        show(nil)
     }
 
     /// ViewModel für die Detailansicht einer Gruppe.
@@ -315,16 +317,23 @@ public final class SocialViewModel {
 
     // MARK: Hilfen
 
+    /// Hinweis einer Aktion. Er ersetzt einen offenen Ladefehler-Hinweis und wird von einem späteren erfolgreichen
+    /// Laden nicht entfernt (auch nicht, wenn sein Text zufällig gleich ist).
+    private func show(_ notice: Notice?) {
+        self.notice = notice
+        loadErrorNotice = nil
+    }
+
     private func perform(on id: UUID, _ action: (any SocialRepository) async throws -> String) async {
         guard let repository, !busyIDs.contains(id) else { return }
         busyIDs.insert(id)
         defer { busyIDs.remove(id) }
         do {
             let text = try await action(repository)
-            notice = Notice(text: text, isError: false)
+            show(Notice(text: text, isError: false))
             await load()
         } catch {
-            notice = Notice(text: Self.message(for: error), isError: true)
+            show(Notice(text: Self.message(for: error), isError: true))
             await load()
         }
     }
