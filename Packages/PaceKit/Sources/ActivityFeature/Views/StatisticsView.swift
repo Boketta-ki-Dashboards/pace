@@ -86,7 +86,7 @@ struct StatisticsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
-            Picker("Zeitraum", selection: Binding(get: { report.period }, set: onSelectPeriod)) {
+            Picker("Zeitraum", selection: Binding(get: { report.period }, set: { onSelectPeriod($0) })) {
                 ForEach(StatisticsPeriod.allCases) { period in
                     Text(period.title).tag(period)
                 }
