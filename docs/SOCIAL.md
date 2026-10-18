@@ -72,7 +72,8 @@ Einträge. Alle Hilfsfunktionen liegen im Schema `private` und sind für Clients
 - **Profilsuche** nur per exaktem Benutzernamen (ohne Groß-/Kleinschreibung), keine Teilstringsuche, keine Listen.
   Ein Treffer zeigt Anzeigename und Benutzername (die beim Annehmen ohnehin sichtbar würden).
 - **Einladungen** gibt es nur unter Freunden. Endet eine Freundschaft, werden offene Einladungen zwischen beiden
-  zurückgezogen. Eingeladene sehen vor dem Annehmen nur Name, Art und Mitgliederzahl der Gruppe sowie die einladende
+  zurückgezogen; verlässt die einladende Person die Gruppe oder wird sie entfernt, ebenso ihre offenen Einladungen
+  in diese Gruppe. Eingeladene sehen vor dem Annehmen nur Name, Art und Mitgliederzahl der Gruppe sowie die einladende
   Person – nicht den Einladungscode und keine Mitglieder.
 - Der Einladungscode ist für alle Mitglieder sichtbar und weitergebbar (wie ein Gruppenlink). Der Eigentümer kann
   ihn jederzeit neu erzeugen; der alte wird sofort ungültig.
@@ -263,13 +264,18 @@ Ohne Anmeldung (nur Publishable Key, Rolle `anon`) antwortet PostgREST mit `4250
 
 Rate Limits zählen nur, was committet wird: Bricht eine RPC mit einem Fehler ab, verfällt der gezählte Eintrag.
 Bewusst gezählt werden deshalb auch erfolglose Suchen (Antwort `null`) und falsche Einladungscodes (siehe oben).
-Der Codebereich hat 32⁸ ≈ 1,1 · 10¹² Möglichkeiten.
+Der Codebereich hat 32⁸ ≈ 1,1 · 10¹² Möglichkeiten. Das Versuchslimit gilt je Konto; da anonyme Konten leicht
+entstehen, begrenzt zusätzlich Supabase die anonymen Anmeldungen (standardmäßig 30 je Stunde und IP). Selbst mit
+vielen Konten bleibt das Erraten eines Codes bei diesem Codebereich praktisch aussichtslos; wer einen Code für
+weitergegeben hält, erzeugt einen neuen.
 
 **Nebenläufigkeit:** Gruppenzeilen werden vor Mitgliedschaftsänderungen mit `select … for update` gesperrt, Nutzer
 (Freundschafts- und Mitgliedschaftslimits) und Rate Limits mit Transaktions-Advisory-Locks – immer in der
 Reihenfolge Gruppe → Nutzer → Rate Limit, beim Löschen eines Profils werden seine Gruppen vorab gesperrt. Doppeltes
 oder paralleles Annehmen, gleichzeitige Gegenanfragen, doppelte oder parallele Beitritte an der Mitgliedergrenze und
 parallele Einladungen erzeugen dadurch weder doppelte Zeilen noch überschrittene Limits noch `unique_violation`.
+Einladen sperrt beide Personen wie das Beenden einer Freundschaft – eine gleichzeitig beendete Freundschaft
+hinterlässt deshalb keine offene Einladung.
 
 ## Nicht umgesetzt
 
@@ -285,7 +291,10 @@ parallele Einladungen erzeugen dadurch weder doppelte Zeilen noch überschritten
   0 … 200 000 und das Sync-Fenster begrenzt. Wer seinen Client verändert, kann innerhalb dieser Grenzen falsche Werte
   senden – das betrifft Freundes- und Gruppenrankings ebenso wie die Gruppen-Streak.
 - Der Gruppentag ist der Kalendertag in der Gruppenzeitzone, die Schritte stammen aber vom lokalen Kalendertag des
-  Geräts. Mitglieder in anderen Zeitzonen tragen ihren eigenen Kalendertag gleichen Datums bei.
+  Geräts. Mitglieder in anderen Zeitzonen tragen ihren eigenen Kalendertag gleichen Datums bei. Für Mitglieder
+  westlich der Gruppenzeitzone läuft ihr Tag noch, wenn der Gruppentag schon vorbei ist: Der gestrige Gruppentag
+  kann dann zunächst als nicht erreicht gelten und nach ihrer Synchronisation doch noch erreicht werden – die
+  Streak wird bei jedem Lesen neu berechnet und korrigiert sich damit von selbst.
 - Die Streak wird bei jedem Lesen über bis zu 730 Tage neu berechnet (Messwerte oben). Bei sehr vielen alten,
   großen Gruppen wären materialisierte Tageswerte der nächste Schritt.
 
@@ -301,7 +310,8 @@ supabase test db   # u. a. 06_social_friends, 07_social_groups, 08_social_group_
   Entfernen, alle Freundes-Limits, Freundesranking (0-Werte, Gleichstand, Woche, Datumsfenster), Freundesprofil.
 - **07** – Gruppen erstellen (Validierung), Beitritt per Code (Normalisierung, falscher Code mit HTTP 400,
   Versuchslimit), Nichtmitglieder (`not_found`), Mitglieder (`not_allowed`), Ändern, Ziel, Code, Ranking,
-  Einladungen, Eigentümerwechsel, Entfernen, letzte Person, Profillöschung, Löschen, alle Gruppen-Limits.
+  Einladungen (auch Rückzug bei Austritt bzw. Entfernen der einladenden Person), Eigentümerwechsel, Entfernen,
+  letzte Person, Profillöschung, Löschen, alle Gruppen-Limits.
 - **08** – Rundung 1/2/3/4/6/10/12/20, laufender Tag, Lücke, `best_streak`, Zieländerung ab morgen,
   Beitritt/Austritt an einem Tag, überlappende Perioden, verspätete Synchronisation, Tage ohne Mitglieder,
   Zeitzonen (Kiritimati/Pago Pago) und Sommer-/Winterzeit (29.03.2026, 26.10.2025).

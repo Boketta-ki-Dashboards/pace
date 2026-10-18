@@ -753,9 +753,10 @@ create trigger group_members_open_period
   after insert on public.group_members
   for each row execute function private.open_group_membership_period();
 
--- Austritt, Entfernen oder Löschen des Profils: Periode schließen. Fehlt danach der Eigentümer, wird das am längsten
--- beigetretene verbleibende Mitglied Eigentümer; ist niemand mehr übrig, wird die Gruppe gelöscht. Wird die Gruppe
--- selbst gelöscht (Cascade), ist ihre Zeile schon weg und es bleibt nichts zu tun.
+-- Austritt, Entfernen oder Löschen des Profils: Periode schließen und offene Einladungen dieser Person in die Gruppe
+-- zurückziehen. Fehlt danach der Eigentümer, wird das am längsten beigetretene verbleibende Mitglied Eigentümer; ist
+-- niemand mehr übrig, wird die Gruppe gelöscht. Wird die Gruppe selbst gelöscht (Cascade), ist ihre Zeile schon weg
+-- und es bleibt nichts zu tun.
 create function private.handle_group_member_removed()
 returns trigger
 language plpgsql
@@ -773,6 +774,14 @@ begin
   if not found then
     return null;
   end if;
+
+  -- Einladungen gelten nur, solange die einladende Person Mitglied ist – sonst bliebe z. B. die Einladung eines
+  -- entfernten Mitglieds annehmbar.
+  update public.group_invitations i
+     set status = 'cancelled', responded_at = now()
+   where i.group_id = old.group_id
+     and i.inviter_id = old.user_id
+     and i.status = 'pending';
 
   if not exists (select 1 from public.group_members m where m.group_id = old.group_id) then
     delete from public.groups g where g.id = old.group_id;
@@ -1658,8 +1667,13 @@ begin
   if v_invitee_id = v_me then
     return jsonb_build_object('status', 'already_member', 'invitation_id', null);
   end if;
+  if v_invitee_id is null then
+    raise exception 'not_found';
+  end if;
+  -- Beide Nutzer sperren wie social_remove_friend: Eine parallel beendete Freundschaft hinterlässt so keine Einladung.
+  perform private.lock_users(array[v_me, v_invitee_id]);
   -- Einladen kann man nur eigene Freunde.
-  if v_invitee_id is null or not private.are_friends(v_me, v_invitee_id) then
+  if not private.are_friends(v_me, v_invitee_id) then
     raise exception 'not_found';
   end if;
   if private.group_role(p_group_id, v_invitee_id) is not null then

@@ -1,6 +1,6 @@
 -- Pace: Social – Gruppen: Erstellen, Beitritt per Code, Rechte, Limits, Eigentümerwechsel, Einladungen, Ranking.
 begin;
-select plan(123);
+select plan(127);
 
 -- 1 olga, 2 paul, 3 quinn, 4 rosa, 5 sven, 6 tina (Fremde), 7 uwe, 8 vera, 9 willi, 10 xaver, 11 yara, 12 zoe;
 -- 101–199 Statisten für die Limits.
@@ -22,10 +22,11 @@ select ('a7000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
        'statist_' || n, 'Statist ' || n
   from generate_series(101, 199) n;
 
--- Freundschaften für Einladungen: olga–paul, olga–sven, olga–willi, paul–sven, paul–quinn, xaver–150.
+-- Freundschaften für Einladungen: olga–paul, olga–sven, olga–willi, olga–uwe, paul–sven, paul–quinn, sven–uwe,
+-- xaver–150.
 insert into public.friendships (user_a, user_b)
 select least(a, b), greatest(a, b)
-  from (values (1, 2), (1, 5), (1, 9), (2, 5), (2, 3), (10, 150)) as v(x, y),
+  from (values (1, 2), (1, 5), (1, 9), (1, 7), (2, 5), (2, 3), (5, 7), (10, 150)) as v(x, y),
        lateral (select ('a7000000-0000-4000-8000-' || lpad(v.x::text, 12, '0'))::uuid as a,
                        ('a7000000-0000-4000-8000-' || lpad(v.y::text, 12, '0'))::uuid as b) ids;
 
@@ -392,7 +393,14 @@ update public.group_members set joined_at = now() - interval '1 day'
 set local role authenticated;
 
 set local request.jwt.claims = '{"sub":"a7000000-0000-4000-8000-000000000001","role":"authenticated"}';
+select is(
+  public.social_invite_to_group(pg_temp.group_id('g1'), 'b7000000-0000-4000-8000-000000000007')->>'status', 'invited',
+  'olga lädt uwe ein'
+);
 select lives_ok(format('select public.social_leave_group(%L)', pg_temp.group_id('g1')), 'Eigentümer verlässt die Gruppe');
+set local request.jwt.claims = '{"sub":"a7000000-0000-4000-8000-000000000007","role":"authenticated"}';
+select is(public.social_group_invitations(), '[]'::jsonb, 'Austritt zieht die offenen Einladungen der Person zurück');
+set local request.jwt.claims = '{"sub":"a7000000-0000-4000-8000-000000000001","role":"authenticated"}';
 select throws_ok(format('select public.social_group(%L)', pg_temp.group_id('g1')), 'P0001', 'not_found', 'nach dem Austritt nicht mehr sichtbar');
 select throws_ok(format('select public.social_leave_group(%L)', pg_temp.group_id('g1')), 'P0001', 'not_found', 'zweiter Austritt → not_found');
 
@@ -402,9 +410,17 @@ select is(
   'owner:4', 'am längsten beigetretenes Mitglied wird Eigentümer'
 );
 select throws_ok(format('select public.social_remove_group_member(%L, %L)', pg_temp.group_id('g1'), 'b7000000-0000-4000-8000-000000000004'), 'P0001', 'not_allowed', 'Eigentümer kann sich nicht selbst entfernen');
+set local request.jwt.claims = '{"sub":"a7000000-0000-4000-8000-000000000005","role":"authenticated"}';
+select is(
+  public.social_invite_to_group(pg_temp.group_id('g1'), 'b7000000-0000-4000-8000-000000000007')->>'status', 'invited',
+  'sven lädt uwe ein'
+);
+set local request.jwt.claims = '{"sub":"a7000000-0000-4000-8000-000000000004","role":"authenticated"}';
 select lives_ok(format('select public.social_remove_group_member(%L, %L)', pg_temp.group_id('g1'), 'b7000000-0000-4000-8000-000000000005'), 'Mitglied entfernen');
 select throws_ok(format('select public.social_remove_group_member(%L, %L)', pg_temp.group_id('g1'), 'b7000000-0000-4000-8000-000000000005'), 'P0001', 'not_found', 'Nichtmitglied entfernen → not_found');
 select throws_ok(format('select public.social_remove_group_member(%L, %L)', pg_temp.group_id('g1'), 'b7000000-0000-4000-8000-00000000ffff'), 'P0001', 'not_found', 'unbekannte Person entfernen → not_found');
+set local request.jwt.claims = '{"sub":"a7000000-0000-4000-8000-000000000007","role":"authenticated"}';
+select is(public.social_group_invitations(), '[]'::jsonb, 'Entfernen zieht die offenen Einladungen der Person zurück');
 set local request.jwt.claims = '{"sub":"a7000000-0000-4000-8000-000000000005","role":"authenticated"}';
 select throws_ok(format('select public.social_group(%L)', pg_temp.group_id('g1')), 'P0001', 'not_found', 'entferntes Mitglied sieht die Gruppe nicht mehr');
 
