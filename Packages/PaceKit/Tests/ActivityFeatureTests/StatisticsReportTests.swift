@@ -123,10 +123,13 @@ struct StatisticsReportTests {
     }
 
     @Test func unavailableMetricIsNotShownAsZero() {
-        let report = report(.day, .distance, history: history(steps: [today: 5_000]))
+        // HealthKit liefert für nicht lesbare Kennzahlen leere Stundenwerte – daraus dürfen keine 0-Balken werden.
+        let hourly = HourlyValues(day: today, metric: .distance, values: [:], previousDay: nil)
+        let report = report(.day, .distance, history: history(steps: [today: 5_000]), hourly: hourly)
 
         #expect(report.valueText == nil)
         #expect(!report.isMetricAvailable)
+        #expect(report.bars.isEmpty)
         #expect(report.notes.first?.contains("Distanz") == true)
     }
 
@@ -187,8 +190,8 @@ struct StatisticsReportTests {
         #expect(tiles[.bestDay]?.detail == formatter.dayWithWeekdayShort(day(-3)))
         #expect(tiles[.previous]?.value == "49.000 Schritte")
         #expect(tiles[.previous]?.detail == "Ø 7.000 Schritte pro Tag")
-        // 7.748,4 / 7.000 − 1 = +10,7 %
-        #expect(report.comparison == .init(direction: .up, text: "+11 % ggü. Vorwoche (Ø pro Tag)"))
+        // Vergleich nur mit abgeschlossenen Tagen (ohne den laufenden Freitag): 30.000 / 4 = 7.500; 7.500 / 7.000 − 1 = +7,1 %
+        #expect(report.comparison == .init(direction: .up, text: "+7 % ggü. Vorwoche (Ø pro Tag)"))
         #expect(!report.canShowNext)
         #expect(report.canShowPrevious)
     }
@@ -211,7 +214,9 @@ struct StatisticsReportTests {
         let report = report(.week, history: history(steps: currentWeek), goals: goals)
 
         #expect(report.bars.filter(\.reachedGoal).map(\.label) == ["Di", "Mi", "Do", "Fr"])
-        #expect(report.goalLine == 5_000)
+        // Eine Linie bei 5.000 widerspräche Montag (Ziel 10.000) – bei geändertem Ziel gibt es keine.
+        #expect(report.goalLine == nil)
+        #expect(self.report(.week, anchor: day(-7), history: history(steps: currentWeek), goals: goals).goalLine == 10_000)
     }
 
     @Test func bestDayTodayIsLabelledToday() {
@@ -324,5 +329,6 @@ struct StatisticsReportTests {
         #expect(formatter.signedPercent(-0.08) == "−8 %")
         #expect(formatter.signedPercent(0.001) == "±0 %")
         #expect(formatter.percent(0.8742) == "87 %")
+        #expect(formatter.percent(0.996) == "99 %") // nicht „100 %“, solange das Ziel fehlt
     }
 }

@@ -56,7 +56,11 @@ public final class SocialViewModel {
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private let ownUsername: @MainActor () -> String?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
+    /// Während eines Ladevorgangs wurde ein frischer Stand verlangt (z. B. nach einer Aktion).
+    @ObservationIgnored private var reloadRequested = false
     @ObservationIgnored private var lastLoadedAt: Date?
+    /// Der Hinweis des letzten fehlgeschlagenen Ladens – verschwindet, sobald wieder erfolgreich geladen wurde.
+    @ObservationIgnored private var loadErrorNotice: Notice?
 
     /// - Parameters:
     ///   - repository: `nil`, wenn kein Backend konfiguriert ist.
@@ -98,17 +102,32 @@ public final class SocialViewModel {
     /// Lädt beim ersten Erscheinen bzw. wenn der Stand älter als eine Minute ist.
     public func loadIfNeeded() async {
         if let lastLoadedAt, now().timeIntervalSince(lastLoadedAt) < 60, state == .loaded { return }
-        await load()
+        await load(fresh: false)
     }
 
-    /// Lädt Freunde, Anfragen, Ranking, Gruppen und Einladungen. Gleichzeitige Aufrufe teilen sich einen Ladevorgang.
+    /// Lädt Freunde, Anfragen, Ranking, Gruppen und Einladungen.
+    ///
+    /// Läuft bereits ein Ladevorgang, wartet der Aufruf auf einen Stand, der erst danach abgefragt wird – sonst
+    /// zeigte die Liste nach „Annehmen“ oder „Beitreten“ den Stand von vor der Aktion. Mehrere solche Aufrufe teilen
+    /// sich einen zusätzlichen Ladevorgang.
     public func load() async {
+        await load(fresh: true)
+    }
+
+    /// - Parameter fresh: `false` schließt sich einem laufenden Ladevorgang einfach an.
+    private func load(fresh: Bool) async {
         guard repository != nil else { return }
         if let loadTask {
+            if fresh { reloadRequested = true }
             await loadTask.value
             return
         }
-        let task = Task { await self.performLoad() }
+        let task = Task {
+            repeat {
+                self.reloadRequested = false
+                await self.performLoad()
+            } while self.reloadRequested
+        }
         loadTask = task
         await task.value
         loadTask = nil
@@ -134,6 +153,10 @@ public final class SocialViewModel {
             self.invitations = loaded.4
             state = .loaded
             lastLoadedAt = now()
+            if let loadErrorNotice, notice == loadErrorNotice {
+                notice = nil
+            }
+            loadErrorNotice = nil
         } catch is CancellationError {
             if state == .loading { state = .idle }
         } catch let error as SocialError where error == .unavailable {
@@ -141,7 +164,9 @@ public final class SocialViewModel {
         } catch {
             // Bereits geladene Daten bleiben sichtbar; der Fehler erscheint als Hinweis.
             if state == .loaded {
-                notice = Notice(text: Self.message(for: error), isError: true)
+                let notice = Notice(text: Self.message(for: error), isError: true)
+                self.notice = notice
+                loadErrorNotice = notice
             } else {
                 state = .failed(Self.message(for: error))
             }
@@ -217,7 +242,15 @@ public final class SocialViewModel {
 
     public func respond(to invitation: GroupInvitation, accept: Bool) async {
         await perform(on: invitation.id) { repository in
-            _ = try await repository.respondToInvitation(invitation.id, accept: accept)
+            do {
+                _ = try await repository.respondToInvitation(invitation.id, accept: accept)
+            } catch SocialError.notFound where accept {
+                // Wiederholte Zusage, nachdem die Antwort der ersten verloren ging: Ist man schon Mitglied, hat der
+                // Beitritt geklappt.
+                guard try await repository.myGroups().contains(where: { $0.id == invitation.groupID }) else {
+                    throw SocialError.notFound
+                }
+            }
             return accept ? "Du bist „\(invitation.groupName)“ beigetreten." : "Einladung abgelehnt."
         }
     }

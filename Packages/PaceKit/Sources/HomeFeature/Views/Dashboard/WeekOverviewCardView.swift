@@ -9,6 +9,8 @@ import SwiftUI
 struct WeekOverviewCardView: View {
     let week: WeekOverview?
     var size: HomeModuleSize = .medium
+    /// Grund, warum es keine Wochenwerte gibt (kein Zugriff, Fehler); ohne Werte und ohne Grund wird geladen.
+    var unavailableText: String?
 
     var body: some View {
         if size == .small {
@@ -33,7 +35,7 @@ struct WeekOverviewCardView: View {
                             .foregroundStyle(PaceColor.textPrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
-                        Text(week?.goalDaysText ?? " ")
+                        Text(week?.goalDaysText ?? unavailableText ?? " ")
                             .font(PaceFont.caption)
                             .foregroundStyle(PaceColor.textSecondary)
                             .lineLimit(1)
@@ -61,6 +63,18 @@ struct WeekOverviewCardView: View {
                 .buttonStyle(.pacePressable)
                 .accessibilityLabel(week?.accessibilitySummary ?? "Deine Woche")
                 .accessibilityHint("Öffnet die Wochenstatistik")
+
+                if week == nil {
+                    if let unavailableText {
+                        Text(unavailableText)
+                            .font(PaceFont.callout)
+                            .foregroundStyle(PaceColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, minHeight: 60)
+                    }
+                }
 
                 HStack(alignment: .bottom, spacing: PaceSpacing.s) {
                     ForEach(days) { day in

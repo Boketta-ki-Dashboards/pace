@@ -115,7 +115,7 @@ struct ProfileContent: View {
                             Text("Serie: \(viewModel.streakSummary?.currentText ?? "–")")
                                 .font(PaceFont.headline)
                                 .foregroundStyle(PaceColor.textPrimary)
-                            Text(viewModel.streakSummary?.recordText ?? "Noch kein Rekord")
+                            Text(viewModel.recordText)
                                 .font(PaceFont.caption)
                                 .foregroundStyle(PaceColor.textSecondary)
                         }
@@ -249,7 +249,7 @@ struct ProfileContent: View {
 
     private var participationBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.regionalLeaderboardEnabled },
+            get: { viewModel.participationToggleValue },
             set: { enabled in
                 Task { await viewModel.setRegionalLeaderboardEnabled(enabled) }
             }

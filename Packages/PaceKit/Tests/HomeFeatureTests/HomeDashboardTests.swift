@@ -306,6 +306,55 @@ struct RegionalStandingsViewModelTests {
         #expect(single.standings?.neighborhood?.footerText == "Du bist der Erste in Pfungstadt.")
     }
 
+    @Test func withoutMunicipalityTheLoadEndsWithAHint() async {
+        let (viewModel, _) = makeViewModel(
+            profile: Fixtures.profile(municipalityID: nil, regionalLeaderboardEnabled: true),
+            leaderboards: LeaderboardRepositoryStub()
+        )
+
+        await viewModel.load() // endet, statt sich immer wieder selbst neu anzustoßen
+
+        #expect(viewModel.state == .failed(message: "Wähle im Profil deine Gemeinde, um Platzierungen zu sehen."))
+    }
+
+    @Test func levelsMissingInTheRegionShowTheNextSmallerOne() async throws {
+        let leaderboards = LeaderboardRepositoryStub {
+            $0.rankings[Fixtures.frankfurt.id] = Fixtures.ranking(count: 30, currentUserRank: 10)
+        }
+        let (viewModel, _) = makeViewModel(
+            profile: Fixtures.profile(municipalityID: Fixtures.frankfurt.id, regionalLeaderboardEnabled: true),
+            leaderboards: leaderboards
+        )
+        // Frankfurt ist kreisfrei: Ein Kreis-Modul zeigt die Stadt – mit dem Radius des Kreis-Moduls.
+        viewModel.neighborhoodRadii = [.district: 4]
+
+        await viewModel.loadIfNeeded()
+
+        #expect(viewModel.availableLevels == [.municipality, .state, .country])
+        #expect(viewModel.effectiveLevel(for: .district) == .municipality)
+        #expect(viewModel.effectiveLevel(for: .state) == .state)
+        let radii = Dictionary(uniqueKeysWithValues: leaderboards.state.current.neighborhoodRequests.map {
+            ($0.query.regionID, $0.radius)
+        })
+        #expect(radii[Fixtures.frankfurt.id] == 4)
+        let standings = try #require(viewModel.standings)
+        #expect(standings.neighborhood(for: .municipality, rows: 5)?.entries.map(\.rank) == [8, 9, 10, 11, 12])
+    }
+
+    @Test func aLevelLoadedWithoutNeighborsIsNotAlone() async throws {
+        let leaderboards = LeaderboardRepositoryStub {
+            $0.rankings[Fixtures.hessen.id] = Fixtures.ranking(count: 50, currentUserRank: 7)
+        }
+        let (viewModel, _) = makeViewModel(leaderboards: leaderboards) // Hessen ohne Umfeld-Modul: nur der eigene Platz
+
+        await viewModel.loadIfNeeded()
+
+        let hessen = try #require(viewModel.standings?.neighborhood(for: .state, rows: 3))
+        #expect(hessen.entries.map(\.rank) == [7])
+        #expect(!hessen.isAlone)
+        #expect(hessen.footerText.isEmpty)
+    }
+
     @Test func notParticipatingShowsNoRanks() async throws {
         let leaderboards = LeaderboardRepositoryStub {
             $0.rankings[Fixtures.pfungstadt.id] = Fixtures.ranking(count: 5)

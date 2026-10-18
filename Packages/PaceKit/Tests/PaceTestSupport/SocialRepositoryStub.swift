@@ -12,6 +12,8 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
         public var ranking: [LeaderboardEntry] = []
         public var groups: [GroupSummary] = []
         public var groupRankings: [UUID: GroupRanking] = [:]
+        /// Wochenrankings; ohne Eintrag gilt `groupRankings`.
+        public var weeklyGroupRankings: [UUID: GroupRanking] = [:]
         public var groupDays: [UUID: [GroupDay]] = [:]
         public var invitations: [GroupInvitation] = []
         public var outgoingInvitations: [UUID: [OutgoingGroupInvitation]] = [:]
@@ -24,6 +26,9 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
     }
 
     public let state: Locked<State>
+    /// Hält `myGroups` bzw. `groupRanking:daily`/`groupRanking:weekly` an. Die Daten werden schon beim Aufruf
+    /// gelesen – wie bei einer Serverantwort, die unterwegs ist.
+    public let gate = CallGate()
 
     public init(configure: (inout State) -> Void = { _ in }) {
         var state = State()
@@ -129,7 +134,9 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
     }
 
     public func myGroups() async throws -> [GroupSummary] {
-        try read("myGroups") { $0.groups }
+        let groups = try read("myGroups") { $0.groups }
+        await gate.pass("myGroups")
+        return groups
     }
 
     public func group(_ groupID: UUID) async throws -> GroupSummary {
@@ -139,9 +146,14 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
     }
 
     public func groupRanking(_ groupID: UUID, period: LeaderboardPeriod) async throws -> GroupRanking {
-        try read("groupRanking:\(period.rawValue)") { state in
-            state.groupRankings[groupID] ?? GroupRanking(totalParticipants: 0, groupToday: LocalDate(year: 2026, month: 10, day: 16), dailyGoal: 10_000, entries: [])
+        let name = "groupRanking:\(period.rawValue)"
+        let ranking = try read(name) { state in
+            (period == .weekly ? state.weeklyGroupRankings[groupID] : nil)
+                ?? state.groupRankings[groupID]
+                ?? GroupRanking(totalParticipants: 0, groupToday: LocalDate(year: 2026, month: 10, day: 16), dailyGoal: 10_000, entries: [])
         }
+        await gate.pass(name)
+        return ranking
     }
 
     public func groupDays(_ groupID: UUID, count: Int) async throws -> [GroupDay] {

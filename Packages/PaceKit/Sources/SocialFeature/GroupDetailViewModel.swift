@@ -30,6 +30,10 @@ public final class GroupDetailViewModel: Identifiable {
     @ObservationIgnored private nonisolated let groupID: UUID
     @ObservationIgnored private let repository: any SocialRepository
     @ObservationIgnored private weak var social: SocialViewModel?
+    /// Zählt Ranking-Anfragen. Nur die zuletzt gestartete darf `ranking` setzen – sonst überschriebe eine langsame
+    /// ältere Antwort (z. B. „Heute“) die gerade gewählte Ansicht („Diese Woche“).
+    @ObservationIgnored private var rankingGeneration = 0
+    @ObservationIgnored private var loadErrorNotice: SocialViewModel.Notice?
 
     public init(group: GroupSummary, repository: any SocialRepository, social: SocialViewModel?) {
         self.group = group
@@ -53,24 +57,39 @@ public final class GroupDetailViewModel: Identifiable {
     }
 
     public func load() async {
+        // „Erneut versuchen“ zeigt wieder den Ladezustand statt unverändert den Fehler.
+        if case .failed = state {
+            state = .loading
+        }
+        rankingGeneration += 1
+        let generation = rankingGeneration
+        let requestedPeriod = period
         do {
             async let summary = repository.group(groupID)
-            async let ranking = repository.groupRanking(groupID, period: period)
+            async let ranking = repository.groupRanking(groupID, period: requestedPeriod)
             async let days = repository.groupDays(groupID, count: 14)
             async let invitations = repository.outgoingInvitations(for: groupID)
             let loaded = try await (summary, ranking, days, invitations)
             group = loaded.0
-            self.ranking = loaded.1
+            if generation == rankingGeneration {
+                self.ranking = loaded.1
+            }
             self.days = loaded.2
             outgoingInvitations = loaded.3
             state = .loaded
+            if let loadErrorNotice, notice == loadErrorNotice {
+                notice = nil
+            }
+            loadErrorNotice = nil
         } catch SocialError.notFound {
             state = .gone
         } catch is CancellationError {
             return
         } catch {
             if state == .loaded {
-                notice = .init(text: SocialViewModel.message(for: error), isError: true)
+                let notice = SocialViewModel.Notice(text: SocialViewModel.message(for: error), isError: true)
+                self.notice = notice
+                loadErrorNotice = notice
             } else {
                 state = .failed(SocialViewModel.message(for: error))
             }
@@ -85,9 +104,17 @@ public final class GroupDetailViewModel: Identifiable {
     }
 
     private func loadRanking() async {
+        rankingGeneration += 1
+        let generation = rankingGeneration
+        let requestedPeriod = period
         do {
-            ranking = try await repository.groupRanking(groupID, period: period)
+            let result = try await repository.groupRanking(groupID, period: requestedPeriod)
+            guard generation == rankingGeneration else { return }
+            ranking = result
+        } catch is CancellationError {
+            return
         } catch {
+            guard generation == rankingGeneration else { return }
             notice = .init(text: SocialViewModel.message(for: error), isError: true)
         }
     }
@@ -230,6 +257,9 @@ public final class FriendProfileViewModel {
     }
 
     public func load() async {
+        if case .failed = state {
+            state = .loading
+        }
         do {
             state = .loaded(try await repository.friendProfile(profile.publicID, date: calendar.day(containing: now())))
         } catch SocialError.notFound {

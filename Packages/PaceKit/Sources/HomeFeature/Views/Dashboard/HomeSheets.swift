@@ -5,6 +5,8 @@ import SwiftUI
 /// „Anpassen“: Module hinzufügen, entfernen, verschieben, in der Größe ändern und – beim Umfeld – die Ebene wählen.
 struct HomeCustomizeSheet: View {
     let settings: HomeSettings
+    /// Ranking-Ebenen, die es für die Region des Nutzers gibt.
+    var availableLevels: [RegionLevel] = RegionLevel.allCases
 
     @Environment(\.dismiss) private var dismiss
 
@@ -13,7 +15,7 @@ struct HomeCustomizeSheet: View {
             List {
                 Section {
                     ForEach(settings.modules) { module in
-                        ModuleRow(module: module, settings: settings)
+                        ModuleRow(module: module, settings: settings, availableLevels: availableLevels)
                             .deleteDisabled(!module.kind.isRemovable)
                     }
                     .onMove { source, destination in
@@ -80,6 +82,16 @@ struct HomeCustomizeSheet: View {
 private struct ModuleRow: View {
     let module: HomeModule
     let settings: HomeSettings
+    let availableLevels: [RegionLevel]
+
+    /// Die Ebene, die das Modul tatsächlich zeigt (siehe `RegionalStandingsViewModel.effectiveLevel`).
+    private var shownLevel: RegionLevel {
+        RegionalStandingsViewModel.effectiveLevel(for: module.regionLevel ?? .municipality, available: availableLevels)
+    }
+
+    private var detailText: String {
+        module.kind.usesRegionScope ? "\(module.size.title) · \(shownLevel.scopeTitle)" : module.detailText
+    }
 
     var body: some View {
         HStack(spacing: PaceSpacing.s) {
@@ -90,7 +102,7 @@ private struct ModuleRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(module.kind.title)
                     .foregroundStyle(PaceColor.textPrimary)
-                Text(module.detailText)
+                Text(detailText)
                     .font(PaceFont.caption)
                     .foregroundStyle(PaceColor.textSecondary)
             }
@@ -103,7 +115,7 @@ private struct ModuleRow: View {
                 }
                 if module.kind.usesRegionScope {
                     Picker("Ebene", selection: levelBinding) {
-                        ForEach(RegionLevel.allCases, id: \.self) { level in
+                        ForEach(availableLevels, id: \.self) { level in
                             Text(level.scopeTitle).tag(level)
                         }
                     }
@@ -127,8 +139,9 @@ private struct ModuleRow: View {
     }
 
     private var levelBinding: Binding<RegionLevel> {
-        Binding(
-            get: { module.regionLevel ?? .municipality },
+        let shown = shownLevel
+        return Binding(
+            get: { shown },
             set: { [settings, id = module.id] in settings.setRegionLevel($0, for: id) }
         )
     }

@@ -79,6 +79,25 @@ public final class RegionalStandingsViewModel {
         store.hierarchy?.leaderboardScopes ?? []
     }
 
+    /// Ebenen, die es für die Region des Nutzers als eigenes Ranking gibt (z. B. hat eine kreisfreie Stadt keinen
+    /// eigenen Kreis). Solange die Region nicht geladen ist, alle Ebenen.
+    public var availableLevels: [RegionLevel] {
+        let levels = scopes.map(\.level)
+        return levels.isEmpty ? RegionLevel.allCases : levels
+    }
+
+    /// Die angezeigte Ebene für ein Umfeld-Modul: die gewählte, wenn es sie für die Region gibt, sonst die nächst
+    /// kleinere vorhandene (Berlin: Kreis → Gemeinde).
+    public func effectiveLevel(for level: RegionLevel) -> RegionLevel {
+        Self.effectiveLevel(for: level, available: scopes.map(\.level))
+    }
+
+    /// Siehe ``effectiveLevel(for:)``; ohne bekannte Ebenen bleibt es bei der gewählten.
+    public static func effectiveLevel(for level: RegionLevel, available levels: [RegionLevel]) -> RegionLevel {
+        guard !levels.isEmpty, !levels.contains(level) else { return level }
+        return levels.filter { $0 < level }.max() ?? levels.min() ?? level
+    }
+
     /// Lädt, wenn noch nichts geladen ist oder sich Gemeinde bzw. Teilnahme geändert haben.
     public func loadIfNeeded() async {
         if case .loaded = state, loadedKey == reloadKey { return }
@@ -127,8 +146,13 @@ public final class RegionalStandingsViewModel {
             state = .failed(message: Self.message(for: error))
             return
         }
-        guard let hierarchy = store.hierarchy, key == reloadKey else {
+        guard key == reloadKey else {
             needsReload = true
+            return
+        }
+        // Ohne Gemeinde im Profil gibt es keine Ebenen. Kein erneuter Versuch – er liefe sofort wieder hierher.
+        guard let hierarchy = store.hierarchy else {
+            state = .failed(message: "Wähle im Profil deine Gemeinde, um Platzierungen zu sehen.")
             return
         }
         let scopes = hierarchy.leaderboardScopes
@@ -148,7 +172,15 @@ public final class RegionalStandingsViewModel {
 
         let date = calendar.day(containing: now())
         let repository = leaderboards
-        let radii = key.neighborhoodRadii
+        // Module für Ebenen, die es in dieser Region nicht gibt, zeigen die nächst kleinere – dort wird ihr Radius
+        // gebraucht.
+        let levels = scopes.map(\.level)
+        var effectiveRadii: [RegionLevel: Int] = [:]
+        for (level, radius) in key.neighborhoodRadii {
+            let effective = Self.effectiveLevel(for: level, available: levels)
+            effectiveRadii[effective] = max(effectiveRadii[effective] ?? 0, radius)
+        }
+        let radii = effectiveRadii
         do {
             let neighborhoods = try await withThrowingTaskGroup(of: (RegionID, [LeaderboardEntry]).self) { group in
                 for scope in scopes {
@@ -166,7 +198,7 @@ public final class RegionalStandingsViewModel {
                 needsReload = true
                 return
             }
-            state = .loaded(RegionalStandings(scopes: scopes, neighborhoods: neighborhoods, isParticipating: true))
+            state = .loaded(RegionalStandings(scopes: scopes, neighborhoods: neighborhoods, radii: radii, isParticipating: true))
         } catch {
             // Bei einem Fehler bleibt eine bereits angezeigte Platzierung derselben Gemeinde sichtbar.
             if showsResults(for: key) { return }
@@ -266,13 +298,21 @@ public struct RegionalStandings: Equatable, Sendable {
     private struct Loaded: Equatable, Sendable {
         let region: Region
         let entries: [LeaderboardEntry]
+        /// Plätze über und unter dem eigenen, mit denen geladen wurde. Bei 0 steht nur der eigene Eintrag da.
+        let radius: Int
     }
 
     public let scopes: [Scope]
     public let isParticipating: Bool
     private let loaded: [RegionLevel: Loaded]
 
-    public init(scopes regions: [Region], neighborhoods: [RegionID: [LeaderboardEntry]], isParticipating: Bool) {
+    /// - Parameter radii: Radius, mit dem jede Ebene geladen wurde (fehlend = 0).
+    public init(
+        scopes regions: [Region],
+        neighborhoods: [RegionID: [LeaderboardEntry]],
+        radii: [RegionLevel: Int] = [:],
+        isParticipating: Bool
+    ) {
         self.isParticipating = isParticipating
         scopes = regions.map { region in
             let entries = neighborhoods[region.id] ?? []
@@ -281,7 +321,11 @@ public struct RegionalStandings: Equatable, Sendable {
         var loaded: [RegionLevel: Loaded] = [:]
         for region in regions {
             guard let entries = neighborhoods[region.id] else { continue }
-            loaded[region.level] = Loaded(region: region, entries: entries.sorted { $0.rank < $1.rank })
+            loaded[region.level] = Loaded(
+                region: region,
+                entries: entries.sorted { $0.rank < $1.rank },
+                radius: radii[region.level] ?? 0
+            )
         }
         self.loaded = loaded
     }
@@ -304,7 +348,8 @@ public struct RegionalStandings: Equatable, Sendable {
             entries: Array(entries[window]),
             currentUser: currentUser,
             nextAbove: entries.first { $0.rank == currentUser.rank - 1 },
-            isAlone: entries.count == 1
+            // Nur mit Nachbarn geladen lässt sich sagen, dass niemand sonst im Ranking ist.
+            isAlone: loaded.radius > 0 && entries.count == 1
         )
     }
 

@@ -205,15 +205,19 @@ private struct LeaderboardList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
             HStack(alignment: .firstTextBaseline) {
+                // Lange Namen („Landkreis Mecklenburgische Seenplatte“) dürfen zweizeilig werden statt gekürzt.
                 Text(title)
                     .font(PaceFont.cardTitle)
                     .foregroundStyle(PaceColor.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.9)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: PaceSpacing.xs)
                 Text("Heute · \(participantsText)")
                     .font(PaceFont.caption)
                     .foregroundStyle(PaceColor.textSecondary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
             }
 
             if let emptyStateText {

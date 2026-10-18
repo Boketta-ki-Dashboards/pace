@@ -64,7 +64,7 @@ public struct HomeView: View {
         .sheet(item: $viewModel.presentedSheet) { sheet in
             switch sheet {
             case .customize:
-                HomeCustomizeSheet(settings: viewModel.settings)
+                HomeCustomizeSheet(settings: viewModel.settings, availableLevels: viewModel.standings.availableLevels)
             case .stepGoal:
                 StepGoalSheet(goals: viewModel.goals)
             case .notifications:
@@ -89,7 +89,7 @@ public struct HomeView: View {
                 onRetry: { Task { await viewModel.activity.retry() } }
             )
         case .week:
-            WeekOverviewCardView(week: viewModel.week, size: module.size)
+            WeekOverviewCardView(week: viewModel.week, size: module.size, unavailableText: viewModel.weekUnavailableText)
         case .streak:
             StreakCardView(summary: viewModel.streakSummary, state: viewModel.streak.history.state, size: module.size)
         case .neighborhood:

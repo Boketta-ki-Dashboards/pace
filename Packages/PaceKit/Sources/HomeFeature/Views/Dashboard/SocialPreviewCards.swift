@@ -120,7 +120,8 @@ struct GroupsPreviewCardView: View {
         case .loading where social.groups.isEmpty: return "Wird geladen …"
         default:
             guard let best = social.groups.max(by: { $0.currentStreak < $1.currentStreak }) else { return "Noch keine Gruppen" }
-            return "\(best.name): \(best.currentStreak == 1 ? "1 Tag" : "\(best.currentStreak) Tage")"
+            // Serie zuerst: Wird gekürzt, trifft es den Gruppennamen, nicht die Zahl.
+            return "\(best.currentStreak == 1 ? "1 Tag" : "\(best.currentStreak) Tage") · \(best.name)"
         }
     }
 

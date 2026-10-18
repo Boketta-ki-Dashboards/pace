@@ -554,6 +554,7 @@ private struct EditGroupSheet: View {
     @State private var description: String
     @State private var kind: GroupKind
     @State private var isSaving = false
+    @State private var errorText: String?
 
     init(viewModel: GroupDetailViewModel) {
         self.viewModel = viewModel
@@ -573,6 +574,12 @@ private struct EditGroupSheet: View {
                         Label(kind.title, systemImage: kind.systemImage).tag(kind)
                     }
                 }
+                if let errorText {
+                    Section {
+                        Text(errorText)
+                            .foregroundStyle(PaceColor.danger)
+                    }
+                }
             }
             .navigationTitle("Gruppe bearbeiten")
             .navigationBarTitleDisplayMode(.inline)
@@ -585,9 +592,11 @@ private struct EditGroupSheet: View {
                     Button("Sichern") {
                         Task {
                             isSaving = true
+                            errorText = nil
+                            viewModel.dismissNotice()
                             let saved = await viewModel.update(name: name, description: description, kind: kind)
                             isSaving = false
-                            if saved { dismiss() }
+                            if saved { dismiss() } else { errorText = saveErrorText(viewModel) }
                         }
                     }
                     .disabled(isSaving)
@@ -604,6 +613,7 @@ private struct GroupGoalSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var goal: Int
     @State private var isSaving = false
+    @State private var errorText: String?
 
     init(viewModel: GroupDetailViewModel) {
         self.viewModel = viewModel
@@ -626,6 +636,13 @@ private struct GroupGoalSheet: View {
                     .foregroundStyle(PaceColor.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                if let errorText {
+                    Text(errorText)
+                        .font(PaceFont.callout)
+                        .foregroundStyle(PaceColor.danger)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(PaceSpacing.m)
             .navigationTitle("Gruppenziel")
@@ -639,9 +656,11 @@ private struct GroupGoalSheet: View {
                     Button("Sichern") {
                         Task {
                             isSaving = true
+                            errorText = nil
+                            viewModel.dismissNotice()
                             let saved = await viewModel.setGoal(goal)
                             isSaving = false
-                            if saved { dismiss() }
+                            if saved { dismiss() } else { errorText = saveErrorText(viewModel) }
                         }
                     }
                     .disabled(isSaving)
@@ -650,4 +669,13 @@ private struct GroupGoalSheet: View {
         }
         .presentationDetents([.medium])
     }
+}
+
+/// Fehlertext für ein Bearbeitungsblatt: Der Hinweis der Detailansicht liegt hinter dem Blatt und wäre unsichtbar.
+@MainActor
+private func saveErrorText(_ viewModel: GroupDetailViewModel) -> String {
+    if let notice = viewModel.notice, notice.isError {
+        return notice.text
+    }
+    return "Gerade läuft noch eine andere Änderung. Versuche es gleich noch einmal."
 }

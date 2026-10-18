@@ -88,6 +88,15 @@ public final class HomeDashboardViewModel {
         }
     }
 
+    /// Hinweis für „Deine Woche“, wenn es keine Wochenwerte gibt; `nil` während des Ladens.
+    public var weekUnavailableText: String? {
+        switch activity.state {
+        case .noReadAccess: "Ohne Zugriff auf deine Schritte gibt es keine Wochenwerte."
+        case .failed: "Wochenwerte gerade nicht verfügbar."
+        case .loading, .loaded: nil
+        }
+    }
+
     public var modules: [HomeModule] {
         settings.modules
     }

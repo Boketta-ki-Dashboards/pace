@@ -42,8 +42,13 @@ struct NeighborhoodCardView: View {
         }
     }
 
+    /// Gibt es die gewählte Ebene für die Region nicht (z. B. Kreis bei einer kreisfreien Stadt), die nächst kleinere.
+    private var shownLevel: RegionLevel {
+        standings.effectiveLevel(for: level)
+    }
+
     private var region: Region? {
-        standings.scopes.first { $0.level == level }
+        standings.scopes.first { $0.level == shownLevel }
     }
 
     private var title: String {
@@ -62,7 +67,7 @@ struct NeighborhoodCardView: View {
     private var content: some View {
         switch standings.state {
         case .idle, .loading:
-            if let neighborhood = standings.standings?.neighborhood(for: level, rows: rowCount) {
+            if let neighborhood = standings.standings?.neighborhood(for: shownLevel, rows: rowCount) {
                 rows(neighborhood)
             } else {
                 ProgressView()
@@ -75,7 +80,7 @@ struct NeighborhoodCardView: View {
         case .loaded(let loaded):
             if !loaded.isParticipating {
                 participationPrompt
-            } else if let neighborhood = loaded.neighborhood(for: level, rows: rowCount) {
+            } else if let neighborhood = loaded.neighborhood(for: shownLevel, rows: rowCount) {
                 rows(neighborhood)
             } else {
                 hint(

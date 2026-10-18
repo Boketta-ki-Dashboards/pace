@@ -10,7 +10,10 @@ import RegionFeature
 @Observable
 public final class ProfileViewModel {
     public private(set) var isUpdatingParticipation = false
-    public private(set) var errorMessage: String?
+    /// Gewünschter Wert, solange die Anfrage läuft – der Schalter springt so nicht zurück.
+    public private(set) var pendingParticipation: Bool?
+    /// Wert der zuletzt fehlgeschlagenen Änderung.
+    private var failedParticipation: Bool?
     public private(set) var regionLoadFailed = false
 
     /// Suche für „Region ändern“; `nil`, solange der Dialog geschlossen ist.
@@ -108,21 +111,51 @@ public final class ProfileViewModel {
     public func setRegionalLeaderboardEnabled(_ enabled: Bool) async {
         guard enabled != regionalLeaderboardEnabled, !isUpdatingParticipation else { return }
         isUpdatingParticipation = true
-        errorMessage = nil
-        defer { isUpdatingParticipation = false }
+        pendingParticipation = enabled
+        failedParticipation = nil
+        defer {
+            isUpdatingParticipation = false
+            pendingParticipation = nil
+        }
 
         do {
             try await store.setRegionalLeaderboardEnabled(enabled)
         } catch {
-            errorMessage = enabled
-                ? "Du konntest nicht zu den Rankings hinzugefügt werden. Bitte versuche es erneut."
-                : "Du konntest nicht aus den Rankings entfernt werden. Bitte versuche es erneut."
+            failedParticipation = enabled
         }
+    }
+
+    /// Wert des Schalters: während der Anfrage bereits der gewünschte.
+    public var participationToggleValue: Bool {
+        pendingParticipation ?? regionalLeaderboardEnabled
+    }
+
+    /// Fehler der letzten Änderung – verschwindet, sobald die Teilnahme (auch anderswo, z. B. im Rankings-Tab)
+    /// dem gewünschten Wert entspricht.
+    public var errorMessage: String? {
+        guard let failedParticipation, failedParticipation != regionalLeaderboardEnabled else { return nil }
+        return failedParticipation
+            ? "Du konntest nicht zu den Rankings hinzugefügt werden. Bitte versuche es erneut."
+            : "Du konntest nicht aus den Rankings entfernt werden. Bitte versuche es erneut."
     }
 
     /// z. B. `10.000 Schritte`; `nil` ohne angebundene Bewegungsdaten.
     public var goalText: String? {
         streak.map { "\(formatter.steps($0.goals.currentGoal)) Schritte" }
+    }
+
+    /// z. B. `Rekord: 33 Tage`. Ein gespeicherter Rekord erscheint auch, solange der Verlauf lädt oder nicht lesbar
+    /// ist; „Noch kein Rekord“ nur, wenn der Verlauf wirklich keinen ergibt.
+    public var recordText: String {
+        if let record = streak?.record, record.days > 0 {
+            return "Rekord: \(record.days == 1 ? "1 Tag" : "\(record.days) Tage")"
+        }
+        guard let streak else { return "Noch kein Rekord" }
+        switch streak.history.state {
+        case .idle, .loading: return "Rekord wird berechnet …"
+        case .noReadAccess, .failed: return "Rekord nicht verfügbar"
+        case .loaded: return "Noch kein Rekord"
+        }
     }
 
     /// Serie und Rekord; `nil`, solange der Verlauf nicht geladen ist.

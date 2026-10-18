@@ -23,8 +23,18 @@ struct StreakCardView: View {
         }
         .buttonStyle(.pacePressable)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(summary?.accessibilityLabel ?? "Deine Serie")
+        .accessibilityLabel(accessibilityText)
         .accessibilityHint("Öffnet die Monatsstatistik")
+    }
+
+    /// Ohne Serie sagt VoiceOver, warum (statt nur „Deine Serie“).
+    private var accessibilityText: String {
+        if let summary { return summary.accessibilityLabel }
+        switch state {
+        case .noReadAccess: return "Deine Serie: Ohne Zugriff auf deine Schritte lässt sich keine Serie berechnen."
+        case .failed(let message): return "Deine Serie: \(message)"
+        case .idle, .loading, .loaded: return "Deine Serie wird berechnet."
+        }
     }
 
     @ViewBuilder

@@ -82,6 +82,21 @@ struct ProfileViewModelTests {
         #expect(!viewModel.isUpdatingParticipation)
     }
 
+    @Test func participationErrorDisappearsOnceTheValueMatches() async throws {
+        let (viewModel, env) = makeViewModel(profile: Fixtures.profile(regionalLeaderboardEnabled: false))
+        env.profiles.state.withLock { $0.error = .network }
+
+        await viewModel.setRegionalLeaderboardEnabled(true)
+        #expect(viewModel.errorMessage != nil)
+        #expect(!viewModel.participationToggleValue)
+
+        // Später anderswo (z. B. im Rankings-Tab) erfolgreich eingeschaltet.
+        env.profiles.state.withLock { $0.error = nil }
+        try await env.store.setRegionalLeaderboardEnabled(true)
+        #expect(viewModel.errorMessage == nil)
+        #expect(viewModel.participationToggleValue)
+    }
+
     @Test func changingRegionStoresOnlyTheMunicipalityAndKeepsConsent() async {
         let (viewModel, env) = makeViewModel(profile: Fixtures.profile(regionalLeaderboardEnabled: true))
         await viewModel.load()

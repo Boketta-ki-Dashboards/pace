@@ -173,7 +173,12 @@ struct StatisticsContent: View {
                     Text("Verlauf über den Tag")
                         .font(PaceFont.headline)
                         .foregroundStyle(PaceColor.textPrimary)
-                    if !report.bars.isEmpty {
+                    if !report.isMetricAvailable {
+                        Text("Keine Daten für \(report.metric.title).")
+                            .font(PaceFont.callout)
+                            .foregroundStyle(PaceColor.textSecondary)
+                            .frame(maxWidth: .infinity, minHeight: 120)
+                    } else if !report.bars.isEmpty {
                         StatisticsChart(report: report, onSelectDay: onSelectDay)
                             .frame(height: 180)
                     } else if hourly == .failed {

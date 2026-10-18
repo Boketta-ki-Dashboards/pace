@@ -148,7 +148,11 @@ public final class StatisticsViewModel {
 
     public func showNext() {
         guard case .report(let report) = content, report.canShowNext else { return }
-        anchor = min(shifted(by: 1), today)
+        let next = shifted(by: 1)
+        // Zurück im laufenden Zeitraum: wieder bei heute (Monate mit weniger Tagen verschieben sonst den Tag, und
+        // „Woche“ oder „Tag“ zeigten danach nicht mehr die aktuelle Woche bzw. heute).
+        let (first, last) = StatisticsReport.bounds(of: period, containing: next, calendar: calendar)
+        anchor = (first...last).contains(today) ? today : min(next, today)
     }
 
     /// Beim Erscheinen: Verlauf laden, falls nötig.

@@ -68,7 +68,9 @@ App-Start
   (z. B. aus einer neueren Version) werden übersprungen statt das Layout zu verwerfen.
 - Größen ändern nur die Darstellung vorhandener Daten – zusätzliche HealthKit-Abfragen entstehen dadurch nicht.
   Umfeld-Module bestimmen, wie viele Plätze je Ebene geladen werden (`neighborhoodRadii`: klein 1, mittel 2, groß 4);
-  die Platzierungs-Karten brauchen nur den eigenen Platz.
+  die Platzierungs-Karten brauchen nur den eigenen Platz. Gibt es eine gewählte Ebene für die Region nicht als eigenes
+  Ranking (kreisfreie Stadt ohne Kreis, Berlin/Hamburg), zeigt das Modul die nächst kleinere vorhandene Ebene; „Anpassen“
+  bietet nur vorhandene Ebenen an.
 - Das Tagesziel ist eine lokale Einstellung und beeinflusst keine Rankings.
 - Platzierungen und Umfeld (`RegionalStandingsViewModel`) nutzen die bestehenden Ranking-RPCs (eigene Position
   ± Nachbarn je Ebene); es gibt dafür keine neue Backend-Funktion.
@@ -98,6 +100,10 @@ App-Start
 - `StatisticsView` (ActivityFeature) zeigt Tag, Woche (ISO, Mo–So) und Monat für Schritte, Distanz und aktive
   Kalorien. Die Berechnung steckt vollständig in `StatisticsReport` (rein, ohne SwiftUI, getestet); das ViewModel
   wählt nur Zeitraum, Kennzahl und Tag und lädt Stundenwerte für die Tagesansicht.
+- Regeln der Berechnung: Der Vergleich mit Vorwoche/Vormonat nutzt den Tagesschnitt der **abgeschlossenen** Tage (der
+  laufende Tag würde ihn drücken; am ersten Tag des Zeitraums gibt es noch keinen Vergleich). Prozent zum Ziel werden
+  abgerundet (99,6 % erscheinen nicht als 100 %). Eine Ziellinie gibt es nur, wenn das Ziel im ganzen Zeitraum gleich
+  war. Nicht lesbare Kennzahlen zeigen „nicht verfügbar“ statt 0 – auch keine leeren Stundenbalken.
 - Navigation von Home: Schrittzahl → Tagesansicht von heute, Distanz/Kalorien → Wochenstatistik der Kennzahl,
   „Deine Woche“ → Wochenstatistik, ein Wochentag → Tagesansicht dieses Tags (`StatisticsRoute`, wertbasiert).
 - `ActivityHistoryStore` hält den Verlauf (12 Monate) für alle Ansichten und ergänzt die live aktualisierten letzten

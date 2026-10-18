@@ -298,7 +298,7 @@ struct SocialContent: View {
                                     Text(invitation.groupName)
                                         .font(PaceFont.headline)
                                         .foregroundStyle(PaceColor.textPrimary)
-                                    Text("von \(invitation.inviterDisplayName) · \(invitation.memberCount) Mitglieder")
+                                    Text("von \(invitation.inviterDisplayName) · \(invitation.memberCount == 1 ? "1 Mitglied" : "\(invitation.memberCount) Mitglieder")")
                                         .font(PaceFont.caption)
                                         .foregroundStyle(PaceColor.textSecondary)
                                 }
@@ -537,11 +537,12 @@ public struct GroupStreakRow: View {
                         .font(PaceFont.headline)
                         .foregroundStyle(PaceColor.textPrimary)
                         .lineLimit(1)
-                    Text("Heute \(group.todayReachedCount) von \(group.todayRequiredCount) nötig · \(group.memberCount) Mitglieder")
+                    Text("Heute \(group.todayReachedCount) von \(group.todayRequiredCount) nötig · \(group.memberCount == 1 ? "1 Mitglied" : "\(group.memberCount) Mitglieder")")
                         .font(PaceFont.caption)
                         .foregroundStyle(group.todayComplete ? PaceColor.accent : PaceColor.textSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        // Darf umbrechen: auf schmalen iPhones passt die Zeile neben Flamme und Serie nicht immer.
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: PaceSpacing.xs)
                 Text(group.currentStreak == 1 ? "1 Tag" : "\(group.currentStreak) Tage")
@@ -558,6 +559,6 @@ public struct GroupStreakRow: View {
             .padding(.vertical, 2)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(group.name), Serie \(group.currentStreak) Tage, heute \(group.todayReachedCount) von \(group.todayRequiredCount) nötigen Mitgliedern")
+        .accessibilityLabel("\(group.name), Serie \(group.currentStreak == 1 ? "1 Tag" : "\(group.currentStreak) Tage"), heute \(group.todayReachedCount) von \(group.todayRequiredCount) nötigen Mitgliedern")
     }
 }

@@ -130,6 +130,16 @@ struct StatisticsViewModelTests {
         #expect(viewModel.anchor == Fixtures.day(2025, 10, 16))
     }
 
+    @Test func returningToTheCurrentPeriodShowsToday() async {
+        let (viewModel, _) = makeViewModel(route: StatisticsRoute(period: .month, day: Fixtures.day(2026, 10, 10)), health: healthWithHistory())
+        await viewModel.loadIfNeeded()
+
+        viewModel.showPrevious()
+        #expect(viewModel.anchor == Fixtures.day(2026, 9, 10))
+        viewModel.showNext()
+        #expect(viewModel.anchor == today)
+    }
+
     @Test func futureRouteDayIsClampedToToday() {
         let (viewModel, _) = makeViewModel(
             route: StatisticsRoute(period: .day, day: Fixtures.day(2026, 12, 24)),

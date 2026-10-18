@@ -228,10 +228,14 @@ public struct StatisticsReport: Equatable, Sendable {
             ))
         }
 
+        // Verglichen werden nur abgeschlossene Tage: Der laufende Tag würde den Schnitt gegenüber den vollständigen
+        // Tagen des Vorzeitraums drücken. Am ersten Tag des Zeitraums gibt es deshalb noch keinen Vergleich.
+        let completed = values.filter { $0.day.date < input.today }
+        let completedAverage = completed.isEmpty ? nil : completed.reduce(0) { $0 + $1.value } / Double(completed.count)
         var comparison: Comparison?
-        if isAvailable, let average, let previous, previous.average > 0 {
+        if isAvailable, let completedAverage, let previous, previous.average > 0 {
             comparison = makeComparison(
-                change: average / previous.average - 1,
+                change: completedAverage / previous.average - 1,
                 suffix: input.period == .week ? "ggü. Vorwoche (Ø pro Tag)" : "ggü. Vormonat (Ø pro Tag)",
                 formatter: formatter
             )
@@ -247,6 +251,9 @@ public struct StatisticsReport: Equatable, Sendable {
 
         let (title, subtitle) = rangeTitle(input, first: first, last: last)
         let goalDay = min(last, input.today)
+        // Eine einzige Ziellinie nur, wenn das Ziel im ganzen Zeitraum gleich war – Zieländerungen wirken nicht
+        // zurück, die Balkenfarbe richtet sich nach dem Ziel des jeweiligen Tages.
+        let hasSingleGoal = Set(elapsed.map { input.goals.goal(on: $0) }).count <= 1
         return StatisticsReport(
             period: input.period,
             metric: metric,
@@ -264,7 +271,7 @@ public struct StatisticsReport: Equatable, Sendable {
             comparison: comparison,
             bars: bars,
             averageLine: isAvailable ? average.map(metric.chartValue).flatMap { $0 > 0 ? $0 : nil } : nil,
-            goalLine: metric == .steps ? Double(input.goals.goal(on: goalDay)) : nil,
+            goalLine: metric == .steps && hasSingleGoal ? Double(input.goals.goal(on: goalDay)) : nil,
             tiles: tiles,
             bests: isAvailable ? bests(input) : [],
             notes: notes,
@@ -382,7 +389,8 @@ public struct StatisticsReport: Equatable, Sendable {
             }
         }
 
-        let bars = hourlyBars(input)
+        // Ohne lesbare Werte dieser Kennzahl keine Stundenbalken – sie zeigten sonst überall 0.
+        let bars = isAvailable ? hourlyBars(input) : []
         let comparison = dayComparison(input, value: value)
 
         var tiles: [Tile] = []

@@ -59,8 +59,10 @@ struct ProfileActivityTests {
         let (viewModel, tracker) = makeViewModel(withActivity: true)
         #expect(viewModel.goalText == "10.000 Schritte")
         #expect(viewModel.streakSummary == nil)
+        #expect(viewModel.recordText == "Rekord wird berechnet …") // nicht „Noch kein Rekord“, solange es lädt
 
         await viewModel.loadActivity()
+        #expect(viewModel.recordText == "Rekord: 3 Tage")
 
         #expect(viewModel.streakSummary?.currentText == "3 Tage")
         #expect(viewModel.streakSummary?.recordText == "Rekord: 3 Tage")

@@ -47,9 +47,10 @@ public struct ActivityFormatter: Sendable {
         Int(value.rounded()).formatted(.number.locale(locale))
     }
 
-    /// Anteil als Prozent, z. B. `87 %`
+    /// Anteil am Ziel als Prozent, abgerundet wie auf Home, z. B. `87 %` – 99,6 % erscheinen nicht als „100 %“,
+    /// solange das Ziel nicht erreicht ist.
     public func percent(_ fraction: Double) -> String {
-        "\(Int((fraction * 100).rounded()).formatted(.number.locale(locale))) %"
+        "\(Int((fraction * 100).rounded(.down)).formatted(.number.locale(locale))) %"
     }
 
     /// Veränderung als Prozent mit Vorzeichen, z. B. `+12 %`, `−8 %`, `±0 %`

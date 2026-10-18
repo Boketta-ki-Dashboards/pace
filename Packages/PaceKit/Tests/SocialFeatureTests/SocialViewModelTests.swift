@@ -107,6 +107,65 @@ struct SocialViewModelTests {
         #expect(viewModel.busyIDs.isEmpty)
     }
 
+    @Test func anActionDuringARunningLoadShowsItsResult() async throws {
+        let request = FriendRequest(id: UUID(), direction: .incoming, profile: ben, createdAt: .distantPast)
+        let repository = SocialRepositoryStub { $0.requests = [request] }
+        let viewModel = makeViewModel(repository)
+        await viewModel.load()
+
+        // Ein Neuladen läuft: Die Anfragen hat es schon gelesen, die Gruppen sind noch unterwegs.
+        repository.gate.close("myGroups")
+        let refresh = Task { await viewModel.load() }
+        try await waitUntil { repository.gate.waitingCount("myGroups") == 1 }
+
+        let accept = Task { await viewModel.respond(to: request, accept: true) }
+        try await waitUntil { repository.state.current.calls.contains("respondToFriendRequest") }
+        try await Task.sleep(for: .milliseconds(20)) // die Aktion wartet jetzt auf das laufende Laden
+        repository.gate.open("myGroups")
+        await accept.value
+        await refresh.value
+
+        // Nicht der Stand von vor dem Annehmen.
+        #expect(viewModel.requests.isEmpty)
+        #expect(viewModel.friends.map(\.profile) == [ben])
+    }
+
+    @Test func aConnectionErrorDisappearsAfterTheNextSuccessfulLoad() async {
+        let repository = SocialRepositoryStub { $0.friends = [Friend(profile: self.mia, friendsSince: .distantPast)] }
+        let viewModel = makeViewModel(repository)
+        await viewModel.load()
+
+        repository.state.withLock { $0.error = .network }
+        await viewModel.load()
+        #expect(viewModel.notice == .init(text: SocialError.network.message, isError: true))
+        #expect(viewModel.friends.count == 1)
+
+        repository.state.withLock { $0.error = nil }
+        await viewModel.load()
+        #expect(viewModel.notice == nil)
+    }
+
+    @Test func aRepeatedAcceptAfterALostAnswerCountsAsJoined() async {
+        let group = SocialRepositoryStub.group(name: "Laufteam")
+        let invitation = GroupInvitation(
+            id: UUID(), groupID: group.id, groupName: group.name, groupKind: group.kind, memberCount: 3,
+            inviterUsername: "mia", inviterDisplayName: "Mia", createdAt: .distantPast
+        )
+        // Die erste Zusage kam an, ihre Antwort nicht: Der Server kennt die Einladung nicht mehr, man ist Mitglied.
+        let repository = SocialRepositoryStub { state in
+            state.groups = [group]
+            state.actionError = .notFound
+        }
+        let viewModel = makeViewModel(repository)
+
+        await viewModel.respond(to: invitation, accept: true)
+        #expect(viewModel.notice == .init(text: "Du bist „Laufteam“ beigetreten.", isError: false))
+
+        repository.state.withLock { $0.groups = [] }
+        await viewModel.respond(to: invitation, accept: true)
+        #expect(viewModel.notice == .init(text: SocialError.notFound.message, isError: true))
+    }
+
     @Test func rateLimitsAreShownAndDataStays() async {
         let repository = SocialRepositoryStub { state in
             state.friends = [Friend(profile: self.mia, friendsSince: .distantPast)]
@@ -173,6 +232,58 @@ struct GroupDetailViewModelTests {
 
         await detail.select(.weekly)
         #expect(repository.state.current.calls.contains("groupRanking:weekly"))
+    }
+
+    @Test func aSlowOlderRankingDoesNotReplaceTheSelectedPeriod() async throws {
+        let group = SocialRepositoryStub.group()
+        func ranking(_ steps: Int) -> GroupRanking {
+            GroupRanking(
+                totalParticipants: 1,
+                groupToday: Fixtures.day(2026, 10, 16),
+                dailyGoal: 8_000,
+                entries: [GroupRankingEntry(rank: 1, profile: mia, competitionSteps: steps, isCurrentUser: false, role: .member, reachedGoalToday: true)]
+            )
+        }
+        let daily = ranking(9_000), weekly = ranking(52_000)
+        let repository = SocialRepositoryStub { state in
+            state.groups = [group]
+            state.groupRankings[group.id] = daily
+            state.weeklyGroupRankings[group.id] = weekly
+        }
+        let detail = GroupDetailViewModel(group: group, repository: repository, social: nil)
+
+        // Das erste Laden (Heute) hängt, währenddessen wählt man „Diese Woche“.
+        repository.gate.close("groupRanking:daily")
+        let load = Task { await detail.load() }
+        try await waitUntil { repository.gate.waitingCount("groupRanking:daily") == 1 }
+        await detail.select(.weekly)
+        #expect(detail.ranking == weekly)
+
+        repository.gate.open("groupRanking:daily")
+        await load.value
+        #expect(detail.period == .weekly)
+        #expect(detail.ranking == weekly)
+        #expect(detail.state == .loaded)
+    }
+
+    @Test func retryingAfterAnErrorShowsTheLoadingState() async throws {
+        let group = SocialRepositoryStub.group()
+        let repository = SocialRepositoryStub { state in
+            state.groups = [group]
+            state.error = .network
+        }
+        let detail = GroupDetailViewModel(group: group, repository: repository, social: nil)
+        await detail.load()
+        #expect(detail.state == .failed(SocialError.network.message))
+
+        repository.state.withLock { $0.error = nil }
+        repository.gate.close("groupRanking:daily")
+        let retry = Task { await detail.load() }
+        try await waitUntil { repository.gate.waitingCount("groupRanking:daily") == 1 }
+        #expect(detail.state == .loading)
+        repository.gate.open("groupRanking:daily")
+        await retry.value
+        #expect(detail.state == .loaded)
     }
 
     @Test func leavingMarksTheGroupAsGone() async {
