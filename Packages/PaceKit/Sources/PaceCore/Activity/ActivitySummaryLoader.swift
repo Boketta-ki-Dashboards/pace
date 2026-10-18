@@ -7,7 +7,8 @@ public enum ActivityLoadResult: Equatable, Sendable {
     case noReadAccess
 }
 
-/// Lädt die Bewegungsdaten der letzten 7 Tage und leitet daraus alle Zeiträume ab.
+/// Lädt die Bewegungsdaten der letzten 7 Tage und leitet daraus alle Zeiträume ab – oder einen längeren Verlauf
+/// für Statistiken.
 ///
 /// Die letzten 7 Tage enthalten immer auch „heute“, „gestern“ und die aktuelle ISO-Woche, deshalb genügt
 /// ein Ladevorgang pro Kennzahl.
@@ -37,6 +38,26 @@ public struct ActivitySummaryLoader: Sendable {
         let today = calendar.day(containing: currentDate)
         let range = ActivityPeriod.lastSevenDays.dayRange(endingOn: today, calendar: calendar)
 
+        guard let days = try await dailySummaries(for: range) else {
+            return .noReadAccess
+        }
+        return .available(makeOverview(days: days, today: today, updatedAt: currentDate))
+    }
+
+    /// Lädt den Verlauf von `first` bis heute (für Statistiken, Bestwerte und Streak).
+    public func loadHistory(from first: LocalDate) async throws -> ActivityHistoryLoadResult {
+        let currentDate = now()
+        let today = calendar.day(containing: currentDate)
+        let range = min(first, today)...today
+
+        guard let days = try await dailySummaries(for: range) else {
+            return .noReadAccess
+        }
+        return .available(ActivityHistory(days: days, range: range, updatedAt: currentDate))
+    }
+
+    /// Tageswerte für alle Tage in `range` (eine Abfrage pro Kennzahl); `nil`, wenn keine Schritte lesbar sind.
+    private func dailySummaries(for range: ClosedRange<LocalDate>) async throws -> [DailyActivitySummary]? {
         async let steps = totals(.steps, range)
         async let competitionSteps = totals(.competitionSteps, range)
         async let distance = totals(.walkingRunningDistance, range)
@@ -45,7 +66,7 @@ public struct ActivitySummaryLoader: Sendable {
         async let exercise = totals(.exerciseTime, range)
 
         guard let stepTotals = try await steps else {
-            return .noReadAccess
+            return nil
         }
         // Wettbewerbsschritte sind eine Teilmenge der Schritte: Sind Schritte lesbar, fehlen nur manuelle Tage.
         let competitionTotals = try await competitionSteps ?? [:]
@@ -54,7 +75,7 @@ public struct ActivitySummaryLoader: Sendable {
         let flightTotals = try await flights
         let exerciseTotals = try await exercise
 
-        let days = calendar.days(from: range.lowerBound, through: range.upperBound).map { day in
+        return calendar.days(from: range.lowerBound, through: range.upperBound).map { day in
             DailyActivitySummary(
                 date: day,
                 healthSteps: Self.integer(stepTotals[day]),
@@ -65,8 +86,6 @@ public struct ActivitySummaryLoader: Sendable {
                 exerciseMinutes: exerciseTotals.map { Self.integer($0[day]) }
             )
         }
-
-        return .available(makeOverview(days: days, today: today, updatedAt: currentDate))
     }
 
     /// Tageswerte einer Kennzahl oder `nil`, wenn die Kennzahl gar nicht lesbar ist.

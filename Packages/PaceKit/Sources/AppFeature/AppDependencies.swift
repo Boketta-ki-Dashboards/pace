@@ -16,6 +16,10 @@ public struct AppDependencies: Sendable {
     public let backend: Backend
     /// Tagesziel und Aufbau des Home-Dashboards (nur auf dem Gerät).
     public let homePreferences: any HomePreferencesStoring
+    /// Verlauf des Tagesziels (nur auf dem Gerät).
+    public let stepGoals: any StepGoalStoring
+    /// Längste persönliche Serie (nur auf dem Gerät).
+    public let streakRecords: any StepStreakRecordStoring
     /// Wechsel des App-Icons (Profil → Darstellung).
     public let appIcons: any AppIconSetting
 
@@ -24,12 +28,16 @@ public struct AppDependencies: Sendable {
         activityData: any ActivityDataProviding,
         backend: Backend,
         homePreferences: any HomePreferencesStoring = UserDefaultsHomePreferencesStore(),
+        stepGoals: any StepGoalStoring = UserDefaultsStepGoalStore(),
+        streakRecords: any StepStreakRecordStoring = UserDefaultsStepStreakRecordStore(),
         appIcons: any AppIconSetting = UnsupportedAppIconSetting()
     ) {
         self.healthAuthorization = healthAuthorization
         self.activityData = activityData
         self.backend = backend
         self.homePreferences = homePreferences
+        self.stepGoals = stepGoals
+        self.streakRecords = streakRecords
         self.appIcons = appIcons
     }
 }

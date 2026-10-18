@@ -37,6 +37,9 @@ public struct HomeView: View {
             .refreshable { [viewModel] in await viewModel.refresh() }
             .paceScreenBackground()
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: StatisticsRoute.self) { route in
+                StatisticsView(viewModel: viewModel.statistics(for: route))
+            }
         }
         .task(id: StandingsTrigger(key: viewModel.standingsReloadKey, isShown: viewModel.showsStandings)) { [viewModel] in
             await viewModel.loadIfNeeded()
@@ -54,7 +57,7 @@ public struct HomeView: View {
             case .customize:
                 HomeCustomizeSheet(settings: viewModel.settings)
             case .stepGoal:
-                StepGoalSheet(settings: viewModel.settings)
+                StepGoalSheet(goals: viewModel.goals)
             case .notifications:
                 NotificationsSheet()
             }
@@ -74,13 +77,9 @@ public struct HomeView: View {
                 summary: viewModel.stepsToday,
                 onEditGoal: { viewModel.present(.stepGoal) },
                 onRetry: { Task { await viewModel.activity.retry() } }
-            ) {
-                ActivityDetailsView(source: viewModel.activity)
-            }
+            )
         case .week:
-            WeekOverviewCardView(week: viewModel.week) {
-                ActivityDetailsView(source: viewModel.activity)
-            }
+            WeekOverviewCardView(week: viewModel.week)
         case .neighborhood:
             NeighborhoodCardView(standings: viewModel.standings) { scope in
                 viewModel.openRankings(scope)

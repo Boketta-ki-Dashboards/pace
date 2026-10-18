@@ -70,6 +70,20 @@ App-Start
 - Darstellung: Komponenten in `HomeFeature/Views/Dashboard/`, gemeinsame Bausteine im `DesignSystem` (Karten, Kacheln,
   Fortschrittsring, Avatar, Wortmarke).
 
+## Statistik, Zielverlauf und Streak
+
+- `StatisticsView` (ActivityFeature) zeigt Tag, Woche (ISO, Mo–So) und Monat für Schritte, Distanz und aktive
+  Kalorien. Die Berechnung steckt vollständig in `StatisticsReport` (rein, ohne SwiftUI, getestet); das ViewModel
+  wählt nur Zeitraum, Kennzahl und Tag und lädt Stundenwerte für die Tagesansicht.
+- Navigation von Home: Schrittzahl → Tagesansicht von heute, Distanz/Kalorien → Wochenstatistik der Kennzahl,
+  „Deine Woche“ → Wochenstatistik, ein Wochentag → Tagesansicht dieses Tags (`StatisticsRoute`, wertbasiert).
+- `ActivityHistoryStore` hält den Verlauf (12 Monate) für alle Ansichten und ergänzt die live aktualisierten letzten
+  7 Tage aus Home. `StepStreakTracker` berechnet daraus die persönliche Streak (`StepStreakCalculator`, PaceCore)
+  und speichert den Rekord.
+- `StepGoalSettings` (PaceCore) speichert das Tagesziel als Verlauf (`StepGoalHistory`): Eine Änderung gilt ab
+  heute, vergangene Tage behalten ihr Ziel – Zieltage und Streak ändern sich dadurch nicht rückwirkend. Das Ziel
+  älterer Versionen (in den Home-Einstellungen) wird beim ersten Start einmalig übernommen.
+
 ## Aktualisierung der Schritte
 
 - HealthKit-Observer (`HKObserverQuery`) für alle gelesenen Typen: neue Samples lösen sofort ein Neuladen aus.

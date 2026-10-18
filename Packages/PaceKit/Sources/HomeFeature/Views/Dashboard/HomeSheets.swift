@@ -61,55 +61,6 @@ struct HomeCustomizeSheet: View {
     }
 }
 
-/// Tagesziel auswählen (lokal gespeichert).
-struct StepGoalSheet: View {
-    let settings: HomeSettings
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var selection: Int
-
-    init(settings: HomeSettings) {
-        self.settings = settings
-        _selection = State(initialValue: settings.stepGoal)
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: PaceSpacing.m) {
-                Text("Wie viele Schritte möchtest du jeden Tag schaffen?")
-                    .font(PaceFont.callout)
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .multilineTextAlignment(.center)
-                Picker("Tagesziel", selection: $selection) {
-                    ForEach(HomeSettings.stepGoalOptions, id: \.self) { goal in
-                        Text("\(goal.formatted(.number)) Schritte").tag(goal)
-                    }
-                }
-                .pickerStyle(.wheel)
-                Text("Das Tagesziel ist nur für dich sichtbar und hat keinen Einfluss auf Rankings.")
-                    .font(PaceFont.caption)
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(PaceSpacing.m)
-            .navigationTitle("Tagesziel")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Sichern") {
-                        settings.setStepGoal(selection)
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
-}
-
 /// Mitteilungen. Überholungen und Einladungen folgen mit Freunden und Gruppen.
 struct NotificationsSheet: View {
     @Environment(\.dismiss) private var dismiss

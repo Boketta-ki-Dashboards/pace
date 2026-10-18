@@ -24,10 +24,16 @@ public final class HomeDashboardViewModel {
     public let activity: HomeViewModel
     public let standings: RegionalStandingsViewModel
     public let settings: HomeSettings
+    /// Tagesziel mit Verlauf.
+    public let goals: StepGoalSettings
+    /// Persönliche Streak und Bewegungsverlauf (geteilt mit Statistik und Profil).
+    public let streak: StepStreakTracker
 
+    @ObservationIgnored private let activityData: any ActivityDataProviding
     @ObservationIgnored private let store: ProfileStore
     @ObservationIgnored private let calendar: ActivityCalendar
     @ObservationIgnored private let formatter: ActivityFormatter
+    @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private let onOpenRankings: @MainActor (Region?) -> Void
     @ObservationIgnored private let onOpenSocial: @MainActor () -> Void
 
@@ -38,18 +44,25 @@ public final class HomeDashboardViewModel {
         activity: HomeViewModel,
         standings: RegionalStandingsViewModel,
         settings: HomeSettings,
+        streak: StepStreakTracker,
+        activityData: any ActivityDataProviding,
         store: ProfileStore,
         calendar: ActivityCalendar = ActivityCalendar(),
         formatter: ActivityFormatter = ActivityFormatter(),
+        now: @escaping @Sendable () -> Date = { Date() },
         onOpenRankings: @escaping @MainActor (Region?) -> Void = { _ in },
         onOpenSocial: @escaping @MainActor () -> Void = {}
     ) {
         self.activity = activity
         self.standings = standings
         self.settings = settings
+        self.streak = streak
+        goals = streak.goals
+        self.activityData = activityData
         self.store = store
         self.calendar = calendar
         self.formatter = formatter
+        self.now = now
         self.onOpenRankings = onOpenRankings
         self.onOpenSocial = onOpenSocial
     }
@@ -61,11 +74,13 @@ public final class HomeDashboardViewModel {
     }
 
     public var stepsToday: StepsTodaySummary? {
-        activity.overview.map { StepsTodaySummary(today: $0.today, goal: settings.stepGoal, formatter: formatter) }
+        activity.overview.map { StepsTodaySummary(today: $0.today, goal: goals.goal(on: $0.today.date), formatter: formatter) }
     }
 
     public var week: WeekOverview? {
-        activity.overview.map { WeekOverview(overview: $0, goal: settings.stepGoal, calendar: calendar, formatter: formatter) }
+        activity.overview.map {
+            WeekOverview(overview: $0, goal: goals.goal(on: $0.today.date), calendar: calendar, formatter: formatter)
+        }
     }
 
     public var visibleSections: [HomeSection] {
@@ -109,6 +124,19 @@ public final class HomeDashboardViewModel {
         guard showsStandings else { return }
         await activity.waitForPendingSync()
         await standings.refreshIfStale()
+    }
+
+    /// ViewModel für die Statistik (Navigation aus Schrittkarte, Distanz, Kalorien und Wochenbalken).
+    public func statistics(for route: StatisticsRoute) -> StatisticsViewModel {
+        StatisticsViewModel(
+            route: route,
+            streak: streak,
+            activityData: activityData,
+            live: activity,
+            calendar: calendar,
+            formatter: formatter,
+            now: now
+        )
     }
 
     public func openRankings(_ scope: Region? = nil) {

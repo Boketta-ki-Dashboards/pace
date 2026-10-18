@@ -26,7 +26,7 @@ public final class HomeViewModel {
     /// Hinweis unter der Schrittzahl, wenn heute Schritte in Apple Health nicht für Rankings zählen.
     public var manualStepsNote: String? {
         guard let overview, overview.today.hasNonCompetitionSteps else { return nil }
-        return ActivityStatsViewModel.manualStepsNote
+        return ActivityTexts.manualStepsNote
     }
 
     /// Zustand der Detailansicht. Scheitert eine spätere Aktualisierung, bleiben die zuletzt geladenen Werte mit

@@ -99,6 +99,20 @@ Das betrifft nur die Statistik der letzten 7 Tage.
 - Schneller als Apple Health selbst geht es nicht: iOS schreibt die Schritte des iPhones gebündelt nach Health.
   Pace bietet bewusst keine Möglichkeit, Schritte manuell einzutragen.
 
+### Verlauf für Statistik, Bestwerte und Streak
+
+- Die letzten 7 Tage kommen immer aus dem laufend aktualisierten Stand von Home (siehe oben) – „heute“ ist in
+  Statistik und Streak deshalb genauso aktuell wie auf Home, ohne zusätzliche Abfragen.
+- Ältere Tage liest `ActivityHistoryStore` als Tageswerte vom Monatsanfang vor 12 Monaten bis heute: eine
+  Statistik-Abfrage (`HKStatisticsCollectionQuery`, Tages-Buckets) je Kennzahl. Neu gelesen wird erst nach einem
+  Tageswechsel oder wenn der Stand älter als eine Stunde ist – dadurch fließen spät synchronisierte Werte (z. B. von
+  der Apple Watch, die teils erst Stunden später in Health landen) ein, ohne den Akku zu belasten.
+- Stundenwerte liest nur die Tagesansicht der Statistik (`hourlyTotals`, Stunden-Buckets) – für vergangene Tage
+  einmal, für heute erneut, sobald sich der Tageswert ändert, plus der Vortag für den Vergleich „zur gleichen Zeit“.
+- Alle Werte bleiben auf dem Gerät. Für Streak und Zieltage zählt wie überall die Wettbewerbsschrittzahl.
+- CoreMotion wird nicht verwendet: Die Schritte des iPhones stehen über Health bereits zur Verfügung, und nur Health
+  führt iPhone und Apple Watch ohne Doppelzählung zusammen.
+
 ## Was ins Backend geht
 
 Tabelle `daily_activity` (siehe `docs/BACKEND.md`):

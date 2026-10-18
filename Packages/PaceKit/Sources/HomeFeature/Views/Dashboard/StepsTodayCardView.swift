@@ -1,13 +1,15 @@
+import ActivityFeature
 import DesignSystem
 import SwiftUI
 
 /// „Deine Schritte heute“: große Schrittzahl, Tagesziel mit Balken und Ring, Distanz und aktive Kalorien.
-struct StepsTodayCardView<Details: View>: View {
+///
+/// Die Schrittzahl öffnet die Tagesansicht der Statistik, Distanz und Kalorien die jeweilige Wochenstatistik.
+struct StepsTodayCardView: View {
     let state: HomeViewModel.State
     let summary: StepsTodaySummary?
     let onEditGoal: () -> Void
     let onRetry: () -> Void
-    @ViewBuilder let details: () -> Details
 
     @ScaledMetric(relativeTo: .largeTitle) private var metricSize: CGFloat = 64
     @ScaledMetric(relativeTo: .largeTitle) private var ringSize: CGFloat = 96
@@ -68,31 +70,36 @@ struct StepsTodayCardView<Details: View>: View {
 
     @ViewBuilder
     private func loadedContent(_ summary: StepsTodaySummary) -> some View {
-        HStack(alignment: .center, spacing: PaceSpacing.m) {
-            VStack(alignment: .leading, spacing: PaceSpacing.xs) {
-                Text(summary.stepsText)
-                    .font(PaceFont.metric(size: metricSize))
-                    .monospacedDigit()
-                    .foregroundStyle(PaceColor.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .contentTransition(.numericText(value: Double(summary.steps)))
-                    .animation(.snappy, value: summary.steps)
-                Text(summary.goalText)
-                    .font(.system(.body, weight: .medium))
-                    .foregroundStyle(PaceColor.textPrimary)
-                PaceProgressBar(progress: summary.progress)
-                    .padding(.top, PaceSpacing.xxs)
-                Text(summary.remainingText)
-                    .font(.subheadline)
-                    .foregroundStyle(summary.isGoalReached ? PaceColor.accent : PaceColor.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+        NavigationLink(value: StatisticsRoute(period: .day, metric: .steps)) {
+            HStack(alignment: .center, spacing: PaceSpacing.m) {
+                VStack(alignment: .leading, spacing: PaceSpacing.xs) {
+                    Text(summary.stepsText)
+                        .font(PaceFont.metric(size: metricSize))
+                        .monospacedDigit()
+                        .foregroundStyle(PaceColor.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .contentTransition(.numericText(value: Double(summary.steps)))
+                        .animation(.snappy, value: summary.steps)
+                    Text(summary.goalText)
+                        .font(.system(.body, weight: .medium))
+                        .foregroundStyle(PaceColor.textPrimary)
+                    PaceProgressBar(progress: summary.progress)
+                        .padding(.top, PaceSpacing.xxs)
+                    Text(summary.remainingText)
+                        .font(.subheadline)
+                        .foregroundStyle(summary.isGoalReached ? PaceColor.accent : PaceColor.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                PaceProgressRing(progress: summary.progress, label: summary.percentText)
+                    .frame(width: ringSize, height: ringSize)
             }
-            PaceProgressRing(progress: summary.progress, label: summary.percentText)
-                .frame(width: ringSize, height: ringSize)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.pacePressable)
         .accessibilityElement(children: .combine)
+        .accessibilityHint("Öffnet die Aktivitätsdetails von heute")
 
         if let note = summary.manualStepsNote {
             Label(note, systemImage: "info.circle")
@@ -104,10 +111,11 @@ struct StepsTodayCardView<Details: View>: View {
             PaceTile {
                 HStack(spacing: 0) {
                     if let distance = summary.distanceText {
-                        NavigationLink(destination: details) {
+                        NavigationLink(value: StatisticsRoute(period: .week, metric: .distance)) {
                             MetricLink(systemImage: "shoeprints.fill", value: distance, caption: nil)
                         }
                         .buttonStyle(.pacePressable)
+                        .accessibilityHint("Öffnet die Distanzstatistik")
                     }
                     if summary.distanceText != nil, summary.energyText != nil {
                         Divider()
@@ -115,16 +123,17 @@ struct StepsTodayCardView<Details: View>: View {
                             .padding(.horizontal, PaceSpacing.xs)
                     }
                     if let energy = summary.energyText {
-                        NavigationLink(destination: details) {
+                        NavigationLink(value: StatisticsRoute(period: .week, metric: .activeEnergy)) {
                             MetricLink(systemImage: "flame", value: energy, caption: "Aktive Kalorien")
                         }
                         .buttonStyle(.pacePressable)
+                        .accessibilityHint("Öffnet die Kalorienstatistik")
                     }
                 }
                 .padding(.vertical, PaceSpacing.xxs)
             }
         } else {
-            NavigationLink(destination: details) {
+            NavigationLink(value: StatisticsRoute(period: .week, metric: .steps)) {
                 PaceTile {
                     MetricLink(systemImage: "chart.bar", value: "Statistiken", caption: nil)
                         .padding(.vertical, PaceSpacing.xxs)

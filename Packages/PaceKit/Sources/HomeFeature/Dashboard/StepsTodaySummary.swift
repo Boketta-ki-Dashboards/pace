@@ -35,7 +35,7 @@ public struct StepsTodaySummary: Equatable, Sendable {
             : "Noch \(formatter.steps(goal - today.competitionSteps)) bis zu deinem Ziel"
         distanceText = today.walkingRunningDistanceMeters.map { formatter.distance(meters: $0) }
         energyText = today.activeEnergyKilocalories.map { formatter.energy(kilocalories: $0) }
-        manualStepsNote = today.hasNonCompetitionSteps ? ActivityStatsViewModel.manualStepsNote : nil
+        manualStepsNote = today.hasNonCompetitionSteps ? ActivityTexts.manualStepsNote : nil
     }
 }
 
@@ -50,6 +50,8 @@ public struct WeekOverview: Equatable, Sendable {
         /// Höhe relativ zum besten Tag bzw. Tagesziel, 0…1.
         public let level: Double
         public let isToday: Bool
+        /// Für VoiceOver, z. B. `Montag, 12. Oktober: 8.432 Schritte`.
+        public let accessibilityLabel: String
 
         public var id: LocalDate { date }
         public var isFuture: Bool { steps == nil }
@@ -76,7 +78,8 @@ public struct WeekOverview: Equatable, Sendable {
                 letter: Self.letters[offset],
                 steps: steps,
                 level: steps.map { min(Double($0) / scale, 1) } ?? 0,
-                isToday: date == today
+                isToday: date == today,
+                accessibilityLabel: "\(formatter.dayLong(date)): \(formatter.steps(steps ?? 0)) Schritte"
             )
         }
         let total = days.compactMap(\.steps).reduce(0, +)

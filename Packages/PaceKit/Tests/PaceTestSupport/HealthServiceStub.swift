@@ -13,6 +13,8 @@ public final class HealthServiceStub: HealthAuthorizationProviding, ActivityData
         public var dailyTotals: [ActivityMetric: [LocalDate: Double]] = [:]
         /// Fehler, den `dailyTotals(of:for:calendar:)` für alle Kennzahlen wirft.
         public var dailyTotalsError: HealthDataError?
+        /// Stundenwerte je Kennzahl und Tag (Stunde 0–23).
+        public var hourlyTotals: [ActivityMetric: [LocalDate: [Int: Double]]] = [:]
         /// Kennzahlen, für die irgendwann Samples existieren (unabhängig vom Zeitraum).
         public var metricsWithAnySamples: Set<ActivityMetric> = []
 
@@ -34,6 +36,7 @@ public final class HealthServiceStub: HealthAuthorizationProviding, ActivityData
     public struct Calls: Sendable {
         public var authorizationRequests = 0
         public var dailyTotalsRequests: [(metric: ActivityMetric, days: ClosedRange<LocalDate>)] = []
+        public var hourlyTotalsRequests: [(metric: ActivityMetric, day: LocalDate)] = []
         public var hasAnySamplesQueries: [ActivityMetric] = []
     }
 
@@ -96,6 +99,20 @@ public final class HealthServiceStub: HealthAuthorizationProviding, ActivityData
                 throw error
             }
             return (configuration.dailyTotals[metric] ?? [:]).filter { days.contains($0.key) }
+        }
+    }
+
+    public func hourlyTotals(
+        of metric: ActivityMetric,
+        on day: LocalDate,
+        calendar: ActivityCalendar
+    ) async throws -> [Int: Double] {
+        try withLock {
+            calls.hourlyTotalsRequests.append((metric, day))
+            if let error = configuration.dailyTotalsError {
+                throw error
+            }
+            return configuration.hourlyTotals[metric]?[day] ?? [:]
         }
     }
 

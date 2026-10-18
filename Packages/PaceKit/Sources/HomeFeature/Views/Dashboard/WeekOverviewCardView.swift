@@ -1,26 +1,42 @@
+import ActivityFeature
 import DesignSystem
 import SwiftUI
 
 /// „Deine Woche“: Montag bis Sonntag als Kacheln, deren Höhe und Farbe die Schritte zeigen. Heute ist hervorgehoben.
-struct WeekOverviewCardView<Details: View>: View {
+///
+/// Die Überschrift öffnet die Wochenstatistik, ein Tag die Tagesansicht dieses Tages.
+struct WeekOverviewCardView: View {
     let week: WeekOverview?
-    @ViewBuilder let details: () -> Details
 
     var body: some View {
-        NavigationLink(destination: details) {
-            PaceCard {
-                VStack(alignment: .leading, spacing: PaceSpacing.s) {
+        PaceCard {
+            VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                NavigationLink(value: StatisticsRoute(period: .week, metric: .steps)) {
                     PaceCardHeader("Deine Woche", showsChevron: true)
-                    HStack(alignment: .bottom, spacing: PaceSpacing.s) {
-                        ForEach(days) { day in
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.pacePressable)
+                .accessibilityLabel(week?.accessibilitySummary ?? "Deine Woche")
+                .accessibilityHint("Öffnet die Wochenstatistik")
+
+                HStack(alignment: .bottom, spacing: PaceSpacing.s) {
+                    ForEach(days) { day in
+                        if day.isFuture {
                             DayBar(day: day)
+                                .accessibilityHidden(true)
+                        } else {
+                            NavigationLink(value: StatisticsRoute(period: .day, metric: .steps, day: day.date)) {
+                                DayBar(day: day)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.pacePressable)
+                            .accessibilityLabel(day.accessibilityLabel)
+                            .accessibilityHint("Öffnet die Details dieses Tages")
                         }
                     }
                 }
             }
         }
-        .buttonStyle(.pacePressable)
-        .accessibilityLabel(week?.accessibilitySummary ?? "Deine Woche")
     }
 
     private var days: [WeekOverview.Day] {

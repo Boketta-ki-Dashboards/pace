@@ -18,3 +18,11 @@ public protocol ActivityOverviewSource: AnyObject, Sendable {
     var detailsState: ActivityDetailsState { get }
     func refresh() async
 }
+
+extension ActivityOverviewSource {
+    /// Die zuletzt geladenen Werte (auch wenn die letzte Aktualisierung fehlschlug); `nil` ohne Werte.
+    public var currentOverview: ActivityOverview? {
+        guard case .loaded(let overview, _) = detailsState else { return nil }
+        return overview
+    }
+}

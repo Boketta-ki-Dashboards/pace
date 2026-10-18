@@ -9,25 +9,18 @@ import Testing
 
 @MainActor
 struct HomeSettingsTests {
-    @Test func defaultsShowAllSectionsWithTenThousandStepGoal() {
+    @Test func defaultsShowAllSections() {
         let settings = HomeSettings(store: InMemoryHomePreferencesStore())
 
-        #expect(settings.stepGoal == 10_000)
         #expect(settings.visibleSections == [.regionRanks, .stepsToday, .week, .neighborhood, .friends, .groups])
     }
 
-    @Test func stepGoalIsClampedRoundedAndPersisted() {
-        let store = InMemoryHomePreferencesStore()
-        let settings = HomeSettings(store: store)
+    @Test func legacyStepGoalIsDecodedForTheGoalHistory() throws {
+        let json = #"{"stepGoal": 12500, "sections": [{"section": "week", "isVisible": true}]}"#
+        let preferences = try JSONDecoder().decode(HomePreferences.self, from: Data(json.utf8))
 
-        settings.setStepGoal(12_340)
-        #expect(settings.stepGoal == 12_500)
-        #expect(store.load()?.stepGoal == 12_500)
-
-        settings.setStepGoal(10)
-        #expect(settings.stepGoal == 1_000)
-        settings.setStepGoal(999_999)
-        #expect(settings.stepGoal == 50_000)
+        #expect(preferences.legacyStepGoal == 12_500)
+        #expect(preferences.normalized().legacyStepGoal == 12_500)
     }
 
     @Test func sectionsCanBeHiddenButStepsTodayStaysVisible() {
@@ -58,14 +51,13 @@ struct HomeSettingsTests {
     }
 
     @Test func storedPreferencesAreRepaired() {
-        let broken = HomePreferences(stepGoal: 123, sections: [
+        let broken = HomePreferences(sections: [
             HomeSectionSetting(section: .week, isVisible: true),
             HomeSectionSetting(section: .week, isVisible: false),
             HomeSectionSetting(section: .stepsToday, isVisible: false),
         ])
         let settings = HomeSettings(store: InMemoryHomePreferencesStore(broken))
 
-        #expect(settings.stepGoal == 1_000)
         #expect(settings.sections.map(\.section) == [.week, .stepsToday, .regionRanks, .neighborhood, .friends, .groups])
         #expect(settings.visibleSections.contains(.stepsToday))
     }
@@ -294,6 +286,20 @@ struct RegionalStandingsViewModelTests {
 
 @MainActor
 struct HomeDashboardViewModelTests {
+    private func makeStreak(
+        activity: HomeViewModel,
+        health: HealthServiceStub,
+        now: @escaping @Sendable () -> Date = { Fixtures.date(2026, 10, 16, 9) }
+    ) -> StepStreakTracker {
+        StepStreakTracker(
+            history: ActivityHistoryStore(activityData: health, live: activity, calendar: Fixtures.activityCalendar, now: now),
+            goals: StepGoalSettings(store: InMemoryStepGoalStore(), calendar: Fixtures.activityCalendar, now: now),
+            recordStore: InMemoryStepStreakRecordStore(),
+            calendar: Fixtures.activityCalendar,
+            now: now
+        )
+    }
+
     @Test func greetsWithFirstNameAndComposesSummaries() async {
         let profile = Fixtures.profile(displayName: "Niklas Zockt", regionalLeaderboardEnabled: true)
         let profiles = ProfileRepositoryStub { $0.profiles[profile.id] = profile }
@@ -306,6 +312,8 @@ struct HomeDashboardViewModelTests {
             activity: activity,
             standings: RegionalStandingsViewModel(store: store, leaderboards: LeaderboardRepositoryStub(), syncing: nil),
             settings: HomeSettings(store: InMemoryHomePreferencesStore()),
+            streak: makeStreak(activity: activity, health: health),
+            activityData: health,
             store: store,
             calendar: Fixtures.activityCalendar,
             formatter: ActivityFormatter(locale: Locale(identifier: "de_DE"), calendar: Fixtures.activityCalendar),
@@ -320,8 +328,13 @@ struct HomeDashboardViewModelTests {
         #expect(dashboard.stepsToday?.stepsText == "8.432")
         #expect(dashboard.week?.days.count == 7)
 
-        dashboard.settings.setStepGoal(8_000)
+        dashboard.goals.setGoal(8_000)
         #expect(dashboard.stepsToday?.isGoalReached == true)
+        #expect(dashboard.stepsToday?.goalText == "von 8.000 Schritten")
+
+        let statistics = dashboard.statistics(for: StatisticsRoute(period: .week, metric: .distance))
+        #expect(statistics.period == .week)
+        #expect(statistics.metric == .distance)
 
         dashboard.openRankings(Fixtures.hessen)
         dashboard.openSocial()
@@ -340,10 +353,14 @@ struct HomeDashboardViewModelTests {
         let settings = HomeSettings(store: InMemoryHomePreferencesStore())
         settings.setVisible(false, for: .regionRanks)
         settings.setVisible(false, for: .neighborhood)
+        let health = HealthServiceStub()
+        let activity = HomeViewModel(activityData: health, calendar: Fixtures.activityCalendar)
         let dashboard = HomeDashboardViewModel(
-            activity: HomeViewModel(activityData: HealthServiceStub(), calendar: Fixtures.activityCalendar),
+            activity: activity,
             standings: RegionalStandingsViewModel(store: store, leaderboards: leaderboards, syncing: nil),
             settings: settings,
+            streak: makeStreak(activity: activity, health: health),
+            activityData: health,
             store: store
         )
 
@@ -361,10 +378,13 @@ struct HomeDashboardViewModelTests {
         let store = ProfileStore(profile: profile, profiles: profiles, regions: RegionRepositoryStub(), cache: InMemoryProfileCache())
         let syncing = ActivitySyncingSpy()
         let health = HealthServiceStub { $0.setSteps(5_000, on: Fixtures.day(2026, 10, 16)) }
+        let activity = HomeViewModel(activityData: health, syncing: syncing, calendar: Fixtures.activityCalendar, now: { Fixtures.date(2026, 10, 16, 9) })
         let dashboard = HomeDashboardViewModel(
-            activity: HomeViewModel(activityData: health, syncing: syncing, calendar: Fixtures.activityCalendar, now: { Fixtures.date(2026, 10, 16, 9) }),
+            activity: activity,
             standings: RegionalStandingsViewModel(store: store, leaderboards: LeaderboardRepositoryStub(), syncing: syncing),
             settings: HomeSettings(store: InMemoryHomePreferencesStore()),
+            streak: makeStreak(activity: activity, health: health),
+            activityData: health,
             store: store
         )
 

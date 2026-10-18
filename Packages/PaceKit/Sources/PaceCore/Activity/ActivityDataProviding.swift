@@ -26,6 +26,14 @@ public protocol ActivityDataProviding: Sendable {
         calendar: ActivityCalendar
     ) async throws -> [LocalDate: Double]
 
+    /// Summe je Stunde eines Tages (0–23, Ortszeit), dedupliziert über alle Quellen. Stunden ohne Samples fehlen.
+    /// An Tagen mit Zeitumstellung fallen zwei gleich benannte Stunden zusammen bzw. eine fehlt.
+    func hourlyTotals(
+        of metric: ActivityMetric,
+        on day: LocalDate,
+        calendar: ActivityCalendar
+    ) async throws -> [Int: Double]
+
     /// Ob für die Kennzahl überhaupt irgendein Sample lesbar ist – unabhängig vom Zeitraum.
     func hasAnySamples(of metric: ActivityMetric) async throws -> Bool
 

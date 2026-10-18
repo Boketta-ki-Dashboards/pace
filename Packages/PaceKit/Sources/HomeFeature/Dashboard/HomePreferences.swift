@@ -54,22 +54,25 @@ public struct HomeSectionSetting: Codable, Equatable, Sendable, Identifiable {
 
 /// Persönliche Einstellungen des Home-Dashboards. Bleiben auf dem Gerät.
 public struct HomePreferences: Codable, Equatable, Sendable {
-    public static let defaultStepGoal = 10_000
-    public static let stepGoalRange = 1_000...50_000
-    public static let stepGoalIncrement = 500
-
-    public var stepGoal: Int
     public var sections: [HomeSectionSetting]
+    /// Tagesziel aus älteren Versionen. Das Ziel steht inzwischen im Zielverlauf (`StepGoalSettings`); der Wert wird
+    /// nur einmalig dorthin übernommen.
+    public var legacyStepGoal: Int?
 
-    public init(stepGoal: Int = Self.defaultStepGoal, sections: [HomeSectionSetting] = Self.defaultSections) {
-        self.stepGoal = stepGoal
+    public init(sections: [HomeSectionSetting] = Self.defaultSections, legacyStepGoal: Int? = nil) {
         self.sections = sections
+        self.legacyStepGoal = legacyStepGoal
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sections
+        case legacyStepGoal = "stepGoal"
     }
 
     public static let defaultSections = HomeSection.allCases.map { HomeSectionSetting(section: $0, isVisible: true) }
 
     /// Repariert gespeicherte Werte: unbekannte oder doppelte Bereiche entfallen, neue kommen ans Ende, die
-    /// Schrittkarte ist immer sichtbar, das Ziel liegt im erlaubten Bereich.
+    /// Schrittkarte ist immer sichtbar.
     public func normalized() -> HomePreferences {
         var seen: Set<HomeSection> = []
         var result: [HomeSectionSetting] = []
@@ -79,13 +82,7 @@ public struct HomePreferences: Codable, Equatable, Sendable {
         for section in HomeSection.allCases where !seen.contains(section) {
             result.append(HomeSectionSetting(section: section, isVisible: true))
         }
-        return HomePreferences(stepGoal: Self.clampedGoal(stepGoal), sections: result)
-    }
-
-    /// Ziel im erlaubten Bereich, gerundet auf 500er-Schritte.
-    public static func clampedGoal(_ goal: Int) -> Int {
-        let clamped = min(max(goal, stepGoalRange.lowerBound), stepGoalRange.upperBound)
-        return (clamped + stepGoalIncrement / 2) / stepGoalIncrement * stepGoalIncrement
+        return HomePreferences(sections: result, legacyStepGoal: legacyStepGoal)
     }
 }
 
@@ -119,7 +116,7 @@ public struct UserDefaultsHomePreferencesStore: HomePreferencesStoring {
     }
 }
 
-/// Tagesziel und Aufbau des Dashboards, live für alle Ansichten.
+/// Aufbau des Dashboards, live für alle Ansichten.
 @MainActor
 @Observable
 public final class HomeSettings {
@@ -132,25 +129,12 @@ public final class HomeSettings {
         preferences = (store.load() ?? HomePreferences()).normalized()
     }
 
-    public var stepGoal: Int { preferences.stepGoal }
-
     /// Alle Bereiche in Nutzer-Reihenfolge, auch ausgeblendete (für „Anpassen“).
     public var sections: [HomeSectionSetting] { preferences.sections }
 
     /// Die angezeigten Bereiche in Nutzer-Reihenfolge.
     public var visibleSections: [HomeSection] {
         preferences.sections.filter(\.isVisible).map(\.section)
-    }
-
-    /// Mögliche Tagesziele in 500er-Schritten.
-    public static let stepGoalOptions = Array(stride(
-        from: HomePreferences.stepGoalRange.lowerBound,
-        through: HomePreferences.stepGoalRange.upperBound,
-        by: HomePreferences.stepGoalIncrement
-    ))
-
-    public func setStepGoal(_ goal: Int) {
-        update { $0.stepGoal = HomePreferences.clampedGoal(goal) }
     }
 
     public func setVisible(_ isVisible: Bool, for section: HomeSection) {

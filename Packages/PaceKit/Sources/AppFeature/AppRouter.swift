@@ -1,3 +1,4 @@
+import ActivityFeature
 import Foundation
 import HealthPermissionFeature
 import HomeFeature
@@ -114,10 +115,22 @@ public final class AppRouter {
             refreshActivity: { [weak home] in await home?.refreshForRanking() }
         )
         let navigation = MainNavigation()
+        // Das Tagesziel älterer Versionen wird einmalig in den Zielverlauf übernommen.
+        let goals = StepGoalSettings(
+            store: dependencies.stepGoals,
+            legacyGoal: dependencies.homePreferences.load()?.legacyStepGoal
+        )
+        let streak = StepStreakTracker(
+            history: ActivityHistoryStore(activityData: dependencies.activityData, live: home),
+            goals: goals,
+            recordStore: dependencies.streakRecords
+        )
         let dashboard = HomeDashboardViewModel(
             activity: home,
             standings: RegionalStandingsViewModel(store: store, leaderboards: services.leaderboards, syncing: sync),
             settings: HomeSettings(store: dependencies.homePreferences),
+            streak: streak,
+            activityData: dependencies.activityData,
             store: store,
             onOpenRankings: { [navigation] scope in navigation.openRankings(scope) },
             onOpenSocial: { [navigation] in navigation.openSocial() }

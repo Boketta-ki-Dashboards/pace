@@ -54,7 +54,7 @@ let package = Package(
         .target(
             name: "AppFeature",
             dependencies: [
-                "PaceCore", "DesignSystem", "HealthPermissionFeature", "HomeFeature",
+                "PaceCore", "DesignSystem", "HealthPermissionFeature", "ActivityFeature", "HomeFeature",
                 "OnboardingFeature", "LeaderboardFeature", "ProfileFeature", "SocialFeature",
             ]
         ),

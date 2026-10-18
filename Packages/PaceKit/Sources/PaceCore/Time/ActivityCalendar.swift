@@ -66,4 +66,28 @@ public struct ActivityCalendar: Sendable {
         let daysSinceMonday = (weekday + 5) % 7
         return adding(-daysSinceMonday, to: day)
     }
+
+    /// Sonntag der ISO-Woche, in der `day` liegt.
+    public func endOfWeek(containing day: LocalDate) -> LocalDate {
+        adding(6, to: startOfWeek(containing: day))
+    }
+
+    /// Erster Tag des Monats, in dem `day` liegt.
+    public func startOfMonth(containing day: LocalDate) -> LocalDate {
+        LocalDate(year: day.year, month: day.month, day: 1)
+    }
+
+    /// Letzter Tag des Monats, in dem `day` liegt.
+    public func endOfMonth(containing day: LocalDate) -> LocalDate {
+        adding(-1, to: addingMonths(1, to: startOfMonth(containing: day)))
+    }
+
+    /// Verschiebt um ganze Monate; der Tag wird auf die Monatslänge begrenzt (31. Jan. + 1 Monat = 28./29. Feb.).
+    public func addingMonths(_ months: Int, to day: LocalDate) -> LocalDate {
+        let total = day.year * 12 + (day.month - 1) + months
+        let year = total / 12
+        let month = total % 12 + 1
+        let length = calendar.range(of: .day, in: .month, for: startOfDay(LocalDate(year: year, month: month, day: 1)))!.count
+        return LocalDate(year: year, month: month, day: min(day.day, length))
+    }
 }

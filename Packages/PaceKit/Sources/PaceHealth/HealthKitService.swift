@@ -80,6 +80,35 @@ extension HealthKitService: ActivityDataProviding {
         calendar: ActivityCalendar
     ) async throws -> [LocalDate: Double] {
         let interval = calendar.interval(from: days.lowerBound, through: days.upperBound)
+        var totals: [LocalDate: Double] = [:]
+        for (start, value) in try await statistics(of: metric, in: interval, bucket: DateComponents(day: 1)) {
+            let day = calendar.day(containing: start)
+            guard days.contains(day) else { continue }
+            totals[day, default: 0] += value
+        }
+        return totals
+    }
+
+    public func hourlyTotals(
+        of metric: ActivityMetric,
+        on day: LocalDate,
+        calendar: ActivityCalendar
+    ) async throws -> [Int: Double] {
+        let interval = calendar.interval(for: day)
+        var totals: [Int: Double] = [:]
+        for (start, value) in try await statistics(of: metric, in: interval, bucket: DateComponents(hour: 1)) {
+            guard interval.contains(start) else { continue }
+            totals[calendar.calendar.component(.hour, from: start), default: 0] += value
+        }
+        return totals
+    }
+
+    /// Summen je Intervall (`bucket`) im Zeitraum, nur Intervalle mit Samples.
+    private func statistics(
+        of metric: ActivityMetric,
+        in interval: DateInterval,
+        bucket: DateComponents
+    ) async throws -> [(start: Date, value: Double)] {
         var predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: [])
         if let filter = HealthMetricMapping.additionalPredicate(for: metric) {
             predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate, filter])
@@ -91,28 +120,23 @@ extension HealthKitService: ActivityDataProviding {
             predicate: .quantitySample(type: HealthMetricMapping.quantityType(for: metric), predicate: predicate),
             options: .cumulativeSum,
             anchorDate: interval.start,
-            intervalComponents: DateComponents(day: 1)
+            intervalComponents: bucket
         )
 
         let collection: HKStatisticsCollection
         do {
             collection = try await descriptor.result(for: healthStore)
         } catch let error as HKError where error.code == .errorNoData {
-            return [:]
+            return []
         } catch {
             throw HealthKitErrorMapping.map(error, fallback: HealthDataError.queryFailed)
         }
 
         let unit = HealthMetricMapping.unit(for: metric)
-        var totals: [LocalDate: Double] = [:]
         // `statistics()` enthält nur Intervalle mit Samples.
-        for statistics in collection.statistics() {
-            guard let sum = statistics.sumQuantity() else { continue }
-            let day = calendar.day(containing: statistics.startDate)
-            guard days.contains(day) else { continue }
-            totals[day, default: 0] += sum.doubleValue(for: unit)
+        return collection.statistics().compactMap { statistics in
+            statistics.sumQuantity().map { (start: statistics.startDate, value: $0.doubleValue(for: unit)) }
         }
-        return totals
     }
 
     public func hasAnySamples(of metric: ActivityMetric) async throws -> Bool {
