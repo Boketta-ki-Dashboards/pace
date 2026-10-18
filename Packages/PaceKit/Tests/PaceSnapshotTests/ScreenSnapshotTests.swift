@@ -104,7 +104,7 @@ struct ScreenSnapshotTests {
             // Sechs Wochen Verlauf für die Statistik, die aktuelle Woche wie im Home-Mockup.
             for offset in -45 ... -7 {
                 let day = calendar.adding(offset, to: today)
-                let steps = 5_000 + (offset * 7_919).magnitude % 8_000
+                let steps = 5_000 + Int((offset * 7_919).magnitude % 8_000)
                 configuration.setSteps(steps, on: day)
                 configuration.set(.walkingRunningDistance, Double(steps) * 0.72, on: day)
                 configuration.set(.activeEnergy, Double(steps) * 0.0384, on: day)
