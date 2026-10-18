@@ -9,5 +9,10 @@
 SUPABASE_URL =
 SUPABASE_PUBLISHABLE_KEY =
 
+// Alternative App-Icons für Profil → Darstellung → App-Icon („Hell“ und „Dunkel“). Das primäre Icon „AppIcon“
+// (Einstellung „Automatisch“) steht in den Target-Einstellungen. Bewusst hier und nicht in project.pbxproj, damit
+// lokale Signing-Einstellungen im Projekt beim Aktualisieren nicht kollidieren.
+ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = AppIconLight AppIconDark
+
 // Optionaler Include: kein Fehler, wenn die Datei fehlt.
 #include? "Pace.xcconfig"

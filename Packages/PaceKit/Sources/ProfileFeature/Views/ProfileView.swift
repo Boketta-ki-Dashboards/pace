@@ -1,4 +1,5 @@
 import DesignSystem
+import PaceCore
 import RegionFeature
 import SwiftUI
 
@@ -47,6 +48,7 @@ struct ProfileContent: View {
             header
             regionCard
             rankingsCard
+            appearanceCard
             dataCard
         }
     }
@@ -125,6 +127,40 @@ struct ProfileContent: View {
         }
     }
 
+    private var appearanceCard: some View {
+        PaceCard {
+            VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                PaceCardHeader("Darstellung")
+                Text("App-Icon")
+                    .font(PaceFont.headline)
+                    .foregroundStyle(PaceColor.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
+                HStack(alignment: .top, spacing: PaceSpacing.s) {
+                    ForEach(AppIconChoice.allCases) { choice in
+                        AppIconOption(
+                            choice: choice,
+                            isSelected: viewModel.appIcon == choice,
+                            isEnabled: viewModel.supportsAppIconChange && !viewModel.isChangingAppIcon
+                        ) {
+                            Task { await viewModel.selectAppIcon(choice) }
+                        }
+                    }
+                }
+                if let error = viewModel.appIconError {
+                    Text(error)
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.danger)
+                }
+                Text(viewModel.supportsAppIconChange
+                    ? "„Automatisch“ folgt der Darstellung deines Home-Bildschirms (hell, dunkel oder getönt, ab iOS 18)."
+                    : "Auf diesem Gerät lässt sich das App-Icon nicht ändern.")
+                    .font(PaceFont.caption)
+                    .foregroundStyle(PaceColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     private var dataCard: some View {
         PaceCard {
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
@@ -154,6 +190,53 @@ struct ProfileContent: View {
                 Task { await viewModel.setRegionalLeaderboardEnabled(enabled) }
             }
         )
+    }
+}
+
+/// Eine Icon-Variante zur Auswahl: Vorschau, Name, Auswahlmarkierung.
+private struct AppIconOption: View {
+    let choice: AppIconChoice
+    let isSelected: Bool
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: PaceSpacing.xs) {
+                PaceAppIconPreview(variant, size: 60)
+                    .padding(3)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 17, style: .continuous)
+                            .strokeBorder(isSelected ? PaceColor.accentStrong : .clear, lineWidth: 2.5)
+                    )
+                HStack(spacing: PaceSpacing.xxs) {
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(PaceColor.accentStrong)
+                            .accessibilityHidden(true)
+                    }
+                    Text(choice.title)
+                        .foregroundStyle(PaceColor.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .font(PaceFont.callout)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.pacePressable)
+        .disabled(!isEnabled)
+        .opacity(isEnabled || isSelected ? 1 : 0.5)
+        .accessibilityLabel("App-Icon \(choice.title)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var variant: PaceAppIconPreview.Variant {
+        switch choice {
+        case .automatic: .automatic
+        case .light: .light
+        case .dark: .dark
+        }
     }
 }
 

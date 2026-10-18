@@ -3,7 +3,7 @@ import Observation
 import PaceCore
 import RegionFeature
 
-/// Profil und Einstellungen: Namen, Region, Zustimmung zu regionalen Rankings.
+/// Profil und Einstellungen: Namen, Region, Zustimmung zu regionalen Rankings, App-Icon.
 @MainActor
 @Observable
 public final class ProfileViewModel {
@@ -16,14 +16,27 @@ public final class ProfileViewModel {
     public private(set) var isSavingRegion = false
     public private(set) var regionChangeError: String?
 
+    /// Das aktuell gesetzte App-Icon.
+    public private(set) var appIcon: AppIconChoice
+    public private(set) var isChangingAppIcon = false
+    public private(set) var appIconError: String?
+
     @ObservationIgnored private let store: ProfileStore
     @ObservationIgnored private let regions: any RegionRepository
+    @ObservationIgnored private let appIcons: any AppIconSetting
     @ObservationIgnored private let searchDebounce: Duration
 
-    public init(store: ProfileStore, regions: any RegionRepository, searchDebounce: Duration = .milliseconds(300)) {
+    public init(
+        store: ProfileStore,
+        regions: any RegionRepository,
+        appIcons: any AppIconSetting = UnsupportedAppIconSetting(),
+        searchDebounce: Duration = .milliseconds(300)
+    ) {
         self.store = store
         self.regions = regions
+        self.appIcons = appIcons
         self.searchDebounce = searchDebounce
+        appIcon = AppIconChoice(alternateIconName: appIcons.currentAlternateIconName)
     }
 
     public var displayName: String { store.profile.displayName }
@@ -88,6 +101,28 @@ public final class ProfileViewModel {
             errorMessage = enabled
                 ? "Du konntest nicht zu den Rankings hinzugefügt werden. Bitte versuche es erneut."
                 : "Du konntest nicht aus den Rankings entfernt werden. Bitte versuche es erneut."
+        }
+    }
+
+    /// Ob iOS alternative App-Icons erlaubt.
+    public var supportsAppIconChange: Bool {
+        appIcons.supportsAlternateIcons
+    }
+
+    /// Setzt das App-Icon. iOS bestätigt den Wechsel selbst; bei Erfolg zeigt die App keine weitere Meldung.
+    public func selectAppIcon(_ choice: AppIconChoice) async {
+        guard choice != appIcon, !isChangingAppIcon, supportsAppIconChange else { return }
+        isChangingAppIcon = true
+        appIconError = nil
+        defer { isChangingAppIcon = false }
+
+        do {
+            try await appIcons.setAlternateIconName(choice.alternateIconName)
+            appIcon = choice
+        } catch {
+            // Tatsächlichen Stand anzeigen, nicht die gewünschte Auswahl.
+            appIcon = AppIconChoice(alternateIconName: appIcons.currentAlternateIconName)
+            appIconError = "Das App-Icon konnte nicht geändert werden. Bitte versuche es erneut."
         }
     }
 

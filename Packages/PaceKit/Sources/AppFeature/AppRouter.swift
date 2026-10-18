@@ -126,7 +126,7 @@ public final class AppRouter {
             dashboard: dashboard,
             leaderboard: leaderboard,
             social: SocialViewModel(),
-            profile: ProfileViewModel(store: store, regions: services.regions),
+            profile: ProfileViewModel(store: store, regions: services.regions, appIcons: dependencies.appIcons),
             store: store
         )
         navigation.main = main

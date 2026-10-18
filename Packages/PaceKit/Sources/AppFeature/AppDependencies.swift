@@ -16,17 +16,21 @@ public struct AppDependencies: Sendable {
     public let backend: Backend
     /// Tagesziel und Aufbau des Home-Dashboards (nur auf dem Gerät).
     public let homePreferences: any HomePreferencesStoring
+    /// Wechsel des App-Icons (Profil → Darstellung).
+    public let appIcons: any AppIconSetting
 
     public init(
         healthAuthorization: any HealthAuthorizationProviding,
         activityData: any ActivityDataProviding,
         backend: Backend,
-        homePreferences: any HomePreferencesStoring = UserDefaultsHomePreferencesStore()
+        homePreferences: any HomePreferencesStoring = UserDefaultsHomePreferencesStore(),
+        appIcons: any AppIconSetting = UnsupportedAppIconSetting()
     ) {
         self.healthAuthorization = healthAuthorization
         self.activityData = activityData
         self.backend = backend
         self.homePreferences = homePreferences
+        self.appIcons = appIcons
     }
 }
 

@@ -3,7 +3,8 @@
 
 Ausgabe (wird überschrieben):
 - DesignSystem: einfärbbare Wortmarke (Template-Bild, nur Alpha) für die App-Oberfläche
-- App-Target: App-Icon (hell, dunkel, getönt), Startbildschirm-Logo (hell/dunkel)
+- DesignSystem: Vorschaubilder der App-Icons für die Icon-Auswahl im Profil
+- App-Target: App-Icons aus der Original-Wortmarke (automatisch/hell/dunkel/getönt), Startbildschirm-Logo
 
 Benötigt Pillow. Aufruf aus dem Repository-Wurzelverzeichnis:
     python3 -I Branding/generate_assets.py
@@ -14,7 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "Branding/source/pace-wordmark.jpg"
@@ -23,10 +24,12 @@ APP_ASSETS = ROOT / "Pace/Resources/Assets.xcassets"
 
 BRAND_LIGHT = (7, 45, 32)        # Farbe der Wortmarke (#072D20)
 BRAND_DARK = (201, 247, 218)     # Mint für den Dark Mode (#C9F7DA)
-ICON_GREEN_TOP = (16, 84, 56)    # #105438
-ICON_GREEN_BOTTOM = (6, 46, 31)  # #062E1F
-ICON_MINT = (196, 247, 214)      # #C4F7D6
-DARK_BACKGROUND = (14, 22, 24)   # #0E1618
+LIGHT_BACKGROUND = (253, 253, 249)  # Hintergrund des Original-Logos (#FDFDF9)
+DARK_BACKGROUND = (14, 22, 24)      # Dark-Mode-Hintergrund der App (#0E1618)
+# Lage der Wortmarke im App-Icon, abgeleitet aus dem Original-Logo (Breite ≈ 81 %, Mitte bei ≈ 51 % der Höhe),
+# mit etwas mehr Rand, damit die abgerundete Icon-Maske nichts anschneidet.
+WORDMARK_ICON_WIDTH = 0.78
+WORDMARK_ICON_CENTER_Y = 0.51
 
 
 def glyph_mask() -> Image.Image:
@@ -75,33 +78,36 @@ def write_imageset(directory: Path, base_width: int, variants: dict[str, Image.I
     write_json(directory / "Contents.json", content)
 
 
-def letter_p(mask: Image.Image) -> Image.Image:
-    """Der erste Buchstabe („p“) der Wortmarke – Spalten bis zur ersten Lücke."""
-    columns = [mask.crop((x, 0, x + 1, mask.height)).getextrema()[1] for x in range(mask.width)]
-    start = next(x for x, value in enumerate(columns) if value > 128)
-    end = next(x for x in range(start, mask.width) if columns[x] < 20)
-    letter = mask.crop((start, 0, end, mask.height))
-    return letter.crop(letter.point(lambda a: 255 if a > 20 else 0).getbbox())
-
-
-def vertical_gradient(size: int, top: tuple[int, int, int], bottom: tuple[int, int, int]) -> Image.Image:
-    gradient = Image.new("RGB", (1, size))
-    for y in range(size):
-        t = y / (size - 1)
-        gradient.putpixel((0, y), tuple(round(top[i] + (bottom[i] - top[i]) * t) for i in range(3)))
-    return gradient.resize((size, size))
-
-
-def icon(letter: Image.Image, background: Image.Image | None, color: tuple[int, int, int]) -> Image.Image:
+def wordmark_icon(mask: Image.Image, background: tuple[int, int, int] | None, color: tuple[int, int, int]) -> Image.Image:
+    """App-Icon: die komplette Original-Wortmarke, unverändert in Form und Proportionen, wie im Original-Logo
+    horizontal zentriert und leicht unterhalb der Mitte. Nur Hintergrund- und Schriftfarbe variieren."""
     size = 1024
-    glyph_height = 560
-    glyph = letter.resize((round(letter.width * glyph_height / letter.height), glyph_height), Image.LANCZOS)
-    canvas = background.convert("RGBA") if background else Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    # Optisch zentriert: der Bauch des „p“ sitzt in der Mitte, die Unterlänge ragt nach unten.
-    x = (size - glyph.width) // 2 + 14
-    y = (size - glyph_height) // 2 + 62
+    glyph = scaled(mask, round(size * WORDMARK_ICON_WIDTH))
+    canvas = Image.new("RGBA", (size, size), (background + (255,)) if background else (0, 0, 0, 0))
+    x = (size - glyph.width) // 2
+    y = round(size * WORDMARK_ICON_CENTER_Y - glyph.height / 2)
     canvas.alpha_composite(colored(glyph, color), (x, y))
     return canvas
+
+
+def write_app_icon(directory: Path, variants: dict[str, Image.Image]) -> None:
+    """`variants`: "any" sowie optional "dark" und "tinted" → 1024×1024-Bild (Single Size, ab Xcode 14)."""
+    directory.mkdir(parents=True, exist_ok=True)
+    for old in directory.glob("*.png"):
+        old.unlink()
+    images = []
+    for appearance, image in variants.items():
+        suffix = "" if appearance == "any" else f"-{appearance.capitalize()}"
+        name = f"{directory.stem}{suffix}.png"
+        if appearance == "tinted":
+            image.convert("L").save(directory / name)
+        else:
+            image.convert("RGB").save(directory / name)
+        entry: dict = {"filename": name, "idiom": "universal", "platform": "ios", "size": "1024x1024"}
+        if appearance != "any":
+            entry = {"appearances": [{"appearance": "luminosity", "value": appearance}], **entry}
+        images.append(entry)
+    write_json(directory / "Contents.json", {"images": images, "info": {"author": "xcode", "version": 1}})
 
 
 def main() -> None:
@@ -119,26 +125,20 @@ def main() -> None:
         template=False,
     )
 
-    # App-Icon: das „p“ der Wortmarke in Mint auf tiefem Grün.
-    letter = letter_p(mask)
-    icon_dir = APP_ASSETS / "AppIcon.appiconset"
-    for old in icon_dir.glob("*.png"):
-        old.unlink()
-    icon(letter, vertical_gradient(1024, ICON_GREEN_TOP, ICON_GREEN_BOTTOM), ICON_MINT).convert("RGB").save(icon_dir / "AppIcon.png")
-    icon(letter, None, ICON_MINT).save(icon_dir / "AppIcon-Dark.png")
-    tinted = Image.new("RGB", (1024, 1024), (0, 0, 0))
-    tinted.paste(icon(letter, None, (255, 255, 255)), (0, 0), icon(letter, None, (255, 255, 255)))
-    tinted.convert("L").save(icon_dir / "AppIcon-Tinted.png")
-    write_json(icon_dir / "Contents.json", {
-        "images": [
-            {"filename": "AppIcon.png", "idiom": "universal", "platform": "ios", "size": "1024x1024"},
-            {"appearances": [{"appearance": "luminosity", "value": "dark"}], "filename": "AppIcon-Dark.png",
-             "idiom": "universal", "platform": "ios", "size": "1024x1024"},
-            {"appearances": [{"appearance": "luminosity", "value": "tinted"}], "filename": "AppIcon-Tinted.png",
-             "idiom": "universal", "platform": "ios", "size": "1024x1024"},
-        ],
-        "info": {"author": "xcode", "version": 1},
-    })
+    # App-Icons aus der Original-Wortmarke: hell (Original), dunkel (gleiche Wortmarke in Mint auf dunklem Grund),
+    # getönt (Graustufen für iOS 18). „AppIcon“ folgt dem Erscheinungsbild des Systems (Einstellung „Automatisch“),
+    # „AppIconLight“ und „AppIconDark“ sind die alternativen Icons für „Hell“ und „Dunkel“.
+    light = wordmark_icon(mask, LIGHT_BACKGROUND, BRAND_LIGHT)
+    dark = wordmark_icon(mask, DARK_BACKGROUND, BRAND_DARK)
+    tinted = wordmark_icon(mask, (0, 0, 0), (255, 255, 255))
+    write_app_icon(APP_ASSETS / "AppIcon.appiconset", {"any": light, "dark": dark, "tinted": tinted})
+    write_app_icon(APP_ASSETS / "AppIconLight.appiconset", {"any": light})
+    write_app_icon(APP_ASSETS / "AppIconDark.appiconset", {"any": dark})
+
+    # Vorschauen für die Icon-Auswahl im Profil (App-Icons selbst sind zur Laufzeit nicht als Bild ladbar).
+    write_imageset(DESIGN_ASSETS / "AppIconPreviewLight.imageset", 64, {"any": light}, template=False)
+    write_imageset(DESIGN_ASSETS / "AppIconPreviewDark.imageset", 64, {"any": dark}, template=False)
+
     print("Assets erzeugt.")
 
 

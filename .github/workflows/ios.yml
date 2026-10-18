@@ -64,6 +64,17 @@ jobs:
             echo "NSHealthUpdateUsageDescription darf nicht gesetzt sein"; exit 1
           fi
 
+      - name: Verify app icons
+        # Profil → Darstellung → App-Icon braucht das primäre Icon und die alternativen Icons „Hell“ und „Dunkel“.
+        run: |
+          PLIST=build/DerivedData/Build/Products/Debug-iphonesimulator/Pace.app/Info.plist
+          plutil -extract CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName raw "$PLIST" | grep -qx AppIcon
+          for icon in AppIconLight AppIconDark; do
+            plutil -extract "CFBundleIcons.CFBundleAlternateIcons.$icon" xml1 -o - "$PLIST" >/dev/null \
+              || { echo "::error::Alternatives App-Icon $icon fehlt im Info.plist"; exit 1; }
+          done
+          echo "App-Icons vorhanden."
+
       - name: Build-time key check rejects secret keys
         # Config/check_supabase_key.sh läuft als Build-Phase; hier wird geprüft, dass sie geheime Keys erkennt.
         run: |

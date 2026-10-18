@@ -10,7 +10,8 @@ extension AppDependencies {
         return AppDependencies(
             healthAuthorization: healthKit,
             activityData: healthKit,
-            backend: makeBackend()
+            backend: makeBackend(),
+            appIcons: SystemAppIconSetting()
         )
     }
 
