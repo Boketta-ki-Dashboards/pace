@@ -36,8 +36,8 @@ struct ScreenSnapshotTests {
             WeekOverviewCardView(week: dashboard.week)
             StreakCardView(summary: dashboard.streakSummary, state: dashboard.streak.history.state)
             NeighborhoodCardView(standings: dashboard.standings) { _ in }
-            FriendsPreviewCardView {}
-            GroupsPreviewCardView {}
+            FriendsPreviewCardView(social: dashboard.social) {}
+            GroupsPreviewCardView(social: dashboard.social) {}
         }
         .padding(.horizontal, PaceSpacing.m)
         .padding(.vertical, PaceSpacing.m)
@@ -53,8 +53,8 @@ struct ScreenSnapshotTests {
             WeekOverviewCardView(week: dashboard.week, size: .small)
             StreakCardView(summary: dashboard.streakSummary, state: dashboard.streak.history.state, size: .small)
             NeighborhoodCardView(standings: dashboard.standings, size: .small) { _ in }
-            FriendsPreviewCardView(size: .small) {}
-            GroupsPreviewCardView(size: .small) {}
+            FriendsPreviewCardView(social: dashboard.social, size: .small) {}
+            GroupsPreviewCardView(social: dashboard.social, size: .small) {}
         }
         .padding(PaceSpacing.m)
         try render(small, name: "home-small")
@@ -71,6 +71,8 @@ struct ScreenSnapshotTests {
             WeekOverviewCardView(week: dashboard.week, size: .large)
             StreakCardView(summary: dashboard.streakSummary, state: dashboard.streak.history.state, size: .large)
             NeighborhoodCardView(standings: dashboard.standings, level: .district, size: .large) { _ in }
+            FriendsPreviewCardView(social: dashboard.social, size: .large) {}
+            GroupsPreviewCardView(social: dashboard.social, size: .large) {}
         }
         .padding(PaceSpacing.m)
         try render(large, name: "home-large")
