@@ -160,7 +160,7 @@ private struct NeighborRow: View {
                     .foregroundStyle(PaceColor.textPrimary)
                     .lineLimit(1)
                 Spacer(minLength: PaceSpacing.xs)
-                Text(entry.competitionSteps.formatted(.number))
+                Text(entry.competitionSteps.paceFormatted)
                     .font(.system(.headline, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(PaceColor.textPrimary)
@@ -171,6 +171,6 @@ private struct NeighborRow: View {
             .padding(.vertical, 2)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Platz \(entry.rank), \(entry.isCurrentUser ? "du" : entry.displayName), \(entry.competitionSteps.formatted(.number)) Schritte")
+        .accessibilityLabel("Platz \(entry.rank), \(entry.isCurrentUser ? "du" : entry.displayName), \(entry.competitionSteps.paceFormatted) Schritte")
     }
 }

@@ -114,7 +114,7 @@ struct StepsTodayCardView: View {
                 HStack(spacing: 0) {
                     if let distance = summary.distanceText {
                         NavigationLink(value: StatisticsRoute(period: .week, metric: .distance)) {
-                            MetricLink(systemImage: "shoeprints.fill", value: distance, caption: nil)
+                            MetricLink(systemImage: "shoeprints.fill", value: distance, caption: "Distanz")
                         }
                         .buttonStyle(.pacePressable)
                         .accessibilityHint("Öffnet die Distanzstatistik")

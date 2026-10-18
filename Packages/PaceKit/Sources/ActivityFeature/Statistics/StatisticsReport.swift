@@ -254,7 +254,11 @@ public struct StatisticsReport: Equatable, Sendable {
             subtitle: subtitle,
             valueText: isAvailable ? metric.format(total, formatter: formatter) : nil,
             unitText: metric.unit,
-            secondaryText: isAvailable ? average.map { "Ø \(metric.format($0, formatter: formatter)) pro Tag" } : nil,
+            // Schritte wie auf Home ohne Einheit („Ø 7.473 pro Tag“), Distanz und Kalorien mit („Ø 6,5 km pro Tag“).
+            secondaryText: isAvailable ? average.map { value in
+                let text = metric == .steps ? metric.format(value, formatter: formatter) : metric.formatWithUnit(value, formatter: formatter)
+                return "Ø \(text) pro Tag"
+            } : nil,
             progress: nil,
             goalReached: nil,
             comparison: comparison,

@@ -31,6 +31,7 @@ struct StatisticsChart: View {
                         Text("Ziel")
                             .font(PaceFont.micro)
                             .foregroundStyle(PaceColor.accentStrong)
+                            .chartLineLabel()
                     }
                     .accessibilityHidden(true)
             }
@@ -41,8 +42,9 @@ struct StatisticsChart: View {
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                     .annotation(position: .top, alignment: .leading) {
                         Text("Ø")
-                            .font(PaceFont.micro)
+                            .font(PaceFont.micro.weight(.semibold))
                             .foregroundStyle(PaceColor.textSecondary)
+                            .chartLineLabel()
                     }
                     .accessibilityHidden(true)
             }
@@ -111,5 +113,14 @@ struct StatisticsChart: View {
         let raw = report.metric == .distance ? value * 1_000 : value
         let text = report.metric.formatWithUnit(raw, formatter: ActivityFormatter())
         return bar.reachedGoal ? "\(text), Ziel erreicht" : text
+    }
+}
+
+private extension View {
+    /// Hinterlegt die Beschriftung einer Linie, damit sie auch über Balken lesbar bleibt.
+    func chartLineLabel() -> some View {
+        padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(PaceColor.surface.opacity(0.9), in: Capsule())
     }
 }

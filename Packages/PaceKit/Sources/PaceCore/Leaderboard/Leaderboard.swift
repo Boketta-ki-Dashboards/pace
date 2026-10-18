@@ -105,7 +105,7 @@ public enum RankingHint {
             return "Du führst \(locative)."
         }
         guard let steps = stepsToNextPlace(currentUser: currentUser, above: above) else { return nil }
-        let formatted = steps.formatted(.number.locale(Locale(identifier: "de_DE")))
+        let formatted = steps.paceFormatted
         return "Noch \(formatted) \(steps == 1 ? "Schritt" : "Schritte") bis Platz #\(currentUser.rank - 1)"
     }
 }

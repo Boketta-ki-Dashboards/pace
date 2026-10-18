@@ -6,7 +6,7 @@ public struct ActivityFormatter: Sendable {
     public let locale: Locale
     public let calendar: ActivityCalendar
 
-    public init(locale: Locale = .autoupdatingCurrent, calendar: ActivityCalendar = ActivityCalendar()) {
+    public init(locale: Locale = PaceLocale.german, calendar: ActivityCalendar = ActivityCalendar()) {
         self.locale = locale
         self.calendar = calendar
     }

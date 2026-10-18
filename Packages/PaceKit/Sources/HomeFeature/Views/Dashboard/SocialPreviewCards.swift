@@ -32,7 +32,9 @@ struct FriendsPreviewCardView: View {
     private var compactDetail: String {
         switch social.state {
         case .unavailable: return "Nicht verfügbar"
-        case .idle, .loading where social.ranking.isEmpty: return "Wird geladen …"
+        case .failed where social.ranking.isEmpty: return "Nicht geladen"
+        case .idle: return "Wird geladen …"
+        case .loading where social.ranking.isEmpty: return "Wird geladen …"
         default:
             guard hasFriends, let me = social.ranking.first(where: \.isCurrentUser) else { return "Noch keine Freunde" }
             return "Platz \(me.rank) von \(social.ranking.count)"
@@ -46,7 +48,10 @@ struct FriendsPreviewCardView: View {
             SocialHint(systemImage: "person.2.slash", text: message)
         case .failed(let message):
             SocialHint(systemImage: "wifi.exclamationmark", text: message)
-        case .idle, .loading where social.ranking.isEmpty:
+        case .idle:
+            ProgressView()
+                .frame(maxWidth: .infinity, minHeight: 60)
+        case .loading where social.ranking.isEmpty:
             ProgressView()
                 .frame(maxWidth: .infinity, minHeight: 60)
         default:
@@ -110,7 +115,9 @@ struct GroupsPreviewCardView: View {
     private var compactDetail: String {
         switch social.state {
         case .unavailable: return "Nicht verfügbar"
-        case .idle, .loading where social.groups.isEmpty: return "Wird geladen …"
+        case .failed where social.groups.isEmpty: return "Nicht geladen"
+        case .idle: return "Wird geladen …"
+        case .loading where social.groups.isEmpty: return "Wird geladen …"
         default:
             guard let best = social.groups.max(by: { $0.currentStreak < $1.currentStreak }) else { return "Noch keine Gruppen" }
             return "\(best.name): \(best.currentStreak == 1 ? "1 Tag" : "\(best.currentStreak) Tage")"
@@ -124,7 +131,10 @@ struct GroupsPreviewCardView: View {
             SocialHint(systemImage: "person.3", text: message)
         case .failed(let message):
             SocialHint(systemImage: "wifi.exclamationmark", text: message)
-        case .idle, .loading where social.groups.isEmpty:
+        case .idle:
+            ProgressView()
+                .frame(maxWidth: .infinity, minHeight: 60)
+        case .loading where social.groups.isEmpty:
             ProgressView()
                 .frame(maxWidth: .infinity, minHeight: 60)
         default:
@@ -174,7 +184,7 @@ private struct FriendRankRow: View {
                     .foregroundStyle(PaceColor.textPrimary)
                     .lineLimit(1)
                 Spacer(minLength: PaceSpacing.xs)
-                Text(entry.competitionSteps.formatted(.number))
+                Text(entry.competitionSteps.paceFormatted)
                     .font(.system(.headline, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(PaceColor.textPrimary)
@@ -182,7 +192,7 @@ private struct FriendRankRow: View {
             .padding(.vertical, 2)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Platz \(entry.rank), \(entry.isCurrentUser ? "du" : entry.displayName), \(entry.competitionSteps.formatted(.number)) Schritte")
+        .accessibilityLabel("Platz \(entry.rank), \(entry.isCurrentUser ? "du" : entry.displayName), \(entry.competitionSteps.paceFormatted) Schritte")
     }
 }
 

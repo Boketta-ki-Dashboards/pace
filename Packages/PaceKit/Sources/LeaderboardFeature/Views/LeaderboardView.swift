@@ -243,7 +243,7 @@ private struct LeaderboardList: View {
     }
 
     private var participantsText: String {
-        snapshot.totalParticipants == 1 ? "1 Teilnehmer" : "\(snapshot.totalParticipants.formatted(.number)) Teilnehmer"
+        snapshot.totalParticipants == 1 ? "1 Teilnehmer" : "\(snapshot.totalParticipants.paceFormatted) Teilnehmer"
     }
 }
 
@@ -271,7 +271,7 @@ private struct LeaderboardEntryRow: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: PaceSpacing.xs)
-                Text(entry.competitionSteps.formatted(.number))
+                Text(entry.competitionSteps.paceFormatted)
                     .font(.system(.headline, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(PaceColor.textPrimary)
@@ -308,6 +308,6 @@ private struct LeaderboardEntryRow: View {
 
     private var accessibilityText: String {
         let name = entry.isCurrentUser ? "\(entry.displayName), du" : entry.displayName
-        return "Platz \(entry.rank), \(name), \(entry.competitionSteps.formatted(.number)) Schritte"
+        return "Platz \(entry.rank), \(name), \(entry.competitionSteps.paceFormatted) Schritte"
     }
 }

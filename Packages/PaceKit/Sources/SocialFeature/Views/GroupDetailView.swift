@@ -213,10 +213,10 @@ struct GroupDetailContent: View {
 
     private var goalText: String {
         let group = viewModel.group
-        var text = "Gruppenziel: \(group.dailyGoal.formatted(.number)) Schritte. Ein Tag zählt, wenn mindestens ein Drittel "
+        var text = "Gruppenziel: \(group.dailyGoal.paceFormatted) Schritte. Ein Tag zählt, wenn mindestens ein Drittel "
             + "der Mitglieder (aufgerundet) das Ziel erreicht."
         if let next = group.nextDailyGoal {
-            text += " Ab morgen: \(next.formatted(.number)) Schritte."
+            text += " Ab morgen: \(next.paceFormatted) Schritte."
         }
         return text
     }
@@ -444,7 +444,7 @@ struct CreateGroupSheet: View {
                     }
                     Picker("Gruppenziel", selection: $draft.dailyGoal) {
                         ForEach(StepGoalRules.options, id: \.self) { goal in
-                            Text("\(goal.formatted(.number)) Schritte").tag(goal)
+                            Text("\(goal.paceFormatted) Schritte").tag(goal)
                         }
                     }
                 } footer: {
@@ -616,7 +616,7 @@ private struct GroupGoalSheet: View {
             VStack(spacing: PaceSpacing.m) {
                 Picker("Gruppenziel", selection: $goal) {
                     ForEach(StepGoalRules.options, id: \.self) { goal in
-                        Text("\(goal.formatted(.number)) Schritte").tag(goal)
+                        Text("\(goal.paceFormatted) Schritte").tag(goal)
                     }
                 }
                 .pickerStyle(.wheel)

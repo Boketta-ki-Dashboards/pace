@@ -255,6 +255,7 @@ struct StatisticsReportTests {
 
         #expect(report.valueText == "38,7")
         #expect(report.unitText == "km")
+        #expect(report.secondaryText == "Ø 7,7 km pro Tag")
         #expect(report.bars[1].value == 12) // km
         #expect(report.goalLine == nil)
         #expect(!report.tiles.contains { $0.kind == .goalDays })

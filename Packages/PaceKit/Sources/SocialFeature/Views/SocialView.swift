@@ -502,7 +502,7 @@ struct RankingRow: View {
                         .foregroundStyle(PaceColor.accentStrong)
                         .accessibilityLabel("Ziel erreicht")
                 }
-                Text(entry.competitionSteps.formatted(.number))
+                Text(entry.competitionSteps.paceFormatted)
                     .font(.system(.headline, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(PaceColor.textPrimary)

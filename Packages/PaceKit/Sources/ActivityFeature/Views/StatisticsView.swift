@@ -284,6 +284,7 @@ private struct PeriodNavigator: View {
                 Image(systemName: "chevron.left")
                     .font(.body.weight(.semibold))
                     .frame(width: 44, height: 44)
+                    .opacity(report.canShowPrevious ? 1 : 0.3)
             }
             .disabled(!report.canShowPrevious)
             .accessibilityLabel("Vorheriger Zeitraum")
@@ -309,6 +310,7 @@ private struct PeriodNavigator: View {
                 Image(systemName: "chevron.right")
                     .font(.body.weight(.semibold))
                     .frame(width: 44, height: 44)
+                    .opacity(report.canShowNext ? 1 : 0.3)
             }
             .disabled(!report.canShowNext)
             .accessibilityLabel("Nächster Zeitraum")
@@ -344,11 +346,17 @@ private struct StatisticsTileView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
-            Label(tile.title, systemImage: tile.kind.systemImage)
-                .font(PaceFont.caption)
-                .foregroundStyle(PaceColor.textSecondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            HStack(spacing: PaceSpacing.xxs) {
+                // Feste Breite, damit die Titel aller Kacheln auf derselben Linie beginnen.
+                Image(systemName: tile.kind.systemImage)
+                    .frame(width: 16)
+                    .accessibilityHidden(true)
+                Text(tile.title)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .font(PaceFont.caption)
+            .foregroundStyle(PaceColor.textSecondary)
             Text(tile.value)
                 .font(tile.isAvailable ? PaceFont.headline : PaceFont.callout)
                 .monospacedDigit()

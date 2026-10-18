@@ -23,7 +23,7 @@ public struct StepGoalSheet: View {
                     .multilineTextAlignment(.center)
                 Picker("Tagesziel", selection: $selection) {
                     ForEach(StepGoalRules.options, id: \.self) { goal in
-                        Text("\(goal.formatted(.number)) Schritte").tag(goal)
+                        Text("\(goal.paceFormatted) Schritte").tag(goal)
                     }
                 }
                 .pickerStyle(.wheel)

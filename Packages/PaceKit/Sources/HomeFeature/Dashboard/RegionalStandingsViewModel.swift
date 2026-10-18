@@ -237,7 +237,7 @@ public struct RegionalStandings: Equatable, Sendable {
 
         /// z. B. `#12`, ohne Platzierung `–`.
         public var rankText: String {
-            rank.map { "#\($0.formatted(.number.locale(Locale(identifier: "de_DE"))))" } ?? "–"
+            rank.map { "#\($0.paceFormatted)" } ?? "–"
         }
     }
 

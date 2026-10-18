@@ -549,8 +549,14 @@ struct StreakSummaryTests {
         #expect(summary.currentText == "5 Tage")
         #expect(summary.statusText == "Erreiche heute dein Tagesziel, um deine Serie fortzusetzen.")
         #expect(summary.recordText == "Rekord: 12 Tage")
-        #expect(summary.lastWeek.map(\.letter) == ["S", "S", "M", "D", "M", "D", "F"])
-        #expect(summary.lastWeek.last?.accessibilityLabel == "Freitag, 16. Oktober: heute noch offen")
+        // Kalenderwoche Montag bis Sonntag; Samstag und Sonntag liegen noch in der Zukunft.
+        #expect(summary.lastWeek.map(\.letter) == ["M", "D", "M", "D", "F", "S", "S"])
+        #expect(summary.lastWeek.map(\.status) == [.reached, .reached, .reached, .reached, .pending, .future, .future])
+        #expect(summary.lastWeek[4].accessibilityLabel == "Freitag, 16. Oktober: heute noch offen")
+        #expect(summary.lastFourWeeks.count == 28)
+        #expect(summary.lastFourWeeks.first?.date == Fixtures.day(2026, 9, 21))
+        #expect(summary.lastFourWeeks.first?.status == .unknown)
+        #expect(summary.lastFourWeeks[19].status == .missed)
     }
 
     @Test func reachedTodayAndOpenEndedStreaks() {
@@ -574,5 +580,6 @@ struct StreakSummaryTests {
 
         let none = StreakSummary(streak: .empty, record: nil, recentDays: [], formatter: formatter)
         #expect(none.statusText == "Erreiche heute dein Tagesziel, um eine neue Serie zu starten.")
+        #expect(none.lastWeek.isEmpty)
     }
 }

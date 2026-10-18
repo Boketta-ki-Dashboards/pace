@@ -21,9 +21,9 @@ public struct StreakSummary: Equatable, Sendable {
     /// z. B. `Rekord: 12 Tage`; `nil` ohne Rekord.
     public let recordText: String?
     public let isTodayReached: Bool
-    /// Die letzten 7 Tage (älteste zuerst).
+    /// Die laufende Kalenderwoche, Montag bis Sonntag. Tage nach heute haben den Status `.future`.
     public let lastWeek: [Day]
-    /// Die letzten 28 Tage (älteste zuerst).
+    /// Die laufende und die drei vorherigen Kalenderwochen (28 Tage, ab Montag).
     public let lastFourWeeks: [Day]
     public let accessibilityLabel: String
 
@@ -52,17 +52,25 @@ public struct StreakSummary: Equatable, Sendable {
         recordText = record.flatMap { $0.days > 0 ? "Rekord: \(Self.days($0.days))" : nil }
 
         let calendar = formatter.calendar
-        let days = recentDays.map { entry in
-            let weekdayIndex = (calendar.calendar.component(.weekday, from: calendar.startOfDay(entry.day)) + 5) % 7
-            return Day(
-                date: entry.day,
-                status: entry.status,
-                letter: Self.letters[weekdayIndex],
-                accessibilityLabel: "\(formatter.dayLong(entry.day)): \(Self.statusTitle(entry.status))"
-            )
+        if let today = recentDays.last?.day {
+            let statuses = Dictionary(recentDays.map { ($0.day, $0.status) }, uniquingKeysWith: { _, last in last })
+            let weekStart = calendar.startOfWeek(containing: today)
+            let days = calendar.days(from: calendar.adding(-21, to: weekStart), through: calendar.adding(6, to: weekStart)).map { day in
+                let status = statuses[day] ?? (day > today ? .future : .unknown)
+                let weekdayIndex = (calendar.calendar.component(.weekday, from: calendar.startOfDay(day)) + 5) % 7
+                return Day(
+                    date: day,
+                    status: status,
+                    letter: Self.letters[weekdayIndex],
+                    accessibilityLabel: "\(formatter.dayLong(day)): \(Self.statusTitle(status))"
+                )
+            }
+            lastFourWeeks = days
+            lastWeek = Array(days.suffix(7))
+        } else {
+            lastFourWeeks = []
+            lastWeek = []
         }
-        lastFourWeeks = Array(days.suffix(28))
-        lastWeek = Array(days.suffix(7))
 
         var label = "Serie: \(currentText). \(statusText)"
         if let recordText { label += " \(recordText)." }

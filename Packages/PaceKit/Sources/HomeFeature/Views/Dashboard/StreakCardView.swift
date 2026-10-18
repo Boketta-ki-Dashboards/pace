@@ -5,7 +5,7 @@ import SwiftUI
 
 /// „Deine Serie“: Tage in Folge mit erreichtem Tagesziel, mit Flamme.
 ///
-/// Klein: Flamme und Zahl. Mittel: dazu Status, Rekord und die letzten 7 Tage. Groß: die letzten 4 Wochen.
+/// Klein: Flamme und Zahl. Mittel: dazu Status, Rekord und die laufende Woche. Groß: die letzten 4 Kalenderwochen.
 struct StreakCardView: View {
     let summary: StreakSummary?
     let state: ActivityHistoryStore.State
@@ -112,7 +112,7 @@ struct StreakCardView: View {
     }
 }
 
-/// Die letzten 7 Tage als Punkte mit Wochentag.
+/// Die laufende Woche (Montag bis Sonntag) als Punkte mit Wochentag.
 private struct StreakWeek: View {
     let days: [StreakSummary.Day]
 
@@ -131,7 +131,7 @@ private struct StreakWeek: View {
     }
 }
 
-/// Die letzten 4 Wochen als Raster (7 Spalten).
+/// Die letzten 4 Kalenderwochen als Raster: eine Zeile pro Woche, Spalten Montag bis Sonntag.
 private struct StreakCalendar: View {
     let days: [StreakSummary.Day]
 
@@ -139,6 +139,12 @@ private struct StreakCalendar: View {
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: PaceSpacing.xs) {
+            ForEach(Array(days.prefix(7).enumerated()), id: \.offset) { _, day in
+                Text(day.letter)
+                    .font(PaceFont.micro)
+                    .foregroundStyle(PaceColor.textSecondary)
+                    .accessibilityHidden(true)
+            }
             ForEach(days) { day in
                 StreakDot(status: day.status, size: 22)
             }
