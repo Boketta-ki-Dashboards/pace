@@ -75,7 +75,8 @@ public struct StatisticsView: View {
 struct StatisticsContent: View {
     let report: StatisticsReport
     let hourly: StatisticsViewModel.HourlyState
-    let onSelectPeriod: (StatisticsPeriod) -> Void
+    /// Main-Actor-isoliert und damit `Sendable`, wie es `Binding` verlangt.
+    let onSelectPeriod: @MainActor (StatisticsPeriod) -> Void
     let onSelectMetric: (StatisticsMetric) -> Void
     let onPrevious: () -> Void
     let onNext: () -> Void
