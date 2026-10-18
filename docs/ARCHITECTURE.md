@@ -58,17 +58,29 @@ App-Start
 
 ## Home-Dashboard
 
-- `HomeDashboardViewModel` setzt das Dashboard aus eigenständigen Bereichen (`HomeSection`) zusammen: Platzierungen,
-  Schritte heute, Woche, Umfeld, Freunde, Gruppen. Reihenfolge und Sichtbarkeit wählt der Nutzer über „Anpassen“
-  (`HomeSettings`, lokal in den `UserDefaults`); „Deine Schritte heute“ bleibt immer sichtbar. Ein neuer Bereich ist
-  ein neuer `HomeSection`-Fall plus eine View.
+- `HomeDashboardViewModel` setzt das Dashboard aus Modulen (`HomeModule`) zusammen: Platzierungen, Schritte heute,
+  Woche, Serie, Umfeld, Freunde, Gruppen. Jedes Modul hat eine Größe (klein, mittel, groß); „Dein Umfeld“ zusätzlich
+  eine Ebene (Gemeinde, Kreis, Bundesland, Deutschland) und darf mehrfach vorkommen. Über „Anpassen“ lassen sich
+  Module hinzufügen, entfernen, verschieben und einstellen (`HomeSettings`, lokal in den `UserDefaults`). „Deine
+  Schritte heute“ bleibt immer erhalten und ist nie klein. Ein neues Modul ist eine neue `HomeModuleKind` plus View.
+- Gespeichert wird Version 2 (`modules`). Einstellungen der Version 1 (`sections` mit Sichtbarkeit) werden beim Laden
+  übernommen: sichtbare Bereiche in derselben Reihenfolge, dazu die neue Serie nach der Woche. Module unbekannter Art
+  (z. B. aus einer neueren Version) werden übersprungen statt das Layout zu verwerfen.
+- Größen ändern nur die Darstellung vorhandener Daten – zusätzliche HealthKit-Abfragen entstehen dadurch nicht.
+  Umfeld-Module bestimmen, wie viele Plätze je Ebene geladen werden (`neighborhoodRadii`: klein 1, mittel 2, groß 4);
+  die Platzierungs-Karten brauchen nur den eigenen Platz.
 - Das Tagesziel ist eine lokale Einstellung und beeinflusst keine Rankings.
 - Platzierungen und Umfeld (`RegionalStandingsViewModel`) nutzen die bestehenden Ranking-RPCs (eigene Position
   ± Nachbarn je Ebene); es gibt dafür keine neue Backend-Funktion.
-- Freunde und Gruppen haben noch kein Backend und zeigen ehrliche Leerzustände; der Social-Tab ist strukturell
-  vorbereitet.
 - Darstellung: Komponenten in `HomeFeature/Views/Dashboard/`, gemeinsame Bausteine im `DesignSystem` (Karten, Kacheln,
-  Fortschrittsring, Avatar, Wortmarke).
+  Fortschrittsring, Avatar, Wortmarke, Flamme der Serie).
+
+## Profil
+
+- „Deine Aktivität“: Tagesziel (änderbar, gleiches Sheet wie auf Home), aktuelle Serie und Rekord, Zugang zur
+  Statistik. „Darstellung → App-Icon“: Automatisch, Hell, Dunkel (alternative App-Icons über `AppIconSetting`; die
+  App zeigt keine eigene Erfolgsmeldung, iOS bestätigt den Wechsel selbst). Es gibt keinen eigenen
+  Einstellungen-Tab.
 
 ## Statistik, Zielverlauf und Streak
 
@@ -79,7 +91,8 @@ App-Start
   „Deine Woche“ → Wochenstatistik, ein Wochentag → Tagesansicht dieses Tags (`StatisticsRoute`, wertbasiert).
 - `ActivityHistoryStore` hält den Verlauf (12 Monate) für alle Ansichten und ergänzt die live aktualisierten letzten
   7 Tage aus Home. `StepStreakTracker` berechnet daraus die persönliche Streak (`StepStreakCalculator`, PaceCore)
-  und speichert den Rekord.
+  und speichert den Rekord. Das Serien-Modul auf Home lädt den Verlauf beim Erscheinen und bei Rückkehr in die App
+  (nur, wenn er veraltet ist); der Rekord wird gespeichert, sobald die längste Serie ihn übertrifft.
 - `StepGoalSettings` (PaceCore) speichert das Tagesziel als Verlauf (`StepGoalHistory`): Eine Änderung gilt ab
   heute, vergangene Tage behalten ihr Ziel – Zieltage und Streak ändern sich dadurch nicht rückwirkend. Das Ziel
   älterer Versionen (in den Home-Einstellungen) wird beim ersten Start einmalig übernommen.

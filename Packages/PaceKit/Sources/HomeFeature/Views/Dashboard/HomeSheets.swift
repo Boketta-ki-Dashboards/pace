@@ -1,7 +1,8 @@
 import DesignSystem
+import PaceCore
 import SwiftUI
 
-/// „Anpassen“: Bereiche des Dashboards ein-/ausblenden und umsortieren.
+/// „Anpassen“: Module hinzufügen, entfernen, verschieben, in der Größe ändern und – beim Umfeld – die Ebene wählen.
 struct HomeCustomizeSheet: View {
     let settings: HomeSettings
 
@@ -11,27 +12,48 @@ struct HomeCustomizeSheet: View {
         NavigationStack {
             List {
                 Section {
-                    ForEach(settings.sections) { setting in
-                        HStack(spacing: PaceSpacing.s) {
-                            Image(systemName: setting.section.systemImage)
-                                .foregroundStyle(PaceColor.accent)
-                                .frame(width: 28)
-                            Text(setting.section.title)
-                                .foregroundStyle(PaceColor.textPrimary)
-                            Spacer()
-                            Toggle(setting.section.title, isOn: visibility(of: setting.section))
-                                .labelsHidden()
-                                .tint(PaceColor.accentStrong)
-                                .disabled(!setting.section.canBeHidden)
-                        }
+                    ForEach(settings.modules) { module in
+                        ModuleRow(module: module, settings: settings)
+                            .deleteDisabled(!module.kind.isRemovable)
                     }
                     .onMove { source, destination in
-                        settings.moveSections(fromOffsets: source, toOffset: destination)
+                        settings.moveModules(fromOffsets: source, toOffset: destination)
+                    }
+                    .onDelete { offsets in
+                        let ids = offsets.map { settings.modules[$0].id }
+                        for id in ids {
+                            settings.remove(id)
+                        }
                     }
                 } header: {
-                    Text("Bereiche")
+                    Text("Deine Module")
                 } footer: {
-                    Text("Ziehe Bereiche in die gewünschte Reihenfolge. „Deine Schritte heute“ bleibt immer sichtbar.")
+                    Text("Ziehe Module in die gewünschte Reihenfolge, wähle die Größe über das Menü und entferne Module "
+                        + "mit dem Minus-Zeichen. „Deine Schritte heute“ bleibt immer erhalten.")
+                }
+
+                if !settings.addableKinds.isEmpty {
+                    Section("Modul hinzufügen") {
+                        ForEach(settings.addableKinds) { kind in
+                            Button {
+                                settings.add(kind)
+                            } label: {
+                                HStack(spacing: PaceSpacing.s) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .foregroundStyle(PaceColor.accent)
+                                        .frame(width: 28)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(kind.title)
+                                            .foregroundStyle(PaceColor.textPrimary)
+                                        Text(kind.summary)
+                                            .font(PaceFont.caption)
+                                            .foregroundStyle(PaceColor.textSecondary)
+                                    }
+                                }
+                            }
+                            .accessibilityLabel("\(kind.title) hinzufügen")
+                        }
+                    }
                 }
 
                 Section {
@@ -52,11 +74,62 @@ struct HomeCustomizeSheet: View {
         }
         .presentationDetents([.medium, .large])
     }
+}
 
-    private func visibility(of section: HomeSection) -> Binding<Bool> {
+/// Eine Zeile in „Deine Module“: Symbol, Name, aktuelle Größe/Ebene und ein Menü zum Ändern.
+private struct ModuleRow: View {
+    let module: HomeModule
+    let settings: HomeSettings
+
+    var body: some View {
+        HStack(spacing: PaceSpacing.s) {
+            Image(systemName: module.kind.systemImage)
+                .foregroundStyle(PaceColor.accent)
+                .frame(width: 28)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(module.kind.title)
+                    .foregroundStyle(PaceColor.textPrimary)
+                Text(module.detailText)
+                    .font(PaceFont.caption)
+                    .foregroundStyle(PaceColor.textSecondary)
+            }
+            Spacer(minLength: PaceSpacing.xs)
+            Menu {
+                Picker("Größe", selection: sizeBinding) {
+                    ForEach(module.kind.supportedSizes) { size in
+                        Text(size.title).tag(size)
+                    }
+                }
+                if module.kind.usesRegionScope {
+                    Picker("Ebene", selection: levelBinding) {
+                        ForEach(RegionLevel.allCases, id: \.self) { level in
+                            Text(level.scopeTitle).tag(level)
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(PaceColor.accent)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("\(module.kind.title) einstellen")
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var sizeBinding: Binding<HomeModuleSize> {
         Binding(
-            get: { settings.sections.first { $0.section == section }?.isVisible ?? true },
-            set: { settings.setVisible($0, for: section) }
+            get: { module.size },
+            set: { [settings, id = module.id] in settings.setSize($0, for: id) }
+        )
+    }
+
+    private var levelBinding: Binding<RegionLevel> {
+        Binding(
+            get: { module.regionLevel ?? .municipality },
+            set: { [settings, id = module.id] in settings.setRegionLevel($0, for: id) }
         )
     }
 }

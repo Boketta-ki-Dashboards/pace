@@ -3,10 +3,10 @@ import Foundation
 import Observation
 import PaceCore
 
-/// Das Home-Dashboard: Bewegungsdaten, Tagesziel, regionale Platzierungen und die vom Nutzer gewählten Bereiche.
+/// Das Home-Dashboard: Bewegungsdaten, Tagesziel, Serie, regionale Platzierungen und die vom Nutzer gewählten Module.
 ///
-/// Die einzelnen Bereiche sind eigenständig (`HomeSection`) und lassen sich über „Anpassen“ ein- und ausblenden oder
-/// umsortieren. Neue Bereiche (z. B. Challenges) kommen als weiterer Fall hinzu.
+/// Die Module sind eigenständig (`HomeModule`) und lassen sich über „Anpassen“ hinzufügen, entfernen, verschieben
+/// und in der Größe ändern. Neue Module (z. B. Challenges) kommen als weitere Art hinzu.
 @MainActor
 @Observable
 public final class HomeDashboardViewModel {
@@ -79,34 +79,68 @@ public final class HomeDashboardViewModel {
 
     public var week: WeekOverview? {
         activity.overview.map {
-            WeekOverview(overview: $0, goal: goals.goal(on: $0.today.date), calendar: calendar, formatter: formatter)
+            WeekOverview(overview: $0, goals: goals.history, calendar: calendar, formatter: formatter)
         }
     }
 
-    public var visibleSections: [HomeSection] {
-        settings.visibleSections
+    public var modules: [HomeModule] {
+        settings.modules
     }
 
-    /// Ändert sich, wenn die Platzierungen neu geladen werden müssen.
-    public var standingsReloadKey: RegionalStandingsViewModel.ReloadKey {
-        standings.reloadKey
+    /// Serie für das Serien-Modul; `nil`, solange der Verlauf nicht geladen ist.
+    public var streakSummary: StreakSummary? {
+        guard let current = streak.streak else { return nil }
+        return StreakSummary(
+            streak: current,
+            record: streak.record,
+            recentDays: streak.recentDays(28),
+            formatter: formatter
+        )
     }
 
-    /// Platzierungen werden nur geladen, wenn ein Bereich sie anzeigt.
+    /// Ändert sich, wenn die Platzierungen neu geladen werden müssen (auch wenn Umfeld-Module mehr Zeilen brauchen).
+    public var standingsReloadKey: StandingsTrigger {
+        StandingsTrigger(key: standings.reloadKey, radii: settings.neighborhoodRadii, isShown: showsStandings)
+    }
+
+    public struct StandingsTrigger: Hashable, Sendable {
+        let key: RegionalStandingsViewModel.ReloadKey
+        let radii: [RegionLevel: Int]
+        let isShown: Bool
+    }
+
+    /// Platzierungen werden nur geladen, wenn ein Modul sie anzeigt.
     public var showsStandings: Bool {
-        visibleSections.contains(.regionRanks) || visibleSections.contains(.neighborhood)
+        settings.showsStandings
     }
 
-    /// Erstes Laden beim Erscheinen.
+    /// Ob ein Modul den Verlauf braucht (Serie).
+    public var showsStreak: Bool {
+        modules.contains { $0.kind == .streak }
+    }
+
+    /// Erstes Laden beim Erscheinen und nach Änderungen am Layout.
     public func loadIfNeeded() async {
         guard showsStandings else { return }
+        standings.neighborhoodRadii = settings.neighborhoodRadii
         await standings.loadIfNeeded()
+    }
+
+    /// Verlauf für das Serien-Modul laden (selten, siehe `ActivityHistoryStore`).
+    public func loadStreakIfNeeded() async {
+        guard showsStreak else { return }
+        await streak.loadIfNeeded()
     }
 
     /// Pull-to-Refresh: Schritte neu aus Apple Health lesen, an den Sync übergeben, Platzierungen neu laden.
     public func refresh() async {
         await activity.refreshForRanking()
+        if showsStreak {
+            await streak.history.reload()
+            streak.saveRecordIfNeeded()
+        }
         guard showsStandings else { return }
+        standings.neighborhoodRadii = settings.neighborhoodRadii
         await standings.load()
     }
 
@@ -114,6 +148,7 @@ public final class HomeDashboardViewModel {
     /// Platzierungen, damit sie die neuen Schritte schon enthalten.
     public func returnedToForeground() async {
         await activity.refresh(trigger: .foreground)
+        await loadStreakIfNeeded()
         await activity.waitForPendingSync()
         guard showsStandings else { return }
         await standings.refreshIfStale()

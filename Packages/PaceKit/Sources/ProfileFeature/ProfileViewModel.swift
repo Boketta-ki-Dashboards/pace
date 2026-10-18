@@ -1,9 +1,11 @@
+import ActivityFeature
 import Foundation
 import Observation
 import PaceCore
 import RegionFeature
 
-/// Profil und Einstellungen: Namen, Region, Zustimmung zu regionalen Rankings, App-Icon.
+/// Profil und Einstellungen: Namen, Aktivität (Tagesziel, Serie, Statistik), Region, Zustimmung zu regionalen
+/// Rankings, App-Icon.
 @MainActor
 @Observable
 public final class ProfileViewModel {
@@ -21,20 +23,34 @@ public final class ProfileViewModel {
     public private(set) var isChangingAppIcon = false
     public private(set) var appIconError: String?
 
+    /// Offenes Sheet für das Tagesziel.
+    public var isEditingGoal = false
+
+    /// Serie, Rekord und Tagesziel; `nil`, wenn keine Bewegungsdaten angebunden sind (z. B. in Tests).
+    public let streak: StepStreakTracker?
+
     @ObservationIgnored private let store: ProfileStore
     @ObservationIgnored private let regions: any RegionRepository
     @ObservationIgnored private let appIcons: any AppIconSetting
+    @ObservationIgnored private let makeStatistics: (@MainActor (StatisticsRoute) -> StatisticsViewModel)?
+    @ObservationIgnored private let formatter: ActivityFormatter
     @ObservationIgnored private let searchDebounce: Duration
 
     public init(
         store: ProfileStore,
         regions: any RegionRepository,
         appIcons: any AppIconSetting = UnsupportedAppIconSetting(),
+        streak: StepStreakTracker? = nil,
+        statistics: (@MainActor (StatisticsRoute) -> StatisticsViewModel)? = nil,
+        formatter: ActivityFormatter = ActivityFormatter(),
         searchDebounce: Duration = .milliseconds(300)
     ) {
         self.store = store
         self.regions = regions
         self.appIcons = appIcons
+        self.streak = streak
+        makeStatistics = statistics
+        self.formatter = formatter
         self.searchDebounce = searchDebounce
         appIcon = AppIconChoice(alternateIconName: appIcons.currentAlternateIconName)
     }
@@ -102,6 +118,30 @@ public final class ProfileViewModel {
                 ? "Du konntest nicht zu den Rankings hinzugefügt werden. Bitte versuche es erneut."
                 : "Du konntest nicht aus den Rankings entfernt werden. Bitte versuche es erneut."
         }
+    }
+
+    /// z. B. `10.000 Schritte`; `nil` ohne angebundene Bewegungsdaten.
+    public var goalText: String? {
+        streak.map { "\(formatter.steps($0.goals.currentGoal)) Schritte" }
+    }
+
+    /// Serie und Rekord; `nil`, solange der Verlauf nicht geladen ist.
+    public var streakSummary: StreakSummary? {
+        guard let streak, let current = streak.streak else { return nil }
+        return StreakSummary(streak: current, record: streak.record, recentDays: streak.recentDays(7), formatter: formatter)
+    }
+
+    public var showsStatistics: Bool {
+        makeStatistics != nil
+    }
+
+    public func statistics(for route: StatisticsRoute) -> StatisticsViewModel? {
+        makeStatistics?(route)
+    }
+
+    /// Lädt den Verlauf für Serie und Rekord (selten, siehe `ActivityHistoryStore`).
+    public func loadActivity() async {
+        await streak?.loadIfNeeded()
     }
 
     /// Ob iOS alternative App-Icons erlaubt.

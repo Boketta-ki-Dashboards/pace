@@ -2,7 +2,8 @@ import Foundation
 import Observation
 import PaceCore
 
-/// Eigene Platzierung in jeder Ranking-Ebene (Gemeinde, Kreis, Bundesland, Land) und das Umfeld in der Gemeinde.
+/// Eigene Platzierung in jeder Ranking-Ebene (Gemeinde, Kreis, Bundesland, Land) und das Umfeld in den Ebenen, die
+/// Umfeld-Module anzeigen.
 ///
 /// Nutzt dieselben Ranking-RPCs wie der Rankings-Tab (eigene Position ± Nachbarn); es werden nie ganze Rankings
 /// geladen.
@@ -35,7 +36,12 @@ public final class RegionalStandingsViewModel {
     public struct ReloadKey: Hashable, Sendable {
         let municipalityID: RegionID?
         let isParticipating: Bool
+        let neighborhoodRadii: [RegionLevel: Int]
     }
+
+    /// Plätze über und unter dem eigenen, die je Ebene geladen werden (für Umfeld-Module). Ebenen ohne Eintrag liefern
+    /// nur den eigenen Platz.
+    public var neighborhoodRadii: [RegionLevel: Int] = [.municipality: 2]
 
     public init(
         store: ProfileStore,
@@ -56,7 +62,11 @@ public final class RegionalStandingsViewModel {
     }
 
     public var reloadKey: ReloadKey {
-        ReloadKey(municipalityID: store.profile.municipalityID, isParticipating: isParticipating)
+        ReloadKey(
+            municipalityID: store.profile.municipalityID,
+            isParticipating: isParticipating,
+            neighborhoodRadii: neighborhoodRadii
+        )
     }
 
     public var standings: RegionalStandings? {
@@ -138,12 +148,12 @@ public final class RegionalStandingsViewModel {
 
         let date = calendar.day(containing: now())
         let repository = leaderboards
+        let radii = key.neighborhoodRadii
         do {
             let neighborhoods = try await withThrowingTaskGroup(of: (RegionID, [LeaderboardEntry]).self) { group in
                 for scope in scopes {
                     let query = LeaderboardQuery(regionID: scope.id, period: .daily, date: date)
-                    // In der Gemeinde zwei Nachbarn je Richtung, damit auch Platz 1 und der Letzte drei Zeilen haben.
-                    let radius = scope.level == .municipality ? 2 : 0
+                    let radius = radii[scope.level] ?? 0
                     group.addTask { (scope.id, try await repository.neighborhood(for: query, radius: radius)) }
                 }
                 var result: [RegionID: [LeaderboardEntry]] = [:]
@@ -231,21 +241,23 @@ public struct RegionalStandings: Equatable, Sendable {
         }
     }
 
-    /// Umfeld in der Gemeinde: Platz über mir, ich, Platz unter mir.
+    /// Umfeld in einem Ranking: Plätze um den eigenen.
     public struct Neighborhood: Equatable, Sendable {
         public let region: Region
         public let entries: [LeaderboardEntry]
         public let currentUser: LeaderboardEntry
+        /// Der Platz direkt über dem eigenen (auch wenn er nicht in `entries` steht).
+        public let nextAbove: LeaderboardEntry?
         /// Niemand außer dem Nutzer ist heute in diesem Ranking.
         public let isAlone: Bool
 
         /// Schritte, die zum nächsten Platz fehlen (bei Gleichstand gewinnt, wer den Wert zuerst hatte).
         public var stepsToNextPlace: Int? {
-            guard let above = entries.first(where: { $0.rank == currentUser.rank - 1 }) else { return nil }
-            return above.competitionSteps - currentUser.competitionSteps + 1
+            guard let nextAbove else { return nil }
+            return nextAbove.competitionSteps - currentUser.competitionSteps + 1
         }
 
-        /// z. B. `Noch 280 Schritte bis Platz #11`.
+        /// z. B. `Noch 280 Schritte bis Platz #11`. Auf Platz 1 gibt es keinen Aufstiegshinweis.
         public var footerText: String {
             if isAlone {
                 return "Du bist der Erste \(region.locative)."
@@ -259,10 +271,15 @@ public struct RegionalStandings: Equatable, Sendable {
         }
     }
 
+    /// Geladene Einträge einer Ebene.
+    private struct Loaded: Equatable, Sendable {
+        let region: Region
+        let entries: [LeaderboardEntry]
+    }
+
     public let scopes: [Scope]
-    /// `nil`, wenn der Nutzer in der Gemeinde (noch) nicht im Ranking ist.
-    public let neighborhood: Neighborhood?
     public let isParticipating: Bool
+    private let loaded: [RegionLevel: Loaded]
 
     public init(scopes regions: [Region], neighborhoods: [RegionID: [LeaderboardEntry]], isParticipating: Bool) {
         self.isParticipating = isParticipating
@@ -270,25 +287,40 @@ public struct RegionalStandings: Equatable, Sendable {
             let entries = neighborhoods[region.id] ?? []
             return Scope(region: region, rank: entries.first(where: \.isCurrentUser)?.rank)
         }
-        if let municipality = regions.first(where: { $0.level == .municipality }),
-           let entries = neighborhoods[municipality.id]?.sorted(by: { $0.rank < $1.rank }),
-           let index = entries.firstIndex(where: \.isCurrentUser) {
-            let window = Self.window(around: index, count: entries.count)
-            neighborhood = Neighborhood(
-                region: municipality,
-                entries: Array(entries[window]),
-                currentUser: entries[index],
-                isAlone: entries.count == 1
-            )
-        } else {
-            neighborhood = nil
+        var loaded: [RegionLevel: Loaded] = [:]
+        for region in regions {
+            guard let entries = neighborhoods[region.id] else { continue }
+            loaded[region.level] = Loaded(region: region, entries: entries.sorted { $0.rank < $1.rank })
         }
+        self.loaded = loaded
     }
 
-    /// Drei Zeilen um den eigenen Platz: normalerweise einer darüber und einer darunter, am Rand zwei auf einer Seite.
-    static func window(around index: Int, count: Int) -> ClosedRange<Int> {
-        let size = min(3, count)
-        let start = min(max(index - 1, 0), count - size)
+    /// Umfeld in der Gemeinde mit drei Zeilen; `nil`, wenn der Nutzer dort (noch) nicht im Ranking ist.
+    public var neighborhood: Neighborhood? {
+        neighborhood(for: .municipality, rows: 3)
+    }
+
+    /// Umfeld einer Ebene mit bis zu `rows` Zeilen; `nil`, wenn der Nutzer dort (noch) nicht im Ranking ist.
+    public func neighborhood(for level: RegionLevel, rows: Int) -> Neighborhood? {
+        guard let loaded = loaded[level],
+              let index = loaded.entries.firstIndex(where: \.isCurrentUser)
+        else { return nil }
+        let entries = loaded.entries
+        let window = Self.window(around: index, count: entries.count, size: rows)
+        let currentUser = entries[index]
+        return Neighborhood(
+            region: loaded.region,
+            entries: Array(entries[window]),
+            currentUser: currentUser,
+            nextAbove: entries.first { $0.rank == currentUser.rank - 1 },
+            isAlone: entries.count == 1
+        )
+    }
+
+    /// Zeilen um den eigenen Platz: so mittig wie möglich, am Rand mehr Zeilen auf der anderen Seite.
+    static func window(around index: Int, count: Int, size requested: Int = 3) -> ClosedRange<Int> {
+        let size = min(max(requested, 1), count)
+        let start = min(max(index - (size - 1) / 2, 0), count - size)
         return start...(start + size - 1)
     }
 }

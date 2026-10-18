@@ -8,6 +8,8 @@ import SwiftUI
 struct StepsTodayCardView: View {
     let state: HomeViewModel.State
     let summary: StepsTodaySummary?
+    /// Groß zeigt zusätzlich Stockwerke und Trainingsminuten.
+    var size: HomeModuleSize = .medium
     let onEditGoal: () -> Void
     let onRetry: () -> Void
 
@@ -137,6 +139,30 @@ struct StepsTodayCardView: View {
                 PaceTile {
                     MetricLink(systemImage: "chart.bar", value: "Statistiken", caption: nil)
                         .padding(.vertical, PaceSpacing.xxs)
+                }
+            }
+            .buttonStyle(.pacePressable)
+        }
+
+        if size == .large {
+            NavigationLink(value: StatisticsRoute(period: .day, metric: .steps)) {
+                PaceTile {
+                    HStack(spacing: 0) {
+                        MetricLink(
+                            systemImage: "figure.stairs",
+                            value: summary.flightsText ?? "nicht verfügbar",
+                            caption: summary.flightsText == nil ? "Stockwerke" : nil
+                        )
+                        Divider()
+                            .frame(height: 32)
+                            .padding(.horizontal, PaceSpacing.xs)
+                        MetricLink(
+                            systemImage: "stopwatch",
+                            value: summary.exerciseText ?? "nicht verfügbar",
+                            caption: "Trainingsminuten"
+                        )
+                    }
+                    .padding(.vertical, PaceSpacing.xxs)
                 }
             }
             .buttonStyle(.pacePressable)

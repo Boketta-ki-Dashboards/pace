@@ -23,6 +23,7 @@ struct ScreenSnapshotTests {
 
     @Test func homeDashboard() async throws {
         let (dashboard, _) = try await makeDashboard()
+        await dashboard.loadStreakIfNeeded()
         let content = VStack(alignment: .leading, spacing: PaceSpacing.s) {
             HomeHeaderView(greeting: dashboard.greeting, onCustomize: {}, onNotifications: {})
             RegionRankCardsView(standings: dashboard.standings) { _ in }
@@ -33,6 +34,7 @@ struct ScreenSnapshotTests {
                 onRetry: {}
             )
             WeekOverviewCardView(week: dashboard.week)
+            StreakCardView(summary: dashboard.streakSummary, state: dashboard.streak.history.state)
             NeighborhoodCardView(standings: dashboard.standings) { _ in }
             FriendsPreviewCardView {}
             GroupsPreviewCardView {}
@@ -40,6 +42,38 @@ struct ScreenSnapshotTests {
         .padding(.horizontal, PaceSpacing.m)
         .padding(.vertical, PaceSpacing.m)
         try render(content, name: "home")
+    }
+
+    /// Kleine und große Varianten der Module.
+    @Test func homeModuleSizes() async throws {
+        let (dashboard, _) = try await makeDashboard()
+        await dashboard.loadStreakIfNeeded()
+        let small = VStack(alignment: .leading, spacing: PaceSpacing.s) {
+            RegionRankCardsView(standings: dashboard.standings, size: .small) { _ in }
+            WeekOverviewCardView(week: dashboard.week, size: .small)
+            StreakCardView(summary: dashboard.streakSummary, state: dashboard.streak.history.state, size: .small)
+            NeighborhoodCardView(standings: dashboard.standings, size: .small) { _ in }
+            FriendsPreviewCardView(size: .small) {}
+            GroupsPreviewCardView(size: .small) {}
+        }
+        .padding(PaceSpacing.m)
+        try render(small, name: "home-small")
+
+        let large = VStack(alignment: .leading, spacing: PaceSpacing.s) {
+            RegionRankCardsView(standings: dashboard.standings, size: .large) { _ in }
+            StepsTodayCardView(
+                state: dashboard.activity.state,
+                summary: dashboard.stepsToday,
+                size: .large,
+                onEditGoal: {},
+                onRetry: {}
+            )
+            WeekOverviewCardView(week: dashboard.week, size: .large)
+            StreakCardView(summary: dashboard.streakSummary, state: dashboard.streak.history.state, size: .large)
+            NeighborhoodCardView(standings: dashboard.standings, level: .district, size: .large) { _ in }
+        }
+        .padding(PaceSpacing.m)
+        try render(large, name: "home-large")
     }
 
     @Test func otherTabs() async throws {
@@ -53,8 +87,17 @@ struct ScreenSnapshotTests {
             topLimit: 8
         )
         await leaderboard.loadIfNeeded()
-        let profile = ProfileViewModel(store: store, regions: RegionRepositoryStub(), appIcons: AppIconSettingStub())
+        let (dashboard, _) = try await makeDashboard()
+        let profile = ProfileViewModel(
+            store: store,
+            regions: RegionRepositoryStub(),
+            appIcons: AppIconSettingStub(),
+            streak: dashboard.streak,
+            statistics: { dashboard.statistics(for: $0) },
+            formatter: ActivityFormatter(locale: Locale(identifier: "de_DE"), calendar: Fixtures.activityCalendar)
+        )
         await profile.load()
+        await profile.loadActivity()
 
         try render(LeaderboardContent(viewModel: leaderboard).padding(PaceSpacing.m), name: "rankings")
         try render(SocialContent(viewModel: SocialViewModel()).padding(PaceSpacing.m), name: "social")
@@ -135,6 +178,7 @@ struct ScreenSnapshotTests {
             calendar: calendar,
             now: { Fixtures.date(2026, 10, 16, 18) }
         )
+        standings.neighborhoodRadii = [.municipality: 2, .district: 4]
         await standings.load()
 
         let streak = StepStreakTracker(

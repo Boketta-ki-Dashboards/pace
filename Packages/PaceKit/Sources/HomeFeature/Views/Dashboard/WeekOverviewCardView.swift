@@ -4,11 +4,54 @@ import SwiftUI
 
 /// „Deine Woche“: Montag bis Sonntag als Kacheln, deren Höhe und Farbe die Schritte zeigen. Heute ist hervorgehoben.
 ///
-/// Die Überschrift öffnet die Wochenstatistik, ein Tag die Tagesansicht dieses Tages.
+/// Die Überschrift öffnet die Wochenstatistik, ein Tag die Tagesansicht dieses Tages. Klein zeigt nur die Summen,
+/// groß zusätzlich Durchschnitt und Zieltage unter den Balken.
 struct WeekOverviewCardView: View {
     let week: WeekOverview?
+    var size: HomeModuleSize = .medium
 
     var body: some View {
+        if size == .small {
+            compact
+        } else {
+            full
+        }
+    }
+
+    private var compact: some View {
+        NavigationLink(value: StatisticsRoute(period: .week, metric: .steps)) {
+            PaceCard(padding: PaceSpacing.s) {
+                HStack(spacing: PaceSpacing.s) {
+                    Image(systemName: "calendar")
+                        .font(.title3)
+                        .foregroundStyle(PaceColor.accent)
+                        .frame(width: 30)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Diese Woche: \(week?.totalText ?? "–") Schritte")
+                            .font(PaceFont.headline)
+                            .foregroundStyle(PaceColor.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        Text(week?.goalDaysText ?? " ")
+                            .font(PaceFont.caption)
+                            .foregroundStyle(PaceColor.textSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    Spacer(minLength: PaceSpacing.xs)
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(PaceColor.textSecondary)
+                }
+            }
+        }
+        .buttonStyle(.pacePressable)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Öffnet die Wochenstatistik")
+    }
+
+    private var full: some View {
         PaceCard {
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
                 NavigationLink(value: StatisticsRoute(period: .week, metric: .steps)) {
@@ -35,12 +78,44 @@ struct WeekOverviewCardView: View {
                         }
                     }
                 }
+
+                if size == .large, let week {
+                    Divider()
+                    HStack {
+                        WeekFact(title: "Gesamt", value: week.totalText)
+                        WeekFact(title: "Durchschnitt", value: week.averageText)
+                    }
+                    Text(week.goalDaysText)
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                }
             }
         }
     }
 
     private var days: [WeekOverview.Day] {
         week?.days ?? []
+    }
+}
+
+private struct WeekFact: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(PaceFont.caption)
+                .foregroundStyle(PaceColor.textSecondary)
+            Text(value)
+                .font(PaceFont.headline)
+                .monospacedDigit()
+                .foregroundStyle(PaceColor.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }
 

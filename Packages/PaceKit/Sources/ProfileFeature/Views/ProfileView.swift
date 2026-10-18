@@ -1,3 +1,4 @@
+import ActivityFeature
 import DesignSystem
 import PaceCore
 import RegionFeature
@@ -5,7 +6,7 @@ import SwiftUI
 
 /// Profil und Einstellungen im Kartenstil des Home-Screens.
 public struct ProfileView: View {
-    private let viewModel: ProfileViewModel
+    @Bindable private var viewModel: ProfileViewModel
 
     public init(viewModel: ProfileViewModel) {
         self.viewModel = viewModel
@@ -21,8 +22,19 @@ public struct ProfileView: View {
             .refreshable { [viewModel] in await viewModel.load() }
             .paceScreenBackground()
             .navigationTitle("Profil")
+            .navigationDestination(for: StatisticsRoute.self) { route in
+                if let statistics = viewModel.statistics(for: route) {
+                    StatisticsView(viewModel: statistics)
+                }
+            }
         }
         .task { [viewModel] in await viewModel.load() }
+        .task { [viewModel] in await viewModel.loadActivity() }
+        .sheet(isPresented: $viewModel.isEditingGoal) {
+            if let goals = viewModel.streak?.goals {
+                StepGoalSheet(goals: goals)
+            }
+        }
         .sheet(item: regionSheetBinding) { search in
             RegionChangeSheet(viewModel: viewModel, search: search)
         }
@@ -46,6 +58,9 @@ struct ProfileContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
             header
+            if viewModel.goalText != nil {
+                activityCard
+            }
             regionCard
             rankingsCard
             appearanceCard
@@ -73,6 +88,55 @@ struct ProfileContent: View {
                 Spacer(minLength: 0)
             }
             .accessibilityElement(children: .combine)
+        }
+    }
+
+    private var activityCard: some View {
+        PaceCard {
+            VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                PaceCardHeader("Deine Aktivität")
+
+                Button {
+                    viewModel.isEditingGoal = true
+                } label: {
+                    ActivityRow(systemImage: "scope", title: "Tagesziel", value: viewModel.goalText ?? "–", showsChevron: true)
+                }
+                .buttonStyle(.pacePressable)
+                .accessibilityHint("Tagesziel ändern")
+
+                PaceTile {
+                    HStack(spacing: PaceSpacing.s) {
+                        PaceStreakFlame(
+                            isActive: (viewModel.streakSummary?.currentDays ?? 0) > 0,
+                            isTodayReached: viewModel.streakSummary?.isTodayReached ?? false,
+                            size: 36
+                        )
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Serie: \(viewModel.streakSummary?.currentText ?? "–")")
+                                .font(PaceFont.headline)
+                                .foregroundStyle(PaceColor.textPrimary)
+                            Text(viewModel.streakSummary?.recordText ?? "Noch kein Rekord")
+                                .font(PaceFont.caption)
+                                .foregroundStyle(PaceColor.textSecondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, PaceSpacing.xxs)
+                }
+                .accessibilityElement(children: .combine)
+
+                if viewModel.showsStatistics {
+                    NavigationLink(value: StatisticsRoute(period: .week, metric: .steps)) {
+                        ActivityRow(systemImage: "chart.bar.xaxis", title: "Statistik", value: "Tag · Woche · Monat", showsChevron: true)
+                    }
+                    .buttonStyle(.pacePressable)
+                }
+
+                Text("Tagesziel und Serie bleiben auf deinem iPhone. Ein neues Ziel gilt ab heute.")
+                    .font(PaceFont.caption)
+                    .foregroundStyle(PaceColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -190,6 +254,41 @@ struct ProfileContent: View {
                 Task { await viewModel.setRegionalLeaderboardEnabled(enabled) }
             }
         )
+    }
+}
+
+/// Antippbare Zeile mit Symbol, Bezeichnung und Wert.
+private struct ActivityRow: View {
+    let systemImage: String
+    let title: String
+    let value: String
+    var showsChevron = false
+
+    var body: some View {
+        PaceTile {
+            HStack(spacing: PaceSpacing.s) {
+                Image(systemName: systemImage)
+                    .foregroundStyle(PaceColor.accent)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(PaceFont.callout)
+                    .foregroundStyle(PaceColor.textSecondary)
+                Spacer(minLength: PaceSpacing.xs)
+                Text(value)
+                    .font(PaceFont.headline)
+                    .foregroundStyle(PaceColor.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                if showsChevron {
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(PaceColor.textSecondary)
+                }
+            }
+            .padding(.vertical, PaceSpacing.xxs)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

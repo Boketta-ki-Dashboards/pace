@@ -47,8 +47,8 @@ let package = Package(
         .target(name: "RegionFeature", dependencies: ["PaceCore", "DesignSystem"]),
         .target(name: "OnboardingFeature", dependencies: ["PaceCore", "DesignSystem", "RegionFeature"]),
         .target(name: "LeaderboardFeature", dependencies: ["PaceCore", "DesignSystem"]),
-        .target(name: "ProfileFeature", dependencies: ["PaceCore", "DesignSystem", "RegionFeature"]),
-        .target(name: "SocialFeature", dependencies: ["DesignSystem"]),
+        .target(name: "ProfileFeature", dependencies: ["PaceCore", "DesignSystem", "RegionFeature", "ActivityFeature"]),
+        .target(name: "SocialFeature", dependencies: ["PaceCore", "DesignSystem"]),
 
         // App-Routing, Tab-Navigation und Zusammenbau der Features.
         .target(
@@ -75,8 +75,8 @@ let package = Package(
         .testTarget(name: "RegionFeatureTests", dependencies: ["RegionFeature", "PaceTestSupport"]),
         .testTarget(name: "OnboardingFeatureTests", dependencies: ["OnboardingFeature", "PaceTestSupport"]),
         .testTarget(name: "LeaderboardFeatureTests", dependencies: ["LeaderboardFeature", "PaceTestSupport"]),
-        .testTarget(name: "ProfileFeatureTests", dependencies: ["ProfileFeature", "PaceTestSupport"]),
-        .testTarget(name: "SocialFeatureTests", dependencies: ["SocialFeature"]),
+        .testTarget(name: "ProfileFeatureTests", dependencies: ["ProfileFeature", "ActivityFeature", "PaceTestSupport"]),
+        .testTarget(name: "SocialFeatureTests", dependencies: ["SocialFeature", "PaceTestSupport"]),
         // Rendert Screens als Bilder für die visuelle Kontrolle (nur mit PACE_SNAPSHOT_DIR, siehe ios.yml).
         .testTarget(
             name: "PaceSnapshotTests",

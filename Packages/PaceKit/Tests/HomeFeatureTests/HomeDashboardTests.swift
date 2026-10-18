@@ -9,57 +9,120 @@ import Testing
 
 @MainActor
 struct HomeSettingsTests {
-    @Test func defaultsShowAllSections() {
-        let settings = HomeSettings(store: InMemoryHomePreferencesStore())
-
-        #expect(settings.visibleSections == [.regionRanks, .stepsToday, .week, .neighborhood, .friends, .groups])
+    private func kinds(_ settings: HomeSettings) -> [HomeModuleKind] {
+        settings.modules.map(\.kind)
     }
 
-    @Test func legacyStepGoalIsDecodedForTheGoalHistory() throws {
-        let json = #"{"stepGoal": 12500, "sections": [{"section": "week", "isVisible": true}]}"#
+    @Test func defaultLayoutHasAllModulesInMediumSize() {
+        let settings = HomeSettings(store: InMemoryHomePreferencesStore())
+
+        #expect(kinds(settings) == [.regionRanks, .stepsToday, .week, .streak, .neighborhood, .friends, .groups])
+        #expect(settings.modules.allSatisfy { $0.size == .medium })
+        #expect(settings.modules.first { $0.kind == .neighborhood }?.regionLevel == .municipality)
+        #expect(settings.modules.first { $0.kind == .week }?.regionLevel == nil)
+        #expect(settings.addableKinds == [.neighborhood])
+    }
+
+    @Test func versionOneLayoutIsMigrated() throws {
+        // Version 1: sichtbare und ausgeblendete Bereiche, dazu das alte Tagesziel.
+        let json = #"""
+        {"stepGoal": 12500, "sections": [
+          {"section": "stepsToday", "isVisible": true},
+          {"section": "regionRanks", "isVisible": false},
+          {"section": "week", "isVisible": true},
+          {"section": "neighborhood", "isVisible": true},
+          {"section": "friends", "isVisible": false},
+          {"section": "groups", "isVisible": true}
+        ]}
+        """#
         let preferences = try JSONDecoder().decode(HomePreferences.self, from: Data(json.utf8))
 
         #expect(preferences.legacyStepGoal == 12_500)
-        #expect(preferences.normalized().legacyStepGoal == 12_500)
+        // Reihenfolge bleibt, Ausgeblendetes entfällt, die neue Serie kommt nach der Woche.
+        #expect(preferences.modules.map(\.kind) == [.stepsToday, .week, .streak, .neighborhood, .groups])
+        #expect(preferences.modules.allSatisfy { $0.size == .medium })
+
+        // Gespeichert wird danach Version 2 – inklusive des alten Ziels, bis der Zielverlauf es übernommen hat.
+        let reloaded = try JSONDecoder().decode(HomePreferences.self, from: JSONEncoder().encode(preferences))
+        #expect(reloaded == preferences)
     }
 
-    @Test func sectionsCanBeHiddenButStepsTodayStaysVisible() {
+    @Test func modulesCanBeAddedRemovedResizedAndScoped() throws {
         let store = InMemoryHomePreferencesStore()
         let settings = HomeSettings(store: store)
+        let friends = settings.modules.first { $0.kind == .friends }!
 
-        settings.setVisible(false, for: .friends)
-        settings.setVisible(false, for: .stepsToday)
+        settings.remove(friends.id)
+        #expect(!kinds(settings).contains(.friends))
+        #expect(settings.addableKinds.contains(.friends))
 
-        #expect(!settings.visibleSections.contains(.friends))
-        #expect(settings.visibleSections.contains(.stepsToday))
-        #expect(HomeSettings(store: store).visibleSections == settings.visibleSections)
+        let district = settings.add(.neighborhood)
+        #expect(district != nil)
+        settings.setRegionLevel(.district, for: district!.id)
+        settings.setSize(.large, for: district!.id)
+        #expect(settings.modules.last?.detailText == "Groß · Kreis")
+        #expect(settings.add(.week) == nil) // gibt es schon
+
+        // Die Schrittkarte lässt sich weder entfernen noch verkleinern.
+        let steps = settings.modules.first { $0.kind == .stepsToday }!
+        settings.remove(steps.id)
+        settings.setSize(.small, for: steps.id)
+        #expect(settings.modules.first { $0.kind == .stepsToday }?.size == .medium)
+
+        #expect(HomeSettings(store: store).modules == settings.modules)
     }
 
-    @Test func sectionsCanBeReorderedAndReset() {
+    @Test func neighborhoodRadiiFollowTheModules() {
+        let settings = HomeSettings(store: InMemoryHomePreferencesStore())
+        #expect(settings.neighborhoodRadii == [.municipality: 2])
+
+        let municipality = settings.modules.first { $0.kind == .neighborhood }!
+        settings.setSize(.small, for: municipality.id)
+        #expect(settings.neighborhoodRadii == [.municipality: 1])
+
+        let state = settings.add(.neighborhood)!
+        settings.setRegionLevel(.state, for: state.id)
+        settings.setSize(.large, for: state.id)
+        #expect(settings.neighborhoodRadii == [.municipality: 1, .state: 4])
+
+        settings.remove(municipality.id)
+        settings.remove(state.id)
+        #expect(settings.neighborhoodRadii.isEmpty)
+        #expect(settings.showsStandings) // Platzierungs-Karten zeigen weiterhin Ränge
+        settings.remove(settings.modules.first { $0.kind == .regionRanks }!.id)
+        #expect(!settings.showsStandings)
+    }
+
+    @Test func modulesCanBeReorderedAndReset() {
         let settings = HomeSettings(store: InMemoryHomePreferencesStore())
 
-        // „Deine Schritte heute“ nach oben.
-        settings.moveSections(fromOffsets: [1], toOffset: 0)
-        #expect(settings.visibleSections.prefix(2) == [.stepsToday, .regionRanks])
+        settings.moveModules(fromOffsets: [1], toOffset: 0)
+        #expect(kinds(settings).prefix(2) == [.stepsToday, .regionRanks])
 
-        // „Deine Gruppen“ vor „Deine Woche“.
-        settings.moveSections(fromOffsets: [5], toOffset: 2)
-        #expect(settings.visibleSections == [.stepsToday, .regionRanks, .groups, .week, .neighborhood, .friends])
+        settings.moveModules(fromOffsets: [6], toOffset: 2)
+        #expect(kinds(settings) == [.stepsToday, .regionRanks, .groups, .week, .streak, .neighborhood, .friends])
 
         settings.resetLayout()
-        #expect(settings.visibleSections == HomeSection.allCases)
+        #expect(kinds(settings) == [.regionRanks, .stepsToday, .week, .streak, .neighborhood, .friends, .groups])
     }
 
-    @Test func storedPreferencesAreRepaired() {
-        let broken = HomePreferences(sections: [
-            HomeSectionSetting(section: .week, isVisible: true),
-            HomeSectionSetting(section: .week, isVisible: false),
-            HomeSectionSetting(section: .stepsToday, isVisible: false),
-        ])
-        let settings = HomeSettings(store: InMemoryHomePreferencesStore(broken))
+    @Test func storedPreferencesAreRepaired() throws {
+        let json = #"""
+        {"version": 2, "modules": [
+          {"id": "a", "kind": "week", "size": "large"},
+          {"id": "b", "kind": "week", "size": "small"},
+          {"id": "c", "kind": "neighborhood", "size": "small"},
+          {"id": "c", "kind": "friends", "size": "small"},
+          {"id": "d", "kind": "challenges", "size": "medium"},
+          {"id": "e", "kind": "regionRanks", "size": "medium"}
+        ]}
+        """#
+        let decoded = try JSONDecoder().decode(HomePreferences.self, from: Data(json.utf8))
+        let settings = HomeSettings(store: InMemoryHomePreferencesStore(decoded))
 
-        #expect(settings.sections.map(\.section) == [.week, .stepsToday, .regionRanks, .neighborhood, .friends, .groups])
-        #expect(settings.visibleSections.contains(.stepsToday))
+        // Doppelte Woche und doppelte ID entfallen, unbekannte Art wird übersprungen, die Schrittkarte ergänzt.
+        #expect(kinds(settings) == [.week, .neighborhood, .regionRanks, .stepsToday])
+        #expect(settings.modules[1].regionLevel == .municipality)
     }
 }
 
@@ -83,6 +146,8 @@ struct StepsTodaySummaryTests {
         #expect(summary.remainingText == "Noch 1.568 bis zu deinem Ziel")
         #expect(summary.distanceText == "6,1 km")
         #expect(summary.energyText == "324 kcal")
+        #expect(summary.flightsText == nil)
+        #expect(summary.exerciseText == nil)
         #expect(summary.manualStepsNote == nil)
         #expect(!summary.isGoalReached)
     }
@@ -118,14 +183,23 @@ struct StepsTodaySummaryTests {
             updatedAt: Fixtures.date(2026, 10, 16, 12)
         )
 
-        let week = WeekOverview(overview: overview, goal: 10_000, calendar: calendar, formatter: formatter)
+        var goals = StepGoalHistory(initialGoal: 10_000)
+        goals.setGoal(4_000, from: Fixtures.day(2026, 10, 14))
+        let week = WeekOverview(overview: overview, goals: goals, calendar: calendar, formatter: formatter)
 
         #expect(week.days.map(\.letter) == ["M", "D", "M", "D", "F", "S", "S"])
         #expect(week.days.first?.date == Fixtures.day(2026, 10, 12))
         #expect(week.days.map(\.steps) == [3_000, 4_000, 5_000, 6_000, 7_000, nil, nil])
         #expect(week.days.filter(\.isToday).map(\.date) == [today])
-        #expect(week.days[4].level == 0.7)
+        // Skala: Ziel von heute (4.000) bzw. bester Tag (7.000).
+        #expect(week.days[4].level == 1)
+        #expect(week.days[2].level == 5_000.0 / 7_000)
         #expect(week.accessibilitySummary == "Diese Woche 25.000 Schritte")
+        #expect(week.totalText == "25.000")
+        #expect(week.averageText == "Ø 5.000 pro Tag")
+        // Mo/Di (3.000/4.000 bei 10.000) verfehlt, ab Mi (Ziel 4.000) erreicht; heute erreicht → zählt mit.
+        #expect(week.days.map(\.reachedGoal) == [false, false, true, true, true, false, false])
+        #expect(week.goalDaysText == "3 von 5 Tagen Ziel erreicht")
     }
 }
 
@@ -177,6 +251,40 @@ struct RegionalStandingsViewModelTests {
         // Nur die Umgebung wird geladen, nie das ganze Ranking.
         #expect(leaderboards.state.current.pageRequests.isEmpty)
         #expect(leaderboards.state.current.neighborhoodRequests.count == 4)
+    }
+
+    @Test func neighborhoodModulesLoadTheRowsTheyNeedPerLevel() async throws {
+        let leaderboards = LeaderboardRepositoryStub {
+            $0.rankings[Fixtures.pfungstadt.id] = Fixtures.ranking(count: 20, currentUserRank: 12, topSteps: 8_552)
+            $0.rankings[Fixtures.darmstadtDieburg.id] = Fixtures.ranking(count: 200, currentUserRank: 2)
+            $0.rankings[Fixtures.hessen.id] = Fixtures.ranking(count: 3_000, currentUserRank: 2_410)
+            $0.rankings[Fixtures.germany.id] = Fixtures.ranking(count: 20_000, currentUserRank: 18_520)
+        }
+        let (viewModel, _) = makeViewModel(leaderboards: leaderboards)
+        // Klein in der Gemeinde (nur der eigene Platz + Abstand), groß im Kreis (fünf Zeilen).
+        viewModel.neighborhoodRadii = [.municipality: 1, .district: 4]
+
+        await viewModel.loadIfNeeded()
+
+        let radii = Dictionary(uniqueKeysWithValues: leaderboards.state.current.neighborhoodRequests.map {
+            ($0.query.regionID, $0.radius)
+        })
+        #expect(radii == [
+            Fixtures.pfungstadt.id: 1, Fixtures.darmstadtDieburg.id: 4, Fixtures.hessen.id: 0, Fixtures.germany.id: 0,
+        ])
+        let standings = try #require(viewModel.standings)
+        let small = try #require(standings.neighborhood(for: .municipality, rows: 1))
+        #expect(small.entries.map(\.rank) == [12])
+        #expect(small.footerText == "Noch 11 Schritte bis Platz #11")
+        // Platz 2 im Kreis: ein Platz darüber, drei darunter.
+        let large = try #require(standings.neighborhood(for: .district, rows: 5))
+        #expect(large.entries.map(\.rank) == [1, 2, 3, 4, 5])
+        #expect(standings.neighborhood(for: .state, rows: 3)?.entries.map(\.rank) == [2_410])
+
+        // Mehr Zeilen nötig → neu laden.
+        viewModel.neighborhoodRadii = [.municipality: 2]
+        await viewModel.loadIfNeeded()
+        #expect(leaderboards.state.current.neighborhoodRequests.count == 8)
     }
 
     @Test func leaderAndLoneUserGetFittingTexts() async throws {
@@ -279,6 +387,10 @@ struct RegionalStandingsViewModelTests {
         #expect(RegionalStandings.window(around: 4, count: 5) == 2...4)
         #expect(RegionalStandings.window(around: 0, count: 1) == 0...0)
         #expect(RegionalStandings.window(around: 1, count: 2) == 0...1)
+        #expect(RegionalStandings.window(around: 0, count: 10, size: 5) == 0...4)
+        #expect(RegionalStandings.window(around: 5, count: 10, size: 5) == 3...7)
+        #expect(RegionalStandings.window(around: 9, count: 10, size: 5) == 5...9)
+        #expect(RegionalStandings.window(around: 4, count: 10, size: 1) == 4...4)
     }
 }
 
@@ -351,8 +463,9 @@ struct HomeDashboardViewModelTests {
         let store = ProfileStore(profile: profile, profiles: profiles, regions: RegionRepositoryStub(), cache: InMemoryProfileCache())
         let leaderboards = LeaderboardRepositoryStub()
         let settings = HomeSettings(store: InMemoryHomePreferencesStore())
-        settings.setVisible(false, for: .regionRanks)
-        settings.setVisible(false, for: .neighborhood)
+        for module in settings.modules where module.kind == .regionRanks || module.kind == .neighborhood {
+            settings.remove(module.id)
+        }
         let health = HealthServiceStub()
         let activity = HomeViewModel(activityData: health, calendar: Fixtures.activityCalendar)
         let dashboard = HomeDashboardViewModel(
@@ -401,4 +514,61 @@ struct HomeDashboardViewModelTests {
 private final class NavigationLog {
     var rankings: [RegionID?] = []
     var socialOpened = 0
+}
+
+// MARK: - Serie
+
+struct StreakSummaryTests {
+    private let formatter = ActivityFormatter(locale: Locale(identifier: "de_DE"), calendar: Fixtures.activityCalendar)
+    private let today = Fixtures.day(2026, 10, 16)
+
+    private func recent(_ statuses: [StepStreakDayStatus]) -> [(day: LocalDate, status: StepStreakDayStatus)] {
+        statuses.enumerated().map { index, status in
+            (Fixtures.activityCalendar.adding(index - (statuses.count - 1), to: today), status)
+        }
+    }
+
+    @Test func runningStreakWaitsForToday() {
+        let streak = StepStreak(
+            current: 5, currentStart: Fixtures.day(2026, 10, 11), isTodayReached: false,
+            longest: 9, longestRange: Fixtures.day(2026, 9, 1)...Fixtures.day(2026, 9, 9), reachesHistoryStart: false
+        )
+        let record = StepStreakRecord(days: 12, start: Fixtures.day(2026, 3, 1), end: Fixtures.day(2026, 3, 12))
+
+        let summary = StreakSummary(
+            streak: streak,
+            record: record,
+            recentDays: recent([.missed, .reached, .reached, .reached, .reached, .reached, .pending]),
+            formatter: formatter
+        )
+
+        #expect(summary.currentText == "5 Tage")
+        #expect(summary.statusText == "Erreiche heute dein Tagesziel, um deine Serie fortzusetzen.")
+        #expect(summary.recordText == "Rekord: 12 Tage")
+        #expect(summary.lastWeek.map(\.letter) == ["S", "S", "M", "D", "M", "D", "F"])
+        #expect(summary.lastWeek.last?.accessibilityLabel == "Freitag, 16. Oktober: heute noch offen")
+    }
+
+    @Test func reachedTodayAndOpenEndedStreaks() {
+        let reached = StreakSummary(
+            streak: StepStreak(current: 1, currentStart: today, isTodayReached: true, longest: 1, longestRange: today...today, reachesHistoryStart: false),
+            record: nil,
+            recentDays: recent([.reached]),
+            formatter: formatter
+        )
+        #expect(reached.currentText == "1 Tag")
+        #expect(reached.statusText == "Heute geschafft – weiter so!")
+        #expect(reached.recordText == nil)
+
+        let openEnded = StreakSummary(
+            streak: StepStreak(current: 400, currentStart: Fixtures.day(2025, 10, 1), isTodayReached: true, longest: 400, longestRange: nil, reachesHistoryStart: true),
+            record: nil,
+            recentDays: [],
+            formatter: formatter
+        )
+        #expect(openEnded.currentText == "400+ Tage")
+
+        let none = StreakSummary(streak: .empty, record: nil, recentDays: [], formatter: formatter)
+        #expect(none.statusText == "Erreiche heute dein Tagesziel, um eine neue Serie zu starten.")
+    }
 }

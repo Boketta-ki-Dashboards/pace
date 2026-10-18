@@ -3,11 +3,22 @@ import SwiftUI
 
 /// „Deine Freunde“. Freundschaften kommen mit dem nächsten Update; bis dahin ein vorbereiteter, ehrlicher Leerzustand.
 struct FriendsPreviewCardView: View {
+    var size: HomeModuleSize = .medium
     let onOpenSocial: () -> Void
 
     var body: some View {
         Button(action: onOpenSocial) {
-            PaceCard {
+            if size == .small {
+                CompactSocialRow(systemImage: "person.2.fill", title: "Deine Freunde", detail: "Noch keine Freunde")
+            } else {
+                card
+            }
+        }
+        .buttonStyle(.pacePressable)
+    }
+
+    private var card: some View {
+        PaceCard {
                 VStack(alignment: .leading, spacing: PaceSpacing.s) {
                     PaceCardHeader("Deine Freunde", actionTitle: "Alle ansehen")
                     HStack(spacing: PaceSpacing.m) {
@@ -24,18 +35,27 @@ struct FriendsPreviewCardView: View {
                     }
                 }
             }
-        }
-        .buttonStyle(.pacePressable)
     }
 }
 
 /// „Deine Gruppen“ – Klassen-, Arbeits- und eigene Gruppen folgen mit dem nächsten Update.
 struct GroupsPreviewCardView: View {
+    var size: HomeModuleSize = .medium
     let onOpenSocial: () -> Void
 
     var body: some View {
         Button(action: onOpenSocial) {
-            PaceCard {
+            if size == .small {
+                CompactSocialRow(systemImage: "person.3.fill", title: "Deine Gruppen", detail: "Noch keine Gruppen")
+            } else {
+                card
+            }
+        }
+        .buttonStyle(.pacePressable)
+    }
+
+    private var card: some View {
+        PaceCard {
                 VStack(alignment: .leading, spacing: PaceSpacing.s) {
                     PaceCardHeader("Deine Gruppen", actionTitle: "Alle ansehen")
                     HStack(spacing: PaceSpacing.m) {
@@ -56,8 +76,38 @@ struct GroupsPreviewCardView: View {
                     }
                 }
             }
+    }
+}
+
+/// Kleine Variante der Social-Module: eine Zeile, öffnet den Social-Tab.
+private struct CompactSocialRow: View {
+    let systemImage: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        PaceCard(padding: PaceSpacing.s) {
+            HStack(spacing: PaceSpacing.s) {
+                Image(systemName: systemImage)
+                    .font(.title3)
+                    .foregroundStyle(PaceColor.accent)
+                    .frame(width: 30)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(PaceFont.headline)
+                    .foregroundStyle(PaceColor.textPrimary)
+                Spacer(minLength: PaceSpacing.xs)
+                Text(detail)
+                    .font(PaceFont.caption)
+                    .foregroundStyle(PaceColor.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(PaceColor.textSecondary)
+            }
         }
-        .buttonStyle(.pacePressable)
+        .accessibilityElement(children: .combine)
     }
 }
 

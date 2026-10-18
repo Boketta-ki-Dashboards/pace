@@ -3,7 +3,7 @@ import DesignSystem
 import PaceCore
 import SwiftUI
 
-/// Home-Dashboard: Wortmarke und Begrüßung, danach die vom Nutzer gewählten Bereiche in seiner Reihenfolge.
+/// Home-Dashboard: Wortmarke und Begrüßung, danach die vom Nutzer gewählten Module in seiner Reihenfolge und Größe.
 ///
 /// Die Aktualisierungs-Auslöser für Bewegungsdaten hängen an der ganzen Main App (`activityUpdates(_:)`), damit sie
 /// auch laufen, während ein anderer Tab offen ist.
@@ -27,8 +27,8 @@ public struct HomeView: View {
                     )
                     .padding(.bottom, PaceSpacing.xxs)
 
-                    ForEach(viewModel.visibleSections) { section in
-                        sectionView(section)
+                    ForEach(viewModel.modules) { module in
+                        moduleView(module)
                     }
                 }
                 .padding(.horizontal, PaceSpacing.m)
@@ -41,8 +41,14 @@ public struct HomeView: View {
                 StatisticsView(viewModel: viewModel.statistics(for: route))
             }
         }
-        .task(id: StandingsTrigger(key: viewModel.standingsReloadKey, isShown: viewModel.showsStandings)) { [viewModel] in
+        .task(id: viewModel.standingsReloadKey) { [viewModel] in
             await viewModel.loadIfNeeded()
+        }
+        .task(id: viewModel.showsStreak) { [viewModel] in
+            await viewModel.loadStreakIfNeeded()
+        }
+        .onChange(of: viewModel.streak.record) {
+            viewModel.streak.saveRecordIfNeeded()
         }
         .onChange(of: viewModel.stepsToday?.steps) {
             Task { await viewModel.stepsDidChange() }
@@ -65,35 +71,36 @@ public struct HomeView: View {
     }
 
     @ViewBuilder
-    private func sectionView(_ section: HomeSection) -> some View {
-        switch section {
+    private func moduleView(_ module: HomeModule) -> some View {
+        switch module.kind {
         case .regionRanks:
-            RegionRankCardsView(standings: viewModel.standings) { scope in
+            RegionRankCardsView(standings: viewModel.standings, size: module.size) { scope in
                 viewModel.openRankings(scope)
             }
         case .stepsToday:
             StepsTodayCardView(
                 state: viewModel.activity.state,
                 summary: viewModel.stepsToday,
+                size: module.size,
                 onEditGoal: { viewModel.present(.stepGoal) },
                 onRetry: { Task { await viewModel.activity.retry() } }
             )
         case .week:
-            WeekOverviewCardView(week: viewModel.week)
+            WeekOverviewCardView(week: viewModel.week, size: module.size)
+        case .streak:
+            StreakCardView(summary: viewModel.streakSummary, state: viewModel.streak.history.state, size: module.size)
         case .neighborhood:
-            NeighborhoodCardView(standings: viewModel.standings) { scope in
+            NeighborhoodCardView(
+                standings: viewModel.standings,
+                level: module.regionLevel ?? .municipality,
+                size: module.size
+            ) { scope in
                 viewModel.openRankings(scope)
             }
         case .friends:
-            FriendsPreviewCardView { viewModel.openSocial() }
+            FriendsPreviewCardView(size: module.size) { viewModel.openSocial() }
         case .groups:
-            GroupsPreviewCardView { viewModel.openSocial() }
+            GroupsPreviewCardView(size: module.size) { viewModel.openSocial() }
         }
     }
-}
-
-/// Lädt Platzierungen neu, wenn sich Gemeinde oder Teilnahme ändern oder ein Bereich sie wieder anzeigt.
-private struct StandingsTrigger: Hashable {
-    let key: RegionalStandingsViewModel.ReloadKey
-    let isShown: Bool
 }

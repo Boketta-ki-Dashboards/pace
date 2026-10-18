@@ -2,17 +2,21 @@ import DesignSystem
 import PaceCore
 import SwiftUI
 
-/// „Pfungstadt · Dein Umfeld“: der Platz über dir, du, der Platz unter dir – und wie viele Schritte zum nächsten Platz
-/// fehlen.
+/// „Pfungstadt · Dein Umfeld“: die Plätze um deinen – und wie viele Schritte zum nächsten Platz fehlen.
+///
+/// Die Ebene (Gemeinde, Kreis, Bundesland, Land) ist pro Modul wählbar. Klein zeigt nur deinen Platz, mittel drei,
+/// groß fünf Zeilen.
 struct NeighborhoodCardView: View {
     let standings: RegionalStandingsViewModel
+    var level: RegionLevel = .municipality
+    var size: HomeModuleSize = .medium
     let onOpenRankings: (Region?) -> Void
 
     var body: some View {
         PaceCard {
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
                 Button {
-                    onOpenRankings(municipality)
+                    onOpenRankings(region)
                 } label: {
                     PaceCardHeader(title, showsChevron: true)
                 }
@@ -23,19 +27,27 @@ struct NeighborhoodCardView: View {
         }
     }
 
-    private var municipality: Region? {
-        standings.scopes.first { $0.level == .municipality }
+    private var region: Region? {
+        standings.scopes.first { $0.level == level }
     }
 
     private var title: String {
-        municipality.map { "\($0.name) · Dein Umfeld" } ?? "Dein Umfeld"
+        region.map { "\($0.name) · Dein Umfeld" } ?? "Dein Umfeld"
+    }
+
+    private var rowCount: Int {
+        switch size {
+        case .small: 1
+        case .medium: 3
+        case .large: 5
+        }
     }
 
     @ViewBuilder
     private var content: some View {
         switch standings.state {
         case .idle, .loading:
-            if let neighborhood = standings.standings?.neighborhood {
+            if let neighborhood = standings.standings?.neighborhood(for: level, rows: rowCount) {
                 rows(neighborhood)
             } else {
                 ProgressView()
@@ -48,7 +60,7 @@ struct NeighborhoodCardView: View {
         case .loaded(let loaded):
             if !loaded.isParticipating {
                 participationPrompt
-            } else if let neighborhood = loaded.neighborhood {
+            } else if let neighborhood = loaded.neighborhood(for: level, rows: rowCount) {
                 rows(neighborhood)
             } else {
                 hint(

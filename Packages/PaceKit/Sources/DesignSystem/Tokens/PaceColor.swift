@@ -39,6 +39,11 @@ public enum PaceColor {
     /// Schwächste Stufe in Wochenübersichten; die stärkste ist `accentStrong`.
     public static var chartLow: Color { Color(light: 0xA7D8B4, dark: 0x5E8F72) }
 
+    // MARK: Serie
+
+    /// Flamme der persönlichen Serie.
+    public static var streak: Color { Color(light: 0xE8590C, dark: 0xFF922B) }
+
     // MARK: Status
 
     public static var success: Color { Color(light: 0x1E8A50, dark: 0x6EE7A0) }

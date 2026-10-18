@@ -139,7 +139,13 @@ public final class AppRouter {
             dashboard: dashboard,
             leaderboard: leaderboard,
             social: SocialViewModel(),
-            profile: ProfileViewModel(store: store, regions: services.regions, appIcons: dependencies.appIcons),
+            profile: ProfileViewModel(
+                store: store,
+                regions: services.regions,
+                appIcons: dependencies.appIcons,
+                streak: streak,
+                statistics: { [dashboard] route in dashboard.statistics(for: route) }
+            ),
             store: store
         )
         navigation.main = main
