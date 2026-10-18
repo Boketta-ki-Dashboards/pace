@@ -49,6 +49,8 @@ public struct BackendServices: Sendable {
     public let regions: any RegionRepository
     public let activitySync: any ActivitySyncRepository
     public let leaderboards: any LeaderboardRepository
+    /// Freunde und Gruppen; `nil`, wenn nicht angebunden (z. B. in Tests).
+    public let social: (any SocialRepository)?
     public let profileCache: any ProfileCaching
 
     public init(
@@ -57,6 +59,7 @@ public struct BackendServices: Sendable {
         regions: any RegionRepository,
         activitySync: any ActivitySyncRepository,
         leaderboards: any LeaderboardRepository,
+        social: (any SocialRepository)? = nil,
         profileCache: any ProfileCaching = UserDefaultsProfileCache()
     ) {
         self.auth = auth
@@ -64,6 +67,7 @@ public struct BackendServices: Sendable {
         self.regions = regions
         self.activitySync = activitySync
         self.leaderboards = leaderboards
+        self.social = social
         self.profileCache = profileCache
     }
 }

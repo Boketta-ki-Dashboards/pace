@@ -88,6 +88,44 @@ enum BackendErrorMapping {
         }
     }
 
+    /// Fehler der Social-RPCs: stabile Tokens in der Meldung (siehe docs/SOCIAL.md).
+    static func socialError(_ error: any Error) -> SocialError {
+        switch BackendFailure(error) {
+        case .network:
+            return .network
+        case .unauthenticated, .permissionDenied:
+            return .notAuthenticated
+        case .database(let code, let message):
+            // PGRST202: Funktion unbekannt – die Social-Migration ist auf dem Server noch nicht eingespielt.
+            if code == "PGRST202" || code == "42883" {
+                return .unavailable
+            }
+            return socialTokens.first { message.contains($0.token) }?.error ?? .unexpected("\(code): \(message)")
+        case .unknown(let description):
+            return .unexpected(description)
+        }
+    }
+
+    /// Reihenfolge wichtig: spezifische Tokens vor allgemeineren.
+    private static let socialTokens: [(token: String, error: SocialError)] = [
+        ("invalid_invite_code", .invalidInviteCode),
+        ("invalid_name", .invalidName),
+        ("invalid_description", .invalidDescription),
+        ("invalid_goal", .invalidGoal),
+        ("invalid_kind", .invalidInput),
+        ("invalid_time_zone", .invalidInput),
+        ("invalid_period", .invalidInput),
+        ("invalid_date", .invalidInput),
+        ("self_request", .selfRequest),
+        ("rate_limited", .rateLimited),
+        ("cooldown", .cooldown),
+        ("limit_reached", .limitReached),
+        ("not_allowed", .notAllowed),
+        ("not_found", .notFound),
+        ("profile_required", .notAuthenticated),
+        ("not_authenticated", .notAuthenticated),
+    ]
+
     static func authError(_ error: any Error) -> PaceCore.AuthError {
         if error is URLError {
             return .network

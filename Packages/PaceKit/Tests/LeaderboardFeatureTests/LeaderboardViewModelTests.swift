@@ -106,6 +106,27 @@ struct LeaderboardViewModelTests {
         #expect(viewModel.emptyStateText == nil)
     }
 
+    @Test func progressHintUsesTheSameRulesAsHome() async {
+        let (viewModel, _) = makeViewModel(leaderboards: LeaderboardRepositoryStub {
+            $0.rankings[Fixtures.pfungstadt.id] = Fixtures.ranking(count: 20, currentUserRank: 12, topSteps: 8_552)
+        })
+
+        await viewModel.loadIfNeeded()
+
+        // Platz 11 hat 10 Schritte mehr → 11 fehlen (wie in „Dein Umfeld“ auf Home).
+        #expect(viewModel.progressText == "Noch 11 Schritte bis Platz #11")
+    }
+
+    @Test func leaderGetsNoClimbHint() async {
+        let (viewModel, _) = makeViewModel(leaderboards: LeaderboardRepositoryStub {
+            $0.rankings[Fixtures.pfungstadt.id] = Fixtures.ranking(count: 5, currentUserRank: 1)
+        })
+
+        await viewModel.loadIfNeeded()
+
+        #expect(viewModel.progressText == "Du führst in Pfungstadt.")
+    }
+
     @Test func secondAppearanceDoesNotReloadFreshData() async {
         let leaderboards = LeaderboardRepositoryStub()
         let (viewModel, _) = makeViewModel(leaderboards: leaderboards)

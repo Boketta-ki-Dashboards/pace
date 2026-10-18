@@ -18,7 +18,22 @@ struct NeighborhoodCardView: View {
                 Button {
                     onOpenRankings(region)
                 } label: {
-                    PaceCardHeader(title, showsChevron: true)
+                    // Lange Regionsnamen („Darmstadt-Dieburg · Dein Umfeld“) dürfen zweizeilig werden statt gekürzt.
+                    HStack(alignment: .firstTextBaseline, spacing: PaceSpacing.xs) {
+                        Text(title)
+                            .font(PaceFont.cardTitle)
+                            .foregroundStyle(PaceColor.textPrimary)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
+                        Spacer(minLength: PaceSpacing.xs)
+                        Image(systemName: "chevron.right")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(PaceColor.textPrimary)
+                            .accessibilityHidden(true)
+                    }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.pacePressable)
 

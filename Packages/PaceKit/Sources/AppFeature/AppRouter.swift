@@ -115,6 +115,7 @@ public final class AppRouter {
             refreshActivity: { [weak home] in await home?.refreshForRanking() }
         )
         let navigation = MainNavigation()
+        let social = SocialViewModel(repository: services.social, ownUsername: { [store] in store.profile.username })
         // Das Tagesziel älterer Versionen wird einmalig in den Zielverlauf übernommen.
         let goals = StepGoalSettings(
             store: dependencies.stepGoals,
@@ -130,6 +131,7 @@ public final class AppRouter {
             standings: RegionalStandingsViewModel(store: store, leaderboards: services.leaderboards, syncing: sync),
             settings: HomeSettings(store: dependencies.homePreferences),
             streak: streak,
+            social: social,
             activityData: dependencies.activityData,
             store: store,
             onOpenRankings: { [navigation] scope in navigation.openRankings(scope) },
@@ -138,7 +140,7 @@ public final class AppRouter {
         let main = MainViewModel(
             dashboard: dashboard,
             leaderboard: leaderboard,
-            social: SocialViewModel(),
+            social: social,
             profile: ProfileViewModel(
                 store: store,
                 regions: services.regions,

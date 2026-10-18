@@ -100,7 +100,11 @@ struct ScreenSnapshotTests {
         await profile.loadActivity()
 
         try render(LeaderboardContent(viewModel: leaderboard).padding(PaceSpacing.m), name: "rankings")
-        try render(SocialContent(viewModel: SocialViewModel()).padding(PaceSpacing.m), name: "social")
+        try render(SocialContent(viewModel: dashboard.social).padding(PaceSpacing.m), name: "social")
+        let group = try #require(dashboard.social.groups.first)
+        let detail = try #require(dashboard.social.detail(for: group))
+        await detail.load()
+        try render(GroupDetailContent(viewModel: detail).padding(PaceSpacing.m), name: "group")
         try render(ProfileContent(viewModel: profile).padding(PaceSpacing.m), name: "profile")
     }
 
@@ -181,6 +185,13 @@ struct ScreenSnapshotTests {
         standings.neighborhoodRadii = [.municipality: 2, .district: 4]
         await standings.load()
 
+        let social = SocialViewModel(
+            repository: Self.socialRepository(),
+            ownUsername: { "niklas" },
+            calendar: calendar,
+            now: now
+        )
+        await social.load()
         let streak = StepStreakTracker(
             history: ActivityHistoryStore(activityData: health, live: activity, calendar: calendar, now: now),
             goals: StepGoalSettings(store: InMemoryStepGoalStore(), calendar: calendar, now: now),
@@ -193,6 +204,7 @@ struct ScreenSnapshotTests {
             standings: standings,
             settings: HomeSettings(store: InMemoryHomePreferencesStore()),
             streak: streak,
+            social: social,
             activityData: health,
             store: store,
             calendar: calendar,
@@ -200,6 +212,59 @@ struct ScreenSnapshotTests {
             now: now
         )
         return (dashboard, store)
+    }
+
+    private static func socialRepository() -> SocialRepositoryStub {
+        func profile(_ index: Int, _ name: String) -> SocialProfile {
+            SocialProfile(
+                publicID: UUID(uuidString: String(format: "40000000-0000-4000-8000-%012d", index))!,
+                username: name.lowercased(),
+                displayName: name
+            )
+        }
+        let mia = profile(1, "Mia"), jonas = profile(2, "Jonas"), lea = profile(3, "Lea")
+        let me = LeaderboardEntry(
+            rank: 2, publicUserID: profile(9, "Niklas").publicID, username: "niklas", displayName: "Niklas",
+            competitionSteps: 8_432, isCurrentUser: true
+        )
+        return SocialRepositoryStub { state in
+            state.friends = [mia, jonas, lea].map { Friend(profile: $0, friendsSince: .distantPast) }
+            state.ranking = [
+                LeaderboardEntry(rank: 1, publicUserID: mia.publicID, username: "mia", displayName: "Mia", competitionSteps: 10_204, isCurrentUser: false),
+                me,
+                LeaderboardEntry(rank: 3, publicUserID: jonas.publicID, username: "jonas", displayName: "Jonas", competitionSteps: 6_870, isCurrentUser: false),
+                LeaderboardEntry(rank: 4, publicUserID: lea.publicID, username: "lea", displayName: "Lea", competitionSteps: 3_115, isCurrentUser: false),
+            ]
+            state.requests = [FriendRequest(id: UUID(), direction: .incoming, profile: profile(4, "Ben"), createdAt: .distantPast)]
+            let classID = UUID(uuidString: "50000000-0000-4000-8000-000000000001")!
+            state.groups = [
+                SocialRepositoryStub.group(
+                    id: classID, name: "Klasse 8b", description: "Wer schafft die meisten Schritte bis zu den Ferien?",
+                    kind: .schoolClass, memberCount: 24, currentStreak: 6, reached: 9
+                ),
+                SocialRepositoryStub.group(name: "Laufteam Büro", kind: .work, memberCount: 7, currentStreak: 2, reached: 1),
+            ]
+            state.groupRankings[classID] = GroupRanking(
+                totalParticipants: 4,
+                groupToday: Fixtures.day(2026, 10, 16),
+                dailyGoal: 8_000,
+                entries: [
+                    GroupRankingEntry(rank: 1, profile: mia, competitionSteps: 10_204, isCurrentUser: false, role: .member, reachedGoalToday: true),
+                    GroupRankingEntry(rank: 2, profile: profile(9, "Niklas"), competitionSteps: 8_432, isCurrentUser: true, role: .owner, reachedGoalToday: true),
+                    GroupRankingEntry(rank: 3, profile: jonas, competitionSteps: 6_870, isCurrentUser: false, role: .member, reachedGoalToday: false),
+                    GroupRankingEntry(rank: 4, profile: lea, competitionSteps: 3_115, isCurrentUser: false, role: .member, reachedGoalToday: false),
+                ]
+            )
+            state.groupDays[classID] = (0..<14).map { offset in
+                let day = Fixtures.activityCalendar.adding(-offset, to: Fixtures.day(2026, 10, 16))
+                let reached = offset == 0 ? 9 : (offset == 7 ? 5 : 8 + offset % 4)
+                return GroupDay(day: day, memberCount: 24, requiredCount: 8, reachedCount: reached, dailyGoal: 8_000, reached: reached >= 8, isToday: offset == 0)
+            }
+            state.invitations = [GroupInvitation(
+                id: UUID(), groupID: UUID(), groupName: "Sonntagsrunde", groupKind: .friends, memberCount: 4,
+                inviterUsername: "mia", inviterDisplayName: "Mia", createdAt: .distantPast
+            )]
+        }
     }
 
     private static func leaderboards() -> LeaderboardRepositoryStub {

@@ -104,6 +104,16 @@ public final class LeaderboardViewModel {
         return nil
     }
 
+    /// Aufstiegshinweis zum eigenen Platz – gleiche Regeln wie „Dein Umfeld“ auf Home. `nil`, wenn der Nutzer nicht
+    /// im Ranking ist, allein ist (dann `emptyStateText`) oder der Platz darüber nicht geladen ist.
+    public var progressText: String? {
+        guard let snapshot, let me = snapshot.currentUserEntry, !snapshot.isCurrentUserAlone,
+              let region = scopes.first(where: { $0.id == snapshot.query.regionID })
+        else { return nil }
+        let above = snapshot.entries.first { $0.rank == me.rank - 1 }
+        return RankingHint.text(currentUser: me, above: above, isAlone: false, locative: region.locative)
+    }
+
     /// Lädt beim Erscheinen – nur wenn sich etwas geändert hat, der letzte Versuch fehlschlug oder die Daten älter
     /// als `maximumAge` sind.
     public func loadIfNeeded() async {

@@ -85,3 +85,27 @@ public protocol LeaderboardRepository: Sendable {
     /// Der eigene Platz und bis zu `radius` Plätze darüber und darunter. Leer, wenn der Nutzer nicht im Ranking ist.
     func neighborhood(for query: LeaderboardQuery, radius: Int) async throws -> [LeaderboardEntry]
 }
+
+/// Gemeinsame Regeln für Aufstiegshinweise – auf Home („Dein Umfeld“) und im Rankings-Tab gleich.
+public enum RankingHint {
+    /// Schritte, die zum Platz darüber fehlen: Vordermann − eigene + 1, weil bei Gleichstand gewinnt, wer den Wert
+    /// zuerst hatte. `nil` auf Platz 1 oder wenn der Platz darüber nicht geladen ist.
+    public static func stepsToNextPlace(currentUser: LeaderboardEntry, above: LeaderboardEntry?) -> Int? {
+        guard currentUser.rank > 1, let above, above.rank == currentUser.rank - 1 else { return nil }
+        return max(above.competitionSteps - currentUser.competitionSteps + 1, 1)
+    }
+
+    /// z. B. `Noch 280 Schritte bis Platz #11`, `Du führst in Pfungstadt.` oder `Du bist der Erste in Pfungstadt.`
+    /// Auf Platz 1 gibt es keinen Aufstiegshinweis.
+    public static func text(currentUser: LeaderboardEntry, above: LeaderboardEntry?, isAlone: Bool, locative: String) -> String? {
+        if isAlone {
+            return "Du bist der Erste \(locative)."
+        }
+        if currentUser.rank == 1 {
+            return "Du führst \(locative)."
+        }
+        guard let steps = stepsToNextPlace(currentUser: currentUser, above: above) else { return nil }
+        let formatted = steps.formatted(.number.locale(Locale(identifier: "de_DE")))
+        return "Noch \(formatted) \(steps == 1 ? "Schritt" : "Schritte") bis Platz #\(currentUser.rank - 1)"
+    }
+}

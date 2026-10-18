@@ -65,10 +65,12 @@ supabase/
 │   ├── 20261016100200_profiles.sql                   Tabelle profiles, Benutzernamen-Regeln
 │   ├── 20261016100300_daily_activity.sql             Tabelle daily_activity (nur Competition Steps)
 │   ├── 20261016100400_leaderboards.sql               Ranking-RPCs
-│   └── 20261016100500_region_data_gv100ad_20260930.sql   generierte Regionsdaten (GV100AD)
+│   ├── 20261016100500_region_data_gv100ad_20260930.sql   generierte Regionsdaten (GV100AD)
+│   └── 20261018100000_social.sql                     Freunde, Gruppen, Einladungen, Gruppen-Streak (docs/SOCIAL.md)
 ├── seed/dev_seed.sql           DEV ONLY: erfundene dev_…-Nutzer für lokale Rankings
 ├── scripts/import_regions.py   Importer GV100AD → Migration (+ test_import_regions.py)
-└── tests/*.test.sql            pgTAP-Tests (Rechte, RLS, Profile, Sync, Rankings, Regionen)
+└── tests/*.test.sql            pgTAP-Tests (Rechte, RLS, Profile, Sync, Rankings, Regionen, Freunde, Gruppen,
+                                Gruppen-Streak)
 ```
 
 Die Swift-Seite liegt in `Packages/PaceKit/Sources/PaceBackend` (Repositories hinter den Protokollen aus `PaceCore`)
@@ -281,7 +283,7 @@ sicher – ausschließlich gegen das Pace-Projekt `bnkrenfvfiaapsbkeejq`:
 supabase login
 supabase link --project-ref bnkrenfvfiaapsbkeejq   # fragt nach dem Datenbank-Passwort des Pace-Projekts
 supabase projects list                             # die verknüpfte Zeile (●) muss Ref bnkrenfvfiaapsbkeejq zeigen
-supabase db push --dry-run                         # listet die 6 Migrationen, ändert nichts
+supabase db push --dry-run                         # listet die noch fehlenden Migrationen (insgesamt 7), ändert nichts
 supabase db push                                   # NIE mit --include-seed
 ```
 
@@ -296,6 +298,9 @@ Danach prüfen:
 
 - **Database → Advisors** (Security und Performance): keine Warnungen erwartet.
 - **Table Editor → regions:** 11 167 Zeilen (1 + 16 + 401 + 10 749).
+- **Freunde und Gruppen:** Ist `20261018100000_social.sql` noch nicht eingespielt, zeigt die App im Social-Tab und in
+  den Home-Modulen „Freunde und Gruppen sind auf dem Server noch nicht eingerichtet“; alles andere funktioniert.
+  Nach `supabase db push` sind die Funktionen sofort verfügbar (Details: `docs/SOCIAL.md`).
 - Erst danach `Config/Pace.xcconfig` lokal anlegen (siehe oben) und die App starten.
 
 Nicht tun: `supabase db reset --linked` (löscht alle Daten), `--include-seed`, Secret Keys in die App oder ins

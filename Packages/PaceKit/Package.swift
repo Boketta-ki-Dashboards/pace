@@ -43,7 +43,7 @@ let package = Package(
         // Features: jeweils ViewModel (ohne SwiftUI) + Views.
         .target(name: "HealthPermissionFeature", dependencies: ["PaceCore", "DesignSystem"]),
         .target(name: "ActivityFeature", dependencies: ["PaceCore", "DesignSystem"]),
-        .target(name: "HomeFeature", dependencies: ["PaceCore", "DesignSystem", "ActivityFeature"]),
+        .target(name: "HomeFeature", dependencies: ["PaceCore", "DesignSystem", "ActivityFeature", "SocialFeature"]),
         .target(name: "RegionFeature", dependencies: ["PaceCore", "DesignSystem"]),
         .target(name: "OnboardingFeature", dependencies: ["PaceCore", "DesignSystem", "RegionFeature"]),
         .target(name: "LeaderboardFeature", dependencies: ["PaceCore", "DesignSystem"]),
@@ -71,7 +71,7 @@ let package = Package(
             dependencies: ["HealthPermissionFeature", "PaceTestSupport"]
         ),
         .testTarget(name: "ActivityFeatureTests", dependencies: ["ActivityFeature", "PaceTestSupport"]),
-        .testTarget(name: "HomeFeatureTests", dependencies: ["HomeFeature", "ActivityFeature", "PaceTestSupport"]),
+        .testTarget(name: "HomeFeatureTests", dependencies: ["HomeFeature", "ActivityFeature", "SocialFeature", "PaceTestSupport"]),
         .testTarget(name: "RegionFeatureTests", dependencies: ["RegionFeature", "PaceTestSupport"]),
         .testTarget(name: "OnboardingFeatureTests", dependencies: ["OnboardingFeature", "PaceTestSupport"]),
         .testTarget(name: "LeaderboardFeatureTests", dependencies: ["LeaderboardFeature", "PaceTestSupport"]),

@@ -2,6 +2,7 @@ import ActivityFeature
 import Foundation
 import Observation
 import PaceCore
+import SocialFeature
 
 /// Das Home-Dashboard: Bewegungsdaten, Tagesziel, Serie, regionale Platzierungen und die vom Nutzer gewählten Module.
 ///
@@ -28,6 +29,8 @@ public final class HomeDashboardViewModel {
     public let goals: StepGoalSettings
     /// Persönliche Streak und Bewegungsverlauf (geteilt mit Statistik und Profil).
     public let streak: StepStreakTracker
+    /// Freunde und Gruppen (geteilt mit dem Social-Tab).
+    public let social: SocialViewModel
 
     @ObservationIgnored private let activityData: any ActivityDataProviding
     @ObservationIgnored private let store: ProfileStore
@@ -45,6 +48,7 @@ public final class HomeDashboardViewModel {
         standings: RegionalStandingsViewModel,
         settings: HomeSettings,
         streak: StepStreakTracker,
+        social: SocialViewModel,
         activityData: any ActivityDataProviding,
         store: ProfileStore,
         calendar: ActivityCalendar = ActivityCalendar(),
@@ -57,6 +61,7 @@ public final class HomeDashboardViewModel {
         self.standings = standings
         self.settings = settings
         self.streak = streak
+        self.social = social
         goals = streak.goals
         self.activityData = activityData
         self.store = store
@@ -119,6 +124,17 @@ public final class HomeDashboardViewModel {
         modules.contains { $0.kind == .streak }
     }
 
+    /// Ob ein Modul Freunde oder Gruppen zeigt.
+    public var showsSocial: Bool {
+        modules.contains { $0.kind == .friends || $0.kind == .groups }
+    }
+
+    /// Freunde und Gruppen laden, wenn ein Modul sie zeigt (höchstens einmal pro Minute).
+    public func loadSocialIfNeeded() async {
+        guard showsSocial else { return }
+        await social.loadIfNeeded()
+    }
+
     /// Erstes Laden beim Erscheinen und nach Änderungen am Layout.
     public func loadIfNeeded() async {
         guard showsStandings else { return }
@@ -129,6 +145,9 @@ public final class HomeDashboardViewModel {
     /// Verlauf für das Serien-Modul laden (selten, siehe `ActivityHistoryStore`).
     public func loadStreakIfNeeded() async {
         guard showsStreak else { return }
+        // Erst die laufende Abfrage der letzten 7 Tage abwarten, damit HealthKit nicht zwei große Abfragen parallel
+        // ausführt (z. B. beim App-Start).
+        await activity.waitForPendingLoad()
         await streak.loadIfNeeded()
     }
 
@@ -138,6 +157,9 @@ public final class HomeDashboardViewModel {
         if showsStreak {
             await streak.history.reload()
             streak.saveRecordIfNeeded()
+        }
+        if showsSocial {
+            await social.load()
         }
         guard showsStandings else { return }
         standings.neighborhoodRadii = settings.neighborhoodRadii

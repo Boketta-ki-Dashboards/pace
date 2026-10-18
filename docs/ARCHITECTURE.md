@@ -14,7 +14,7 @@ Pace (App-Target)            Composition Root: erzeugt HealthKitService + Supaba
  │    │    └── ActivityFeature      Detail-Statistiken (Swift Charts)
  │    ├── OnboardingFeature         Profil anlegen, Region wählen → RegionFeature
  │    ├── LeaderboardFeature        Regionale Daily Rankings
- │    ├── SocialFeature             Social-Bereich (Freunde, Gruppen, Einladungen – vorbereitet)
+ │    ├── SocialFeature             Freunde, Anfragen, Gruppen mit Gruppen-Streak, Einladungen
  │    ├── ProfileFeature            Profil/Einstellungen → RegionFeature
  │    │    └── RegionFeature        Gemeindesuche (wiederverwendbar)
  │    ├── DesignSystem              Farben, Typografie, Abstände, Komponenten
@@ -74,6 +74,17 @@ App-Start
   ± Nachbarn je Ebene); es gibt dafür keine neue Backend-Funktion.
 - Darstellung: Komponenten in `HomeFeature/Views/Dashboard/`, gemeinsame Bausteine im `DesignSystem` (Karten, Kacheln,
   Fortschrittsring, Avatar, Wortmarke, Flamme der Serie).
+
+## Social (Freunde und Gruppen)
+
+- Backend: Migration `20261018100000_social.sql`, Regeln und RPC-Vertrag in `docs/SOCIAL.md`. Clients haben keinen
+  Tabellenzugriff; alle Prüfungen (Zugriff, Limits, Gruppen-Streak) laufen in `security definer`-Funktionen.
+- App: `SocialRepository` (PaceCore) → `SupabaseSocialRepository` (PaceBackend). `SocialViewModel` hält Freunde,
+  Anfragen, Freundesranking, Gruppen und Einladungen (ein gemeinsamer Ladevorgang, höchstens einmal pro Minute
+  automatisch) und wird von Social-Tab und Home-Modulen geteilt. `GroupDetailViewModel` und
+  `FriendProfileViewModel` für die Detailansichten.
+- Fehlt die Migration auf dem Server (PostgREST `PGRST202`), zeigen Social-Tab und Module einen ehrlichen Hinweis
+  statt scheinbar funktionierender Oberflächen. Einen Gruppenchat gibt es bewusst nicht (keine Moderation).
 
 ## Profil
 

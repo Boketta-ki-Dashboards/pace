@@ -3,6 +3,7 @@ import Foundation
 @testable import HomeFeature
 import PaceCore
 import PaceTestSupport
+import SocialFeature
 import Testing
 
 // MARK: - Einstellungen
@@ -425,6 +426,7 @@ struct HomeDashboardViewModelTests {
             standings: RegionalStandingsViewModel(store: store, leaderboards: LeaderboardRepositoryStub(), syncing: nil),
             settings: HomeSettings(store: InMemoryHomePreferencesStore()),
             streak: makeStreak(activity: activity, health: health),
+            social: SocialViewModel(repository: nil),
             activityData: health,
             store: store,
             calendar: Fixtures.activityCalendar,
@@ -473,6 +475,7 @@ struct HomeDashboardViewModelTests {
             standings: RegionalStandingsViewModel(store: store, leaderboards: leaderboards, syncing: nil),
             settings: settings,
             streak: makeStreak(activity: activity, health: health),
+            social: SocialViewModel(repository: nil),
             activityData: health,
             store: store
         )
@@ -497,6 +500,7 @@ struct HomeDashboardViewModelTests {
             standings: RegionalStandingsViewModel(store: store, leaderboards: LeaderboardRepositoryStub(), syncing: syncing),
             settings: HomeSettings(store: InMemoryHomePreferencesStore()),
             streak: makeStreak(activity: activity, health: health),
+            social: SocialViewModel(repository: nil),
             activityData: health,
             store: store
         )

@@ -26,7 +26,8 @@ extension AppDependencies {
                 profiles: backend.profiles,
                 regions: backend.regions,
                 activitySync: backend.activitySync,
-                leaderboards: backend.leaderboards
+                leaderboards: backend.leaderboards,
+                social: backend.social
             ))
         } catch {
             return .unavailable(reason: error.message)

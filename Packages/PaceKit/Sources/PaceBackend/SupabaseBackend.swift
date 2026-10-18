@@ -20,6 +20,7 @@ public final class SupabaseBackend: Sendable {
     public let regions: any RegionRepository
     public let activitySync: any ActivitySyncRepository
     public let leaderboards: any LeaderboardRepository
+    public let social: any SocialRepository
 
     /// - Parameters:
     ///   - localStorage: Speicher der Sitzung (in der App die Keychain, in Tests `InMemoryAuthStorage`).
@@ -54,6 +55,7 @@ public final class SupabaseBackend: Sendable {
         regions = SupabaseRegionRepository(client: database)
         activitySync = SupabaseActivitySyncRepository(client: database, tokens: tokens)
         leaderboards = SupabaseLeaderboardRepository(client: database)
+        social = SupabaseSocialRepository(client: database)
     }
 
     #if !os(Linux) && !os(Windows) && !os(Android)

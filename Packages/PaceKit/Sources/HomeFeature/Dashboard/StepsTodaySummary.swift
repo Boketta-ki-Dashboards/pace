@@ -38,7 +38,7 @@ public struct StepsTodaySummary: Equatable, Sendable {
             : "Noch \(formatter.steps(goal - today.competitionSteps)) bis zu deinem Ziel"
         distanceText = today.walkingRunningDistanceMeters.map { formatter.distance(meters: $0) }
         energyText = today.activeEnergyKilocalories.map { formatter.energy(kilocalories: $0) }
-        flightsText = today.flightsClimbed.map { "\(formatter.flights($0)) \($0 == 1 ? "Stockwerk" : "Stockwerke")" }
+        flightsText = today.flightsClimbed.map { formatter.flights($0) }
         exerciseText = today.exerciseMinutes.map { formatter.exerciseMinutes($0) }
         manualStepsNote = today.hasNonCompetitionSteps ? ActivityTexts.manualStepsNote : nil
     }

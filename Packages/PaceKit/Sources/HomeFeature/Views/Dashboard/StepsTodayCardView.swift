@@ -151,7 +151,7 @@ struct StepsTodayCardView: View {
                         MetricLink(
                             systemImage: "figure.stairs",
                             value: summary.flightsText ?? "nicht verfügbar",
-                            caption: summary.flightsText == nil ? "Stockwerke" : nil
+                            caption: "Stockwerke"
                         )
                         Divider()
                             .frame(height: 32)
@@ -159,7 +159,7 @@ struct StepsTodayCardView: View {
                         MetricLink(
                             systemImage: "stopwatch",
                             value: summary.exerciseText ?? "nicht verfügbar",
-                            caption: "Trainingsminuten"
+                            caption: "Training"
                         )
                     }
                     .padding(.vertical, PaceSpacing.xxs)

@@ -114,6 +114,11 @@ public final class HomeViewModel {
         loadTask = nil
     }
 
+    /// Wartet, bis ein laufender Ladevorgang abgeschlossen ist (ohne auf den Sync zu warten).
+    public func waitForPendingLoad() async {
+        await loadTask?.value
+    }
+
     /// Wartet, bis ein laufender Ladevorgang abgeschlossen und sein Ergebnis an den Sync übergeben ist.
     public func waitForPendingSync() async {
         await loadTask?.value

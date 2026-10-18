@@ -1,81 +1,200 @@
 import DesignSystem
+import PaceCore
+import SocialFeature
 import SwiftUI
 
-/// „Deine Freunde“. Freundschaften kommen mit dem nächsten Update; bis dahin ein vorbereiteter, ehrlicher Leerzustand.
+/// „Deine Freunde“: Rangliste mit deinen Freunden (heute). Klein: dein Platz. Mittel: drei Zeilen. Groß: fünf.
 struct FriendsPreviewCardView: View {
+    let social: SocialViewModel
     var size: HomeModuleSize = .medium
     let onOpenSocial: () -> Void
 
     var body: some View {
         Button(action: onOpenSocial) {
             if size == .small {
-                CompactSocialRow(systemImage: "person.2.fill", title: "Deine Freunde", detail: "Noch keine Freunde")
+                CompactSocialRow(systemImage: "person.2.fill", title: "Deine Freunde", detail: compactDetail)
             } else {
-                card
+                PaceCard {
+                    VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                        PaceCardHeader("Deine Freunde", actionTitle: "Alle ansehen")
+                        content
+                    }
+                }
             }
         }
         .buttonStyle(.pacePressable)
     }
 
-    private var card: some View {
-        PaceCard {
-                VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                    PaceCardHeader("Deine Freunde", actionTitle: "Alle ansehen")
-                    HStack(spacing: PaceSpacing.m) {
-                        PlaceholderAvatars()
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Noch keine Freunde")
-                                .font(PaceFont.headline)
-                                .foregroundStyle(PaceColor.textPrimary)
-                            Text("Bald kannst du Freunde einladen und euch jeden Tag vergleichen.")
-                                .font(PaceFont.caption)
-                                .foregroundStyle(PaceColor.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+    private var hasFriends: Bool {
+        social.ranking.count > 1 || !social.friends.isEmpty
+    }
+
+    private var compactDetail: String {
+        switch social.state {
+        case .unavailable: return "Nicht verfügbar"
+        case .idle, .loading where social.ranking.isEmpty: return "Wird geladen …"
+        default:
+            guard hasFriends, let me = social.ranking.first(where: \.isCurrentUser) else { return "Noch keine Freunde" }
+            return "Platz \(me.rank) von \(social.ranking.count)"
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch social.state {
+        case .unavailable(let message):
+            SocialHint(systemImage: "person.2.slash", text: message)
+        case .failed(let message):
+            SocialHint(systemImage: "wifi.exclamationmark", text: message)
+        case .idle, .loading where social.ranking.isEmpty:
+            ProgressView()
+                .frame(maxWidth: .infinity, minHeight: 60)
+        default:
+            if hasFriends {
+                VStack(spacing: PaceSpacing.xs) {
+                    ForEach(rows) { entry in
+                        FriendRankRow(entry: entry)
+                    }
+                }
+            } else {
+                HStack(spacing: PaceSpacing.m) {
+                    PlaceholderAvatars()
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Noch keine Freunde")
+                            .font(PaceFont.headline)
+                            .foregroundStyle(PaceColor.textPrimary)
+                        Text("Suche im Social-Tab nach einem Benutzernamen und vergleicht euch jeden Tag.")
+                            .font(PaceFont.caption)
+                            .foregroundStyle(PaceColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
+        }
+    }
+
+    /// Ausschnitt um den eigenen Platz.
+    private var rows: [LeaderboardEntry] {
+        let count = size == .large ? 5 : 3
+        let entries = social.ranking
+        guard let index = entries.firstIndex(where: \.isCurrentUser), entries.count > count else {
+            return Array(entries.prefix(count))
+        }
+        let start = min(max(index - (count - 1) / 2, 0), entries.count - count)
+        return Array(entries[start..<(start + count)])
     }
 }
 
-/// „Deine Gruppen“ – Klassen-, Arbeits- und eigene Gruppen folgen mit dem nächsten Update.
+/// „Deine Gruppen“ mit Gruppen-Streak. Klein: die längste laufende Serie. Mittel: drei Gruppen. Groß: fünf.
 struct GroupsPreviewCardView: View {
+    let social: SocialViewModel
     var size: HomeModuleSize = .medium
     let onOpenSocial: () -> Void
 
     var body: some View {
         Button(action: onOpenSocial) {
             if size == .small {
-                CompactSocialRow(systemImage: "person.3.fill", title: "Deine Gruppen", detail: "Noch keine Gruppen")
+                CompactSocialRow(systemImage: "person.3.fill", title: "Deine Gruppen", detail: compactDetail)
             } else {
-                card
+                PaceCard {
+                    VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                        PaceCardHeader("Deine Gruppen", actionTitle: "Alle ansehen")
+                        content
+                    }
+                }
             }
         }
         .buttonStyle(.pacePressable)
     }
 
-    private var card: some View {
-        PaceCard {
-                VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                    PaceCardHeader("Deine Gruppen", actionTitle: "Alle ansehen")
-                    HStack(spacing: PaceSpacing.m) {
-                        Image(systemName: "person.3.fill")
-                            .font(.title3)
-                            .foregroundStyle(PaceColor.accentStrong)
-                            .frame(width: 52, height: 52)
-                            .background(PaceColor.accentSoft, in: RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous))
-                            .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Klassen- und Arbeitsgruppen")
-                                .font(PaceFont.headline)
-                                .foregroundStyle(PaceColor.textPrimary)
-                            Text("Gemeinsam Schritte sammeln – bald verfügbar.")
-                                .font(PaceFont.caption)
-                                .foregroundStyle(PaceColor.textSecondary)
-                        }
+    private var compactDetail: String {
+        switch social.state {
+        case .unavailable: return "Nicht verfügbar"
+        case .idle, .loading where social.groups.isEmpty: return "Wird geladen …"
+        default:
+            guard let best = social.groups.max(by: { $0.currentStreak < $1.currentStreak }) else { return "Noch keine Gruppen" }
+            return "\(best.name): \(best.currentStreak == 1 ? "1 Tag" : "\(best.currentStreak) Tage")"
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch social.state {
+        case .unavailable(let message):
+            SocialHint(systemImage: "person.3", text: message)
+        case .failed(let message):
+            SocialHint(systemImage: "wifi.exclamationmark", text: message)
+        case .idle, .loading where social.groups.isEmpty:
+            ProgressView()
+                .frame(maxWidth: .infinity, minHeight: 60)
+        default:
+            if social.groups.isEmpty {
+                HStack(spacing: PaceSpacing.m) {
+                    Image(systemName: "person.3.fill")
+                        .font(.title3)
+                        .foregroundStyle(PaceColor.accentStrong)
+                        .frame(width: 52, height: 52)
+                        .background(PaceColor.accentSoft, in: RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Noch keine Gruppen")
+                            .font(PaceFont.headline)
+                            .foregroundStyle(PaceColor.textPrimary)
+                        Text("Erstelle eine Gruppe für Klasse, Team oder Freunde – oder tritt per Code bei.")
+                            .font(PaceFont.caption)
+                            .foregroundStyle(PaceColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            } else {
+                VStack(spacing: PaceSpacing.xs) {
+                    ForEach(social.groups.prefix(size == .large ? 5 : 3)) { group in
+                        GroupStreakRow(group: group)
                     }
                 }
             }
+        }
+    }
+}
+
+private struct FriendRankRow: View {
+    let entry: LeaderboardEntry
+
+    var body: some View {
+        PaceTile(isHighlighted: entry.isCurrentUser) {
+            HStack(spacing: PaceSpacing.s) {
+                Text("#\(entry.rank)")
+                    .font(.system(.headline, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(PaceColor.textPrimary)
+                    .frame(minWidth: 36, alignment: .leading)
+                PaceAvatar(name: entry.displayName, seed: entry.publicUserID.uuidString, size: 32, isHighlighted: entry.isCurrentUser)
+                Text(entry.isCurrentUser ? "DU" : entry.displayName)
+                    .font(PaceFont.headline)
+                    .foregroundStyle(PaceColor.textPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: PaceSpacing.xs)
+                Text(entry.competitionSteps.formatted(.number))
+                    .font(.system(.headline, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(PaceColor.textPrimary)
+            }
+            .padding(.vertical, 2)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Platz \(entry.rank), \(entry.isCurrentUser ? "du" : entry.displayName), \(entry.competitionSteps.formatted(.number)) Schritte")
+    }
+}
+
+private struct SocialHint: View {
+    let systemImage: String
+    let text: String
+
+    var body: some View {
+        Label(text, systemImage: systemImage)
+            .font(PaceFont.callout)
+            .foregroundStyle(PaceColor.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

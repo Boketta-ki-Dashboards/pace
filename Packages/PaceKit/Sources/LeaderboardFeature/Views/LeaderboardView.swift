@@ -83,6 +83,13 @@ struct LeaderboardContent: View {
                         emptyStateText: viewModel.emptyStateText
                     )
 
+                    if let progress = viewModel.progressText {
+                        Label(progress, systemImage: "arrow.up.forward.circle")
+                            .font(PaceFont.callout)
+                            .foregroundStyle(PaceColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
                     if viewModel.canLoadMore || viewModel.isLoadingMore {
                         Button {
                             Task { await viewModel.loadMore() }

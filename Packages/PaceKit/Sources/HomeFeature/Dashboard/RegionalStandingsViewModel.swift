@@ -253,21 +253,12 @@ public struct RegionalStandings: Equatable, Sendable {
 
         /// Schritte, die zum nächsten Platz fehlen (bei Gleichstand gewinnt, wer den Wert zuerst hatte).
         public var stepsToNextPlace: Int? {
-            guard let nextAbove else { return nil }
-            return nextAbove.competitionSteps - currentUser.competitionSteps + 1
+            RankingHint.stepsToNextPlace(currentUser: currentUser, above: nextAbove)
         }
 
         /// z. B. `Noch 280 Schritte bis Platz #11`. Auf Platz 1 gibt es keinen Aufstiegshinweis.
         public var footerText: String {
-            if isAlone {
-                return "Du bist der Erste \(region.locative)."
-            }
-            if currentUser.rank == 1 {
-                return "Du führst \(region.locative)."
-            }
-            guard let steps = stepsToNextPlace else { return "" }
-            let formatted = steps.formatted(.number.locale(Locale(identifier: "de_DE")))
-            return "Noch \(formatted) \(steps == 1 ? "Schritt" : "Schritte") bis Platz #\(currentUser.rank - 1)"
+            RankingHint.text(currentUser: currentUser, above: nextAbove, isAlone: isAlone, locative: region.locative) ?? ""
         }
     }
 

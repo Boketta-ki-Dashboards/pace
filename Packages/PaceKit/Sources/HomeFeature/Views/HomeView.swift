@@ -47,6 +47,9 @@ public struct HomeView: View {
         .task(id: viewModel.showsStreak) { [viewModel] in
             await viewModel.loadStreakIfNeeded()
         }
+        .task(id: viewModel.showsSocial) { [viewModel] in
+            await viewModel.loadSocialIfNeeded()
+        }
         .onChange(of: viewModel.streak.record) {
             viewModel.streak.saveRecordIfNeeded()
         }
@@ -98,9 +101,9 @@ public struct HomeView: View {
                 viewModel.openRankings(scope)
             }
         case .friends:
-            FriendsPreviewCardView(size: module.size) { viewModel.openSocial() }
+            FriendsPreviewCardView(social: viewModel.social, size: module.size) { viewModel.openSocial() }
         case .groups:
-            GroupsPreviewCardView(size: module.size) { viewModel.openSocial() }
+            GroupsPreviewCardView(social: viewModel.social, size: module.size) { viewModel.openSocial() }
         }
     }
 }
