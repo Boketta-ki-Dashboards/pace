@@ -11,11 +11,27 @@ struct ChatMediaBubble: View {
     let localData: Data?
     let isGIF: Bool
     let accessibilityText: String
-    var isUploading = false
-    var onOpen: ((MediaReference) -> Void)?
+    let isUploading: Bool
+    let onOpen: ((MediaReference) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var playsGIF = false
+
+    init(
+        reference: MediaReference?,
+        localData: Data?,
+        isGIF: Bool,
+        accessibilityText: String,
+        isUploading: Bool = false,
+        onOpen: ((MediaReference) -> Void)? = nil
+    ) {
+        self.reference = reference
+        self.localData = localData
+        self.isGIF = isGIF
+        self.accessibilityText = accessibilityText
+        self.isUploading = isUploading
+        self.onOpen = onOpen
+    }
 
     private var size: CGSize {
         isGIF ? CGSize(width: 156, height: 104) : CGSize(width: 212, height: 120)
@@ -80,11 +96,18 @@ struct ChatMediaImage: View {
     let reference: MediaReference?
     let localData: Data?
     let animates: Bool
-    var contentMode: ContentMode = .fill
+    let contentMode: ContentMode
 
     @Environment(\.paceImageLoader) private var loader
     @State private var image: UIImage?
     @State private var failed = false
+
+    init(reference: MediaReference?, localData: Data?, animates: Bool, contentMode: ContentMode = .fill) {
+        self.reference = reference
+        self.localData = localData
+        self.animates = animates
+        self.contentMode = contentMode
+    }
 
     var body: some View {
         let shown = image ?? reference.flatMap { loader?.cachedImage(for: $0) }
@@ -178,6 +201,10 @@ struct ChatImageViewer: View {
     @State private var lastScale: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
+
+    init(item: ChatViewerItem) {
+        self.item = item
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {

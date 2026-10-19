@@ -197,4 +197,70 @@ struct ChatFormattingTests {
         #expect(items.last?.id == "pending-\(pending.clientID.uuidString)")
         #expect(items.filter { if case .day = $0 { true } else { false } }.count == 1)
     }
+
+    // MARK: Medien und Eingabe
+
+    @Test func gifsAreRecognizedByTheirSignature() {
+        #expect(ChatMediaSupport.isGIF(Data("GIF89a\u{01}\u{00}".utf8)))
+        #expect(ChatMediaSupport.isGIF(Data("GIF87a".utf8)))
+        #expect(!ChatMediaSupport.isGIF(Data([0xFF, 0xD8, 0xFF, 0xE0])))
+        #expect(!ChatMediaSupport.isGIF(Data("GIF8".utf8)))
+        #expect(!ChatMediaSupport.isGIF(Data()))
+    }
+
+    @Test func photosAreScaledDownKeepingTheAspectRatio() {
+        let large = ChatMediaSupport.scaledSize(width: 4_032, height: 3_024)
+        #expect(large.width == 2_048)
+        #expect(large.height == 1_536)
+        let small = ChatMediaSupport.scaledSize(width: 800, height: 600)
+        #expect(small.width == 800)
+        #expect(small.height == 600)
+        let invalid = ChatMediaSupport.scaledSize(width: 0, height: 100)
+        #expect(invalid.width == 0)
+        #expect(ChatMediaSupport.maximumBytes == 10 * 1024 * 1024)
+    }
+
+    @Test func remainingCharactersAreTranslated() {
+        PaceLocalization.$languageOverride.withValue(.german) {
+            #expect(ChatUIText.remaining(120) == "Noch 120 Zeichen")
+            #expect(ChatUIText.remaining(-5) == "5 Zeichen zu viel")
+        }
+        PaceLocalization.$languageOverride.withValue(.english) {
+            #expect(ChatUIText.remaining(1) == "1 character left")
+            #expect(ChatUIText.remaining(-2) == "2 characters too many")
+        }
+        PaceLocalization.$languageOverride.withValue(.russian) {
+            #expect(ChatUIText.remaining(21) == "Остался 21 символ")
+            #expect(ChatUIText.remaining(3) == "Осталось 3 символа")
+            #expect(ChatUIText.remaining(-11) == "Лишних 11 символов")
+        }
+    }
+
+    @Test func emptyStatesDependOnTheFilter() {
+        PaceLocalization.$languageOverride.withValue(.english) {
+            #expect(ChatUIText.emptyTitle(.all) == "No chats yet")
+            #expect(ChatUIText.emptyTitle(.friends) == "No direct chats yet")
+            #expect(ChatUIText.emptyTitle(.groups) == "No group chats yet")
+        }
+        PaceLocalization.$languageOverride.withValue(.russian) {
+            #expect(ChatUIText.emptyTitle(.groups) == "Групповых чатов пока нет")
+            #expect(ChatUIText.photo(from: "Marie") == "Фото от Marie")
+        }
+    }
+
+    @Test func listRowAccessibilityNamesUnreadMessages() async {
+        let conversation = ChatFixtures.direct(
+            peer: ChatFixtures.leon,
+            last: ChatMessagePreview(kind: .text, text: "Noch eine Runde?", senderName: "Leon", isOwn: false, sentAt: now),
+            unread: 2,
+            updatedAt: now
+        )
+        let label = await MainActor.run {
+            let list = ChatListViewModel(repository: nil, media: nil, calendar: calendar, now: { [now] in now })
+            return PaceLocalization.$languageOverride.withValue(.german) {
+                list.accessibilityLabel(for: conversation)
+            }
+        }
+        #expect(label == "Leon, Noch eine Runde?, 18:00, 2 ungelesene Nachrichten")
+    }
 }

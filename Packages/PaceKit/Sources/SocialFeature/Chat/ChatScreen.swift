@@ -45,14 +45,15 @@ struct ChatActions {
 /// Verlauf – auch für Snapshot-Tests.
 struct ChatContent: View {
     let viewModel: ChatViewModel
-    var backTitle: String = SocialText.social
+    /// Ziel des Zurück-Links; ohne Angabe „Social“.
+    var backTitle: String?
     var actions = ChatActions()
     /// Nachrichten in einem `LazyVStack` (in der App); für Snapshots alle sofort.
     var isLazy = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
-            ChatHeader(viewModel: viewModel, backTitle: backTitle, actions: actions)
+            ChatHeader(viewModel: viewModel, backTitle: backTitle ?? SocialText.social, actions: actions)
             if let notice = viewModel.notice {
                 NoticeBanner(notice: SocialViewModel.Notice(text: notice.text, isError: notice.isError), onDismiss: actions.dismissNotice)
             }

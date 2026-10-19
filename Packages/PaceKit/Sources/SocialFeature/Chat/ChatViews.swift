@@ -9,7 +9,7 @@ import SwiftUI
 /// Solange die Liste sichtbar ist und die App im Vordergrund läuft, hält sie sich per Echtzeit und regelmäßigem
 /// Abfragen aktuell.
 public struct ChatListSection: View {
-    @Bindable private var viewModel: ChatListViewModel
+    private let viewModel: ChatListViewModel
     private let onOpen: (ChatTarget) -> Void
 
     @Environment(\.scenePhase) private var scenePhase
@@ -33,7 +33,7 @@ public struct ChatListSection: View {
 /// Navigation in Social-Seiten (Gruppendetails, Gruppeneinstellungen, Mitglieder) läuft über `onOpenRoute`; ohne
 /// Angabe über `NavigationLink(value: SocialRoute…)`, die der Social-Tab registriert. Profile öffnet `onOpenProfile`.
 public struct ChatView: View {
-    @Bindable private var viewModel: ChatViewModel
+    private let viewModel: ChatViewModel
     private let backTitle: String?
     private let onOpenRoute: ((SocialRoute) -> Void)?
     private let onOpenProfile: (SocialProfile) -> Void
@@ -68,7 +68,7 @@ public struct ChatView: View {
                 ScrollView {
                     ChatContent(
                         viewModel: viewModel,
-                        backTitle: backTitle ?? SocialText.social,
+                        backTitle: backTitle,
                         actions: actions(proxy: proxy)
                     )
                     .padding(.horizontal, PaceSpacing.m)
@@ -129,7 +129,7 @@ public struct ChatView: View {
                     if case .entry = item { return true }
                     return false
                 }?.id
-                Task {
+                Task { @MainActor in
                     await viewModel.loadOlder()
                     if let anchor {
                         proxy.scrollTo(anchor, anchor: .top)

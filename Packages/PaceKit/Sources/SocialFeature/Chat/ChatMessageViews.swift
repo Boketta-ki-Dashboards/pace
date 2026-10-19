@@ -10,24 +10,24 @@ struct ChatTimelineView: View {
     var isLazy = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PaceSpacing.xs) {
-            olderMessages
-            let items = viewModel.timeline
-            if items.isEmpty {
-                Text(ChatUIText.emptyConversation)
-                    .font(PaceFont.callout)
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, PaceSpacing.xl)
-            } else if isLazy {
-                LazyVStack(alignment: .leading, spacing: PaceSpacing.xs) {
-                    rows(items)
-                }
-            } else {
-                VStack(alignment: .leading, spacing: PaceSpacing.xs) {
-                    rows(items)
-                }
+        let items = viewModel.timeline
+        if items.isEmpty {
+            Text(ChatUIText.emptyConversation)
+                .font(PaceFont.callout)
+                .foregroundStyle(PaceColor.textSecondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, PaceSpacing.xl)
+        } else if isLazy {
+            // Lazy: Der Auslöser für ältere Nachrichten erscheint erst, wenn man an den Anfang scrollt.
+            LazyVStack(alignment: .leading, spacing: PaceSpacing.xs) {
+                olderMessages
+                rows(items)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: PaceSpacing.xs) {
+                olderMessages
+                rows(items)
             }
         }
     }
