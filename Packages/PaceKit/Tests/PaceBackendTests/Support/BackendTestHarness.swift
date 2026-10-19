@@ -14,7 +14,14 @@ final class BackendTestHarness: Sendable {
     let host: String
     let backend: SupabaseBackend
     private let requests = Locked<[RecordedRequest]>([])
-    private let routes = Locked<[(method: String, path: String, outcome: StubOutcome)]>([])
+    private let routes = Locked<[Route]>([])
+
+    /// Antwortregel: Methode, Pfadprüfung und Antwort (abhängig von der Anfrage möglich).
+    private struct Route: Sendable {
+        let method: String
+        let matches: @Sendable (String) -> Bool
+        let respond: @Sendable (RecordedRequest) -> StubOutcome
+    }
 
     init() {
         host = "\(UUID().uuidString.lowercased().prefix(12)).supabase.test"
@@ -36,9 +43,10 @@ final class BackendTestHarness: Sendable {
         StubRegistry.register(host: host) { request in
             requests.withLock { $0.append(request) }
             let match = routes.withLock { routes in
-                routes.last { $0.method == request.method && $0.path == request.path }
+                routes.last { $0.method == request.method && $0.matches(request.path) }
             }
-            return match?.outcome ?? .json(#"{"code":"PGRST000","details":null,"hint":null,"message":"no stub"}"#, status: 500)
+            return match?.respond(request)
+                ?? .json(#"{"code":"PGRST000","details":null,"hint":null,"message":"no stub"}"#, status: 500)
         }
     }
 
@@ -48,7 +56,17 @@ final class BackendTestHarness: Sendable {
 
     /// Antwort für Methode + Pfad (der zuletzt registrierte Eintrag gewinnt).
     func stub(_ method: String, _ path: String, _ outcome: StubOutcome) {
-        routes.withLock { $0.append((method, path, outcome)) }
+        routes.withLock { $0.append(Route(method: method, matches: { $0 == path }, respond: { _ in outcome })) }
+    }
+
+    /// Antwort abhängig von der Anfrage (z. B. vom Body oder von Query-Parametern).
+    func stub(_ method: String, _ path: String, respond: @escaping @Sendable (RecordedRequest) -> StubOutcome) {
+        routes.withLock { $0.append(Route(method: method, matches: { $0 == path }, respond: respond)) }
+    }
+
+    /// Antwort für alle Pfade mit diesem Anfang (z. B. Storage-Objekte mit zufälligem Namen).
+    func stub(_ method: String, pathPrefix: String, _ outcome: StubOutcome) {
+        routes.withLock { $0.append(Route(method: method, matches: { $0.hasPrefix(pathPrefix) }, respond: { _ in outcome })) }
     }
 
     var recorded: [RecordedRequest] {
@@ -57,6 +75,10 @@ final class BackendTestHarness: Sendable {
 
     func lastRequest(_ method: String, _ path: String) -> RecordedRequest? {
         recorded.last { $0.method == method && $0.path == path }
+    }
+
+    func requests(_ method: String, pathPrefix: String) -> [RecordedRequest] {
+        recorded.filter { $0.method == method && $0.path.hasPrefix(pathPrefix) }
     }
 
     /// Meldet anonym an, damit Folgeanfragen ein Access Token tragen.
