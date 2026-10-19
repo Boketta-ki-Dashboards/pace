@@ -315,6 +315,27 @@ struct ChatViewModelTests {
         #expect(repository.state.withLock { $0.readMarks.count } == 2)
     }
 
+    @Test func overlappingObserversKeepTheChatVisible() async throws {
+        let conversation = ChatFixtures.direct()
+        let repository = ChatRepositoryStub { $0.conversations = [conversation] }
+        repository.state.withLock { $0.messages[conversation.id] = history(1, in: conversation.id) }
+        let list = makeList(repository)
+        await list.load()
+        let chat = list.chat(for: ChatTarget(conversation))
+        let first = Task { await chat.observe() }
+        try await waitUntil { repository.subscriberCount(conversationID: conversation.id) == 1 }
+        let second = Task { await chat.observe() }
+        try await waitUntil { repository.subscriberCount(conversationID: conversation.id) == 2 }
+
+        first.cancel()
+        await first.value
+        repository.receive(ChatFixtures.message(in: conversation.id, from: ChatFixtures.mia, text: "Noch da?", at: base.addingTimeInterval(60)))
+
+        try await waitUntil { repository.state.withLock { $0.readMarks.count } == 2 }
+        second.cancel()
+        await second.value
+    }
+
     @Test func pollingFallbackLoadsNewMessagesWithoutRealtime() async throws {
         let conversation = ChatFixtures.direct()
         let repository = ChatRepositoryStub { state in

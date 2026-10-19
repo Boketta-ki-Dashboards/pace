@@ -66,7 +66,9 @@ public final class ChatViewModel {
     @ObservationIgnored private var olderTask: Task<Void, Never>?
     /// Bis hierhin ist der Lesestand an den Server gemeldet.
     @ObservationIgnored private var lastReadMark: Date?
-    @ObservationIgnored private var isVisible = false
+    /// Anzahl laufender ``observe()``-Aufrufe (beim schnellen Wechsel kann ein alter kurz neben dem neuen laufen).
+    @ObservationIgnored private var observerCount = 0
+    private var isVisible: Bool { observerCount > 0 }
     /// Gerade hochgeladene Bilder (Pfad → Daten), damit sie nicht noch einmal geladen werden müssen.
     @ObservationIgnored private var uploadedMedia: [String: Data] = [:]
 
@@ -408,8 +410,8 @@ public final class ChatViewModel {
     /// Echtzeit-Ereignisse und als Rückfall regelmäßiges Abfragen. Endet, wenn die Aufgabe abgebrochen wird.
     public func observe() async {
         guard let repository else { return }
-        isVisible = true
-        defer { isVisible = false }
+        observerCount += 1
+        defer { observerCount -= 1 }
         let interval = pollInterval
         let sleep = sleep
         await loadIfNeeded()
