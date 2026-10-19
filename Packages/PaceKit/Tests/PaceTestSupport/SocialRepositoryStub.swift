@@ -18,6 +18,10 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
         public var invitations: [GroupInvitation] = []
         public var outgoingInvitations: [UUID: [OutgoingGroupInvitation]] = [:]
         public var friendRequestOutcome: FriendRequestOutcome = .requested
+        /// Treffer der Präfix-Suche (nach Benutzername gefiltert).
+        public var searchableProfiles: [SocialProfile] = []
+        public var blocked: [SocialProfile] = []
+        public var reports: [(ReportTarget, ReportReason, String?)] = []
         /// Fehler für alle Aufrufe.
         public var error: SocialError?
         /// Fehler nur für Schreibaktionen.
@@ -110,8 +114,14 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
 
     public func createGroup(_ draft: GroupDraft, timeZone: String) async throws -> GroupSummary {
         try write("createGroup") { state in
-            let group = Self.group(name: draft.name, kind: draft.kind, goal: draft.dailyGoal, timeZone: timeZone)
+            let group = Self.group(name: draft.name, kind: draft.kind, goal: draft.dailyGoal, timeZone: timeZone, privacy: draft.privacy)
             state.groups.append(group)
+            for invitee in draft.inviteePublicIDs {
+                guard let friend = state.friends.first(where: { $0.profile.publicID == invitee }) else { continue }
+                state.outgoingInvitations[group.id, default: []].append(
+                    OutgoingGroupInvitation(id: UUID(), profile: friend.profile, createdAt: Date(timeIntervalSince1970: 0))
+                )
+            }
             return group
         }
     }
@@ -224,6 +234,99 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
         }
     }
 
+    public func searchProfiles(query: String) async throws -> [ProfileSearchResult] {
+        try read("searchProfiles:\(query)") { state in
+            let lowered = query.lowercased()
+            let blockedIDs = Set(state.blocked.map(\.publicID))
+            return state.searchableProfiles
+                .filter { $0.username.lowercased().hasPrefix(lowered) && !blockedIDs.contains($0.publicID) }
+                .sorted { lhs, rhs in
+                    let lhsExact = lhs.username.lowercased() == lowered, rhsExact = rhs.username.lowercased() == lowered
+                    return lhsExact != rhsExact ? lhsExact : lhs.username < rhs.username
+                }
+                .prefix(20)
+                .map { ProfileSearchResult(profile: $0, relationship: state.relationships[$0.publicID] ?? .none, requestID: nil) }
+        }
+    }
+
+    public func publicProfile(_ publicID: UUID, date: LocalDate) async throws -> PublicProfile {
+        let found = try read("publicProfile") { state -> PublicProfile? in
+            let friend = state.friends.first { $0.profile.publicID == publicID }
+            let known = friend?.profile
+                ?? state.searchableProfiles.first { $0.publicID == publicID }
+                ?? state.profiles.values.first { $0.publicID == publicID }
+            guard let profile = known else { return nil }
+            let isFriend = friend != nil
+            return PublicProfile(
+                profile: profile,
+                relationship: isFriend ? .friend : (state.relationships[publicID] ?? .none),
+                requestID: nil,
+                friendsSince: friend?.friendsSince,
+                stepsToday: isFriend ? 4_200 : nil,
+                stepsWeek: isFriend ? 30_100 : nil,
+                isBlockedByMe: state.blocked.contains { $0.publicID == publicID }
+            )
+        }
+        guard let found else { throw SocialError.notFound }
+        return found
+    }
+
+    public func updateGroupDetails(_ groupID: UUID, name: String, description: String, kind: GroupKind, privacy: GroupPrivacy) async throws -> GroupSummary {
+        try write("updateGroupDetails") { state in
+            guard let index = state.groups.firstIndex(where: { $0.id == groupID }) else { throw SocialError.notFound }
+            let old = state.groups[index]
+            let updated = Self.group(
+                id: groupID, name: name, description: description, kind: kind, role: old.role, memberCount: old.memberCount,
+                goal: old.dailyGoal, timeZone: old.timeZone, currentStreak: old.currentStreak, reached: old.todayReachedCount,
+                imagePath: old.imagePath, privacy: privacy
+            )
+            state.groups[index] = updated
+            return updated
+        }
+    }
+
+    public func setGroupImage(_ groupID: UUID, path: String?) async throws -> GroupSummary {
+        try write("setGroupImage") { state in
+            guard let index = state.groups.firstIndex(where: { $0.id == groupID }) else { throw SocialError.notFound }
+            let old = state.groups[index]
+            let updated = Self.group(
+                id: groupID, name: old.name, description: old.description, kind: old.kind, role: old.role,
+                memberCount: old.memberCount, goal: old.dailyGoal, timeZone: old.timeZone, currentStreak: old.currentStreak,
+                reached: old.todayReachedCount, imagePath: path, privacy: old.privacy
+            )
+            state.groups[index] = updated
+            return updated
+        }
+    }
+
+    public func block(_ publicID: UUID) async throws {
+        try write("block") { state in
+            let profile = state.friends.first { $0.profile.publicID == publicID }?.profile
+                ?? state.searchableProfiles.first { $0.publicID == publicID }
+                ?? SocialProfile(publicID: publicID, username: "blockiert", displayName: "Blockiert")
+            if !state.blocked.contains(where: { $0.publicID == publicID }) { state.blocked.append(profile) }
+            state.friends.removeAll { $0.profile.publicID == publicID }
+            state.requests.removeAll { $0.profile.publicID == publicID }
+            state.relationships[publicID] = SocialRelationship.none
+        }
+    }
+
+    public func unblock(_ publicID: UUID) async throws {
+        try write("unblock") { state in
+            state.blocked.removeAll { $0.publicID == publicID }
+        }
+    }
+
+    public func blockedUsers() async throws -> [SocialProfile] {
+        try read("blockedUsers") { $0.blocked }
+    }
+
+    public func report(_ target: ReportTarget, reason: ReportReason, details: String?) async throws {
+        try write("report") { state in
+            state.reports.append((target, reason, details))
+        }
+    }
+
     /// Beispielgruppe für Tests.
     public static func group(
         id: UUID = UUID(),
@@ -236,7 +339,9 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
         timeZone: String = "Europe/Berlin",
         inviteCode: String = "K7M2Q9XA",
         currentStreak: Int = 4,
-        reached: Int = 1
+        reached: Int = 1,
+        imagePath: String? = nil,
+        privacy: GroupPrivacy = .code
     ) -> GroupSummary {
         GroupSummary(
             id: id,
@@ -255,7 +360,9 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
             todayReachedCount: reached,
             todayRequiredCount: GroupStreakRules.requiredMembers(forMemberCount: memberCount),
             todayComplete: reached >= GroupStreakRules.requiredMembers(forMemberCount: memberCount),
-            createdAt: Date(timeIntervalSince1970: 0)
+            createdAt: Date(timeIntervalSince1970: 0),
+            imagePath: imagePath,
+            privacy: privacy
         )
     }
 }

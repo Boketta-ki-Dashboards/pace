@@ -10,6 +10,7 @@ public final class AuthStub: AuthProviding, Sendable {
             AuthSession(userID: Fixtures.userID, isAnonymous: true)
         )
         public var signInCalls = 0
+        public var signOutCalls = 0
     }
 
     public let state: Locked<State>
@@ -32,6 +33,13 @@ public final class AuthStub: AuthProviding, Sendable {
             return session
         }
     }
+
+    public func signOut() async {
+        state.withLock { state in
+            state.signOutCalls += 1
+            state.storedSession = nil
+        }
+    }
 }
 
 // MARK: - Profile
@@ -45,6 +53,9 @@ public final class ProfileRepositoryStub: ProfileRepository, Sendable {
         public var createCalls: [NewProfile] = []
         public var regionUpdates: [(RegionID, Bool)] = []
         public var optInUpdates: [Bool] = []
+        public var nameUpdates: [(username: String?, displayName: String?)] = []
+        public var avatarUpdates: [String?] = []
+        public var discoverableUpdates: [Bool] = []
     }
 
     public let state: Locked<State>
@@ -111,6 +122,46 @@ public final class ProfileRepositoryStub: ProfileRepository, Sendable {
         try state.withLock { state in
             if let error = state.error { throw error }
             return !state.takenUsernames.contains(username.lowercased())
+        }
+    }
+
+    public func updateNames(username: String?, displayName: String?, for userID: UserID) async throws -> UserProfile {
+        try state.withLock { state in
+            state.nameUpdates.append((username, displayName))
+            if let error = state.error { throw error }
+            guard var profile = state.profiles[userID] else { throw ProfileError.notAuthenticated }
+            if let username {
+                let lowered = username.lowercased()
+                if lowered != profile.username.lowercased(), state.takenUsernames.contains(lowered) { throw ProfileError.usernameTaken }
+                state.takenUsernames.remove(profile.username.lowercased())
+                state.takenUsernames.insert(lowered)
+                profile.username = username
+            }
+            if let displayName { profile.displayName = displayName }
+            state.profiles[userID] = profile
+            return profile
+        }
+    }
+
+    public func updateAvatar(path: String?, for userID: UserID) async throws -> UserProfile {
+        try state.withLock { state in
+            state.avatarUpdates.append(path)
+            if let error = state.error { throw error }
+            guard var profile = state.profiles[userID] else { throw ProfileError.notAuthenticated }
+            profile.avatarPath = path
+            state.profiles[userID] = profile
+            return profile
+        }
+    }
+
+    public func updateDiscoverable(_ discoverable: Bool, for userID: UserID) async throws -> UserProfile {
+        try state.withLock { state in
+            state.discoverableUpdates.append(discoverable)
+            if let error = state.error { throw error }
+            guard var profile = state.profiles[userID] else { throw ProfileError.notAuthenticated }
+            profile.isDiscoverable = discoverable
+            state.profiles[userID] = profile
+            return profile
         }
     }
 }

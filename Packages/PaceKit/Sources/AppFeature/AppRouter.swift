@@ -17,12 +17,23 @@ import SocialFeature
 @Observable
 public final class AppRouter {
     public private(set) var route: AppRoute = .launching
+    /// Darstellung, Sprache und Erinnerungen. Wird sofort beim Start geladen, damit die erste Ansicht schon in der
+    /// gewählten Sprache und Darstellung erscheint.
+    public let settings: AppSettings
+    /// Profil-, Gruppen- und Chatbilder; `nil` ohne Backend.
+    public let media: (any MediaRepository)?
 
     @ObservationIgnored private let dependencies: AppDependencies
     @ObservationIgnored private var isConnecting = false
 
     public init(dependencies: AppDependencies) {
         self.dependencies = dependencies
+        settings = AppSettings(store: dependencies.preferences)
+        if case .available(let services) = dependencies.backend {
+            media = services.media
+        } else {
+            media = nil
+        }
     }
 
     /// Bestimmt beim App-Start die erste Route. Weitere Aufrufe haben keine Wirkung.

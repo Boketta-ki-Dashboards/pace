@@ -22,6 +22,12 @@ public struct AppDependencies: Sendable {
     public let streakRecords: any StepStreakRecordStoring
     /// Wechsel des App-Icons (Profil → Darstellung).
     public let appIcons: any AppIconSetting
+    /// Darstellung, Sprache und Erinnerungen (nur auf dem Gerät).
+    public let preferences: any AppPreferencesStoring
+    /// Lokale Mitteilungen (Erinnerung an das Tagesziel).
+    public let notifications: any LocalNotificationScheduling
+    /// Versionsangabe für „Hilfe & Rechtliches“, z. B. `0.1.0 (1)`.
+    public let appVersion: String
 
     public init(
         healthAuthorization: any HealthAuthorizationProviding,
@@ -30,7 +36,10 @@ public struct AppDependencies: Sendable {
         homePreferences: any HomePreferencesStoring = UserDefaultsHomePreferencesStore(),
         stepGoals: any StepGoalStoring = UserDefaultsStepGoalStore(),
         streakRecords: any StepStreakRecordStoring = UserDefaultsStepStreakRecordStore(),
-        appIcons: any AppIconSetting = UnsupportedAppIconSetting()
+        appIcons: any AppIconSetting = UnsupportedAppIconSetting(),
+        preferences: any AppPreferencesStoring = UserDefaultsAppPreferencesStore(),
+        notifications: any LocalNotificationScheduling = NoLocalNotifications(),
+        appVersion: String = ""
     ) {
         self.healthAuthorization = healthAuthorization
         self.activityData = activityData
@@ -39,7 +48,19 @@ public struct AppDependencies: Sendable {
         self.stepGoals = stepGoals
         self.streakRecords = streakRecords
         self.appIcons = appIcons
+        self.preferences = preferences
+        self.notifications = notifications
+        self.appVersion = appVersion
     }
+}
+
+/// Ohne Mitteilungen (Tests, Vorschauen).
+public struct NoLocalNotifications: LocalNotificationScheduling {
+    public init() {}
+    public func authorization() async -> NotificationAuthorization { .denied }
+    public func requestAuthorization() async -> Bool { false }
+    public func scheduleStreakReminders(hour: Int, minute: Int, skipToday: Bool, title: String, body: String) async {}
+    public func cancelStreakReminders() async {}
 }
 
 /// Backend-Dienste hinter den Protokollen aus PaceCore.
@@ -51,6 +72,12 @@ public struct BackendServices: Sendable {
     public let leaderboards: any LeaderboardRepository
     /// Freunde und Gruppen; `nil`, wenn nicht angebunden (z. B. in Tests).
     public let social: (any SocialRepository)?
+    /// Unterhaltungen; `nil`, wenn nicht angebunden.
+    public let chat: (any ChatRepository)?
+    /// Profil-, Gruppen- und Chatbilder; `nil`, wenn nicht angebunden.
+    public let media: (any MediaRepository)?
+    /// Datenexport, Kontolöschung, Rückmeldungen; `nil`, wenn nicht angebunden.
+    public let account: (any AccountRepository)?
     public let profileCache: any ProfileCaching
 
     public init(
@@ -60,6 +87,9 @@ public struct BackendServices: Sendable {
         activitySync: any ActivitySyncRepository,
         leaderboards: any LeaderboardRepository,
         social: (any SocialRepository)? = nil,
+        chat: (any ChatRepository)? = nil,
+        media: (any MediaRepository)? = nil,
+        account: (any AccountRepository)? = nil,
         profileCache: any ProfileCaching = UserDefaultsProfileCache()
     ) {
         self.auth = auth
@@ -68,6 +98,9 @@ public struct BackendServices: Sendable {
         self.activitySync = activitySync
         self.leaderboards = leaderboards
         self.social = social
+        self.chat = chat
+        self.media = media
+        self.account = account
         self.profileCache = profileCache
     }
 }

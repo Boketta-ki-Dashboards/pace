@@ -30,6 +30,8 @@ public struct LeaderboardEntry: Equatable, Hashable, Sendable, Identifiable {
     public let displayName: String
     public let competitionSteps: Int
     public let isCurrentUser: Bool
+    /// Profilbild im Bucket `avatars`.
+    public let avatarPath: String?
 
     public init(
         rank: Int,
@@ -37,7 +39,8 @@ public struct LeaderboardEntry: Equatable, Hashable, Sendable, Identifiable {
         username: String,
         displayName: String,
         competitionSteps: Int,
-        isCurrentUser: Bool
+        isCurrentUser: Bool,
+        avatarPath: String? = nil
     ) {
         self.rank = rank
         self.publicUserID = publicUserID
@@ -45,9 +48,12 @@ public struct LeaderboardEntry: Equatable, Hashable, Sendable, Identifiable {
         self.displayName = displayName
         self.competitionSteps = competitionSteps
         self.isCurrentUser = isCurrentUser
+        self.avatarPath = avatarPath
     }
 
     public var id: UUID { publicUserID }
+
+    public var avatar: MediaReference? { .avatar(avatarPath) }
 }
 
 /// Ein Ausschnitt des Rankings (serverseitig sortiert und paginiert).

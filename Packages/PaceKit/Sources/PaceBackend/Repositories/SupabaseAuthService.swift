@@ -19,6 +19,12 @@ struct SupabaseAuthService: AuthProviding {
             throw BackendErrorMapping.authError(error)
         }
     }
+
+    /// Entfernt die lokale Sitzung (Keychain). Der Server wird nicht benötigt – z. B. nach dem Löschen des Kontos ist
+    /// das Token ohnehin ungültig.
+    func signOut() async {
+        try? await client.signOut(scope: .local)
+    }
 }
 
 extension AuthSession {

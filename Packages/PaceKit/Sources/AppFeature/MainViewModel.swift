@@ -10,7 +10,7 @@ import SocialFeature
 @MainActor
 @Observable
 public final class MainViewModel {
-    public enum Tab: Hashable, Sendable {
+    public enum Tab: Hashable, Sendable, CaseIterable {
         case home
         case rankings
         case social
@@ -55,5 +55,18 @@ public final class MainViewModel {
 
     public func openSocial() {
         selectedTab = .social
+    }
+
+    /// Beim Wechsel in einen Tab: veraltete Inhalte nachladen (die Tabs bleiben im Speicher und erscheinen dabei nicht
+    /// neu, deshalb löst das nicht `.task` aus).
+    public func didSelect(_ tab: Tab) async {
+        switch tab {
+        case .home, .rankings:
+            break
+        case .social:
+            await social.loadIfNeeded()
+        case .profile:
+            await profile.load()
+        }
     }
 }

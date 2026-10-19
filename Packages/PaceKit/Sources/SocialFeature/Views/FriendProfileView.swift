@@ -81,7 +81,7 @@ struct FriendProfileView: View {
                         .font(PaceFont.callout)
                         .foregroundStyle(PaceColor.textSecondary)
                     if case .loaded(let details) = viewModel.state {
-                        Text("Befreundet seit \(details.friendsSince.formatted(.dateTime.day().month(.abbreviated).year().locale(PaceLocale.german)))")
+                        Text("Befreundet seit \(details.friendsSince.formatted(.dateTime.day().month(.abbreviated).year().locale(PaceLocalization.shared.locale)))")
                             .font(PaceFont.caption)
                             .foregroundStyle(PaceColor.textSecondary)
                     }

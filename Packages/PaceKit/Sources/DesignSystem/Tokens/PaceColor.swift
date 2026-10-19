@@ -6,25 +6,38 @@ public enum PaceColor {
     // MARK: Marke
 
     /// Farbe der Wortmarke und großer Markenflächen: tiefes Grün, im Dark Mode Mint.
-    public static var brand: Color { Color(light: 0x072D20, dark: 0xC9F7DA) }
+    public static var brand: Color { Color(light: 0x072D20, dark: 0x8EF5D8) }
     /// Akzent für Fortschritt, Links und Symbole.
-    public static var accent: Color { Color(light: 0x1C7A4E, dark: 0xB4F5CC) }
+    public static var accent: Color { Color(light: 0x16784C, dark: 0x86F3D3) }
     /// Gefüllte Buttons, ausgewählte Elemente, Fortschrittsring.
-    public static var accentStrong: Color { Color(light: 0x0A4A31, dark: 0xBDF8D2) }
+    public static var accentStrong: Color { Color(light: 0x075237, dark: 0x88F7D8) }
     /// Vordergrund auf `accentStrong`- und `accent`-Flächen.
-    public static var onAccent: Color { Color(light: 0xFFFFFF, dark: 0x0A1A14) }
+    public static var onAccent: Color { Color(light: 0xFFFFFF, dark: 0x06211A) }
     /// Zarte Hervorhebung, z. B. die eigene Zeile im Ranking.
-    public static var accentSoft: Color { Color(light: 0xE4F6EA, dark: 0x1C352C) }
+    public static var accentSoft: Color { Color(light: 0xDDF8EC, dark: 0x0F2A24) }
+
+    /// Kompakte Aktions-Buttons in Zeilen („Hinzufügen“, „Annehmen“): etwas helleres Grün, im Dark Mode Mint.
+    public static var actionFill: Color { Color(light: 0x07774B, dark: 0x88F7D8) }
+    /// Aktiver Tab und weiche Aktionsflächen („Freund hinzufügen“): zartes Mint, im Dark Mode Mint.
+    public static var selectionFill: Color { Color(light: 0xD3F9EA, dark: 0x8EF8DC) }
+    /// Vordergrund auf `selectionFill`.
+    public static var onSelection: Color { Color(light: 0x063D29, dark: 0x06211A) }
+    /// Zielerreichte Tage im Kalender: frisches Grün, im Dark Mode Mint (mit dunkler Schrift).
+    public static var goalReachedFill: Color { Color(light: 0x3BBF79, dark: 0x7FEFC5) }
+    /// Text auf `goalReachedFill`.
+    public static var onGoalReached: Color { Color(light: 0x07301F, dark: 0x06211A) }
 
     // MARK: Flächen
 
-    public static var background: Color { Color(light: 0xF8F9F7, dark: 0x0E1618) }
+    public static var background: Color { Color(light: 0xF8F9F7, dark: 0x0B1315) }
     /// Karten.
-    public static var surface: Color { Color(light: 0xFFFFFF, dark: 0x131D1F) }
+    public static var surface: Color { Color(light: 0xFFFFFF, dark: 0x111A1D) }
     /// Flächen innerhalb von Karten (Kacheln, Zeilen).
-    public static var surfaceSecondary: Color { Color(light: 0xFFFFFF, dark: 0x172325) }
+    public static var surfaceSecondary: Color { Color(light: 0xFFFFFF, dark: 0x152024) }
     /// Feine Ränder um Karten und Kacheln.
-    public static var border: Color { Color(light: 0xE7EAE6, dark: 0x243033) }
+    public static var border: Color { Color(light: 0xE7EAE6, dark: 0x232E32) }
+    /// Eingabefelder, nicht gewählte Segmente und leere Kalendertage.
+    public static var fieldBackground: Color { Color(light: 0xF1F2F5, dark: 0x172125) }
     /// Hintergrund von Fortschrittsbalken und -ringen.
     public static var track: Color { Color(light: 0xE1E4E2, dark: 0x343C3E) }
 
@@ -32,12 +45,12 @@ public enum PaceColor {
 
     public static var textPrimary: Color { Color(light: 0x0B120F, dark: 0xF3F7F5) }
     /// Sekundärer Text mit leichtem Blaustich, wie im Pace-Design.
-    public static var textSecondary: Color { Color(light: 0x4A4D69, dark: 0xA4ACAE) }
+    public static var textSecondary: Color { Color(light: 0x5F6684, dark: 0xA3AEB8) }
 
     // MARK: Diagramme
 
     /// Schwächste Stufe in Wochenübersichten; die stärkste ist `accentStrong`.
-    public static var chartLow: Color { Color(light: 0xA7D8B4, dark: 0x5E8F72) }
+    public static var chartLow: Color { Color(light: 0xA7DDBF, dark: 0x4E9F86) }
 
     // MARK: Serie
 

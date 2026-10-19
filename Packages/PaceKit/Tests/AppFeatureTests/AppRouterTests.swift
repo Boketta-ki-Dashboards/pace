@@ -34,7 +34,8 @@ struct AppRouterTests {
             healthAuthorization: health,
             activityData: health,
             backend: backend ?? .available(services),
-            homePreferences: InMemoryHomePreferencesStore()
+            homePreferences: InMemoryHomePreferencesStore(),
+            preferences: InMemoryAppPreferencesStore(AppPreferences(language: .fixed(.german)))
         )
         return (AppRouter(dependencies: dependencies), Environment(health: health, auth: auth, profiles: profiles, cache: cache))
     }

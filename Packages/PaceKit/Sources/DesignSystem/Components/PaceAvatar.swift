@@ -1,31 +1,61 @@
+import PaceCore
 import SwiftUI
+import UIKit
 
-/// Rundes Profilbild mit Initialen. Der Farbton ergibt sich stabil aus `seed`, damit dieselbe Person immer gleich aussieht.
+/// Rundes Profilbild: das hochgeladene Foto oder – solange keins da ist – Initialen. Der Farbton der Initialen ergibt
+/// sich stabil aus `seed`, damit dieselbe Person immer gleich aussieht.
 public struct PaceAvatar: View {
     private let initials: String
     private let seed: String
     private let size: CGFloat
     private let isHighlighted: Bool
+    private let image: MediaReference?
+
+    @Environment(\.paceImageLoader) private var loader
+    @State private var photo: UIImage?
 
     /// - Parameters:
     ///   - name: Anzeigename; daraus werden bis zu zwei Initialen gebildet.
     ///   - seed: Stabiler Wert für die Farbe, z. B. die öffentliche Nutzer-ID.
-    public init(name: String, seed: String, size: CGFloat = 40, isHighlighted: Bool = false) {
+    ///   - image: Profil- oder Gruppenbild aus Storage.
+    public init(name: String, seed: String, size: CGFloat = 40, isHighlighted: Bool = false, image: MediaReference? = nil) {
         initials = Self.initials(of: name)
         self.seed = seed
         self.size = size
         self.isHighlighted = isHighlighted
+        self.image = image
     }
 
     public var body: some View {
         let tone = Self.tones[Self.toneIndex(for: seed)]
-        Text(initials)
-            .font(.system(size: size * 0.38, weight: .semibold))
-            .foregroundStyle(isHighlighted ? PaceColor.onAccent : tone.foreground)
-            .frame(width: size, height: size)
-            .background(isHighlighted ? PaceColor.accentStrong : tone.background, in: Circle())
-            .overlay(Circle().strokeBorder(PaceColor.border, lineWidth: isHighlighted ? 0 : 1))
-            .accessibilityHidden(true)
+        ZStack {
+            if let photo {
+                Image(uiImage: photo)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+            } else {
+                Text(initials)
+                    .font(.system(size: size * 0.38, weight: .semibold))
+                    .foregroundStyle(isHighlighted ? PaceColor.onAccent : tone.foreground)
+                    .frame(width: size, height: size)
+                    .background(isHighlighted ? PaceColor.accentStrong : tone.background, in: Circle())
+            }
+        }
+        .overlay(Circle().strokeBorder(isHighlighted ? PaceColor.accent : PaceColor.border, lineWidth: isHighlighted && photo != nil ? 2 : (isHighlighted ? 0 : 1)))
+        .accessibilityHidden(true)
+        .task(id: image) {
+            guard let image, let loader else {
+                photo = nil
+                return
+            }
+            if let cached = loader.cachedImage(for: image) {
+                photo = cached
+            } else {
+                photo = await loader.image(for: image)
+            }
+        }
     }
 
     static func initials(of name: String) -> String {

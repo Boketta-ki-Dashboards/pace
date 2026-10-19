@@ -74,6 +74,30 @@ public final class ProfileStore {
         apply(updated)
     }
 
+    /// Ändert Benutzernamen und/oder Anzeigenamen (`nil` = unverändert).
+    public func updateNames(username: String?, displayName: String?) async throws {
+        mutationCount += 1
+        defer { mutationCount += 1 }
+        let updated = try await profiles.updateNames(username: username, displayName: displayName, for: profile.id)
+        apply(updated)
+    }
+
+    /// Setzt oder entfernt das Profilbild (Pfad im Bucket `avatars`).
+    public func updateAvatar(path: String?) async throws {
+        mutationCount += 1
+        defer { mutationCount += 1 }
+        let updated = try await profiles.updateAvatar(path: path, for: profile.id)
+        apply(updated)
+    }
+
+    /// Ob das Profil in der Präfix-Suche erscheint.
+    public func setDiscoverable(_ discoverable: Bool) async throws {
+        mutationCount += 1
+        defer { mutationCount += 1 }
+        let updated = try await profiles.updateDiscoverable(discoverable, for: profile.id)
+        apply(updated)
+    }
+
     private func apply(_ updated: UserProfile) {
         profile = updated
         cache.save(updated)

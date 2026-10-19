@@ -38,7 +38,7 @@ let package = Package(
         ),
 
         // Farben, Typografie, Abstände, Wortmarke und wiederverwendbare UI-Komponenten.
-        .target(name: "DesignSystem", resources: [.process("Resources")]),
+        .target(name: "DesignSystem", dependencies: ["PaceCore"], resources: [.process("Resources")]),
 
         // Features: jeweils ViewModel (ohne SwiftUI) + Views.
         .target(name: "HealthPermissionFeature", dependencies: ["PaceCore", "DesignSystem"]),

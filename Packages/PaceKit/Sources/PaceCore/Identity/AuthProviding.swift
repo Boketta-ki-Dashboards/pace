@@ -48,4 +48,11 @@ public protocol AuthProviding: Sendable {
 
     /// Legt eine neue anonyme Identität an und meldet sie an.
     func signInAnonymously() async throws -> AuthSession
+
+    /// Meldet lokal ab und entfernt die gespeicherte Sitzung (z. B. nach dem Löschen des Kontos).
+    func signOut() async
+}
+
+extension AuthProviding {
+    public func signOut() async {}
 }

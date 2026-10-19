@@ -11,8 +11,18 @@ extension AppDependencies {
             healthAuthorization: healthKit,
             activityData: healthKit,
             backend: makeBackend(),
-            appIcons: SystemAppIconSetting()
+            appIcons: SystemAppIconSetting(),
+            notifications: UserNotificationScheduler(),
+            appVersion: appVersion
         )
+    }
+
+    /// z. B. `0.1.0 (1)`.
+    private static var appVersion: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let version = info["CFBundleShortVersionString"] as? String ?? "–"
+        let build = info["CFBundleVersion"] as? String ?? "–"
+        return "\(version) (\(build))"
     }
 
     /// Supabase mit den Werten aus `Config/Pace.xcconfig` (über die Info.plist). Fehlt die Konfiguration oder ist
