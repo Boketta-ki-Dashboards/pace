@@ -69,8 +69,8 @@ select 'g1', public.social_create_group('  Lauftreff Nord  ', E'Jeden Morgen\nam
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(pg_temp.result('g1')) k),
   array['best_streak', 'created_at', 'current_streak', 'daily_goal', 'description', 'group_id', 'group_today',
-        'invite_code', 'kind', 'member_count', 'name', 'next_daily_goal', 'role', 'time_zone',
-        'today_complete', 'today_reached_count', 'today_required_count'],
+        'image_path', 'invite_code', 'kind', 'member_count', 'name', 'next_daily_goal', 'privacy', 'role',
+        'time_zone', 'today_complete', 'today_reached_count', 'today_required_count'],
   'summary: genau die vereinbarten Felder'
 );
 select is(
@@ -79,7 +79,7 @@ select is(
     'name', 'Lauftreff Nord', 'description', E'Jeden Morgen\nam See', 'kind', 'club', 'role', 'owner',
     'member_count', 1, 'daily_goal', 10000, 'next_daily_goal', null, 'time_zone', 'Europe/Berlin',
     'current_streak', 0, 'best_streak', 0, 'today_reached_count', 0, 'today_required_count', 1,
-    'today_complete', false
+    'today_complete', false, 'image_path', null, 'privacy', 'code'
   ),
   'erstellt: Name getrimmt, Zeitzone Standard Europe/Berlin, Ersteller ist owner'
 );
@@ -249,8 +249,8 @@ select is(
 );
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(public.social_group_ranking(pg_temp.group_id('g1'), 'daily')->'entries'->0) k),
-  array['competition_steps', 'display_name', 'is_current_user', 'public_user_id', 'rank', 'reached_goal_today',
-        'role', 'username'],
+  array['avatar_path', 'competition_steps', 'display_name', 'is_current_user', 'public_user_id', 'rank',
+        'reached_goal_today', 'role', 'username'],
   'Ranking-Einträge: nur öffentliche Felder'
 );
 select is(
@@ -308,20 +308,21 @@ select is(
 );
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(public.social_group_outgoing_invitations(pg_temp.group_id('g1'))->0) k),
-  array['created_at', 'display_name', 'invitation_id', 'public_id', 'username'], 'ausgehende Einladungen: Felder'
+  array['avatar_path', 'created_at', 'display_name', 'invitation_id', 'public_id', 'username'], 'ausgehende Einladungen: Felder'
 );
 
 -- sven lehnt ab, wird erneut eingeladen und nimmt an.
 set local request.jwt.claims = '{"sub":"a7000000-0000-4000-8000-000000000005","role":"authenticated"}';
 select is(
   public.social_group_invitations() #- '{0,invitation_id}' #- '{0,group_id}' #- '{0,created_at}',
-  '[{"group_name": "Lauftreff Süd", "group_kind": "friends", "member_count": 3, "inviter_username": "olga", "inviter_display_name": "Olga"}]'::jsonb,
+  '[{"group_name": "Lauftreff Süd", "group_kind": "friends", "group_image_path": null, "group_privacy": "code", "member_count": 3, "inviter_public_id": "b7000000-0000-4000-8000-000000000001", "inviter_username": "olga", "inviter_display_name": "Olga", "inviter_avatar_path": null}]'::jsonb,
   'eingehende Einladung mit Gruppe und einladender Person'
 );
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(public.social_group_invitations()->0) k),
-  array['created_at', 'group_id', 'group_kind', 'group_name', 'invitation_id', 'inviter_display_name',
-        'inviter_username', 'member_count'],
+  array['created_at', 'group_id', 'group_image_path', 'group_kind', 'group_name', 'group_privacy',
+        'invitation_id', 'inviter_avatar_path', 'inviter_display_name', 'inviter_public_id', 'inviter_username',
+        'member_count'],
   'eingehende Einladungen: Felder'
 );
 select is(
