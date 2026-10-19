@@ -341,6 +341,10 @@ Upload (`SupabaseMediaRepository`), der Server erzwingt dieselben Grenzen.
   Person selbst (`pace_access.can_receive_topic`). Clients können keine Broadcasts senden (keine insert-Policy).
 - Die App (`RealtimeEvents`) abonniert mit dem Access Token. Ist Realtime nicht erreichbar oder wird der Beitritt
   abgelehnt, endet der Stream sofort und die App aktualisiert regelmäßig (Polling-Rückfall im Chat-Feature).
+- Der Realtime-Client teilt Kanäle je Topic (z. B. `user:<public_id>` für Chat-Liste und Ungelesen-Zähler).
+  `TopicUsage` zählt die Streams je Topic: Erst der letzte entfernt den Kanal, und ein neuer Stream desselben Topics
+  wartet, bis dieses Entfernen abgeschlossen ist (sonst übernähme er einen Kanal, der danach nicht mehr im Client
+  eingetragen ist und nie wieder Hinweise erhielte).
 - Fehlt `realtime.send` (Realtime nicht eingerichtet), werden Nachrichten trotzdem gespeichert.
 
 ### Konto und Datenschutz

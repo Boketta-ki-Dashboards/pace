@@ -100,25 +100,50 @@ struct RealtimeEvents: Sendable {
     }
 
     private static func release(_ channel: RealtimeChannelV2, topic: String, client: RealtimeClientV2, usage: TopicUsage) async {
-        if await usage.release(topic) {
+        await usage.release(topic) {
             await client.removeChannel(channel)
         }
     }
 }
 
-/// Wie viele Streams ein Topic gerade nutzen.
+/// Wie viele Streams ein Topic gerade nutzen – und ob sein Kanal gerade entfernt wird.
+///
+/// Der Realtime-Client liefert für ein Topic denselben Kanal, bis `removeChannel` ihn nach dem Abmelden aus seiner
+/// Liste nimmt. Ein Stream, der in dieser Zeit beginnt, bekäme sonst genau diesen Kanal: Er wäre danach zwar
+/// angemeldet, aber nicht mehr im Client eingetragen, erhielte nie wieder Hinweise und endete auch nicht (kein
+/// Rückfall auf regelmäßiges Aktualisieren). Deshalb wartet `acquire`, bis das Entfernen abgeschlossen ist.
 actor TopicUsage {
     private var counts: [String: Int] = [:]
+    private var removals: [String: Task<Void, Never>] = [:]
 
-    func acquire(_ topic: String) {
+    /// Zählt eine Nutzung, sobald kein Entfernen des Kanals dieses Topics mehr läuft.
+    func acquire(_ topic: String) async {
+        while let removal = removals[topic] {
+            await removal.value
+            if removals[topic] == removal {
+                removals[topic] = nil
+            }
+        }
         counts[topic, default: 0] += 1
     }
 
-    /// Gibt eine Nutzung frei; `true`, wenn das Topic danach von niemandem mehr genutzt wird.
-    func release(_ topic: String) -> Bool {
+    /// Gibt eine Nutzung frei. War es die letzte, läuft `remove` (Kanal entfernen); neue Nutzungen warten darauf.
+    /// - Returns: `true`, wenn das Topic danach von niemandem mehr genutzt wird.
+    @discardableResult
+    func release(_ topic: String, remove: @escaping @Sendable () async -> Void = {}) async -> Bool {
         let remaining = (counts[topic] ?? 1) - 1
-        counts[topic] = remaining > 0 ? remaining : nil
-        return remaining <= 0
+        guard remaining <= 0 else {
+            counts[topic] = remaining
+            return false
+        }
+        counts[topic] = nil
+        let removal = Task { await remove() }
+        removals[topic] = removal
+        await removal.value
+        if removals[topic] == removal {
+            removals[topic] = nil
+        }
+        return true
     }
 }
 
