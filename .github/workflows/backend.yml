@@ -70,6 +70,18 @@ jobs:
       - name: Security & performance advisors
         run: supabase db advisors --local --fail-on warn
 
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Realtime channels end-to-end (private broadcast + policies)
+        # Der Swift-Client kann unter Linux keine WebSockets öffnen (libcurl ohne WebSocket-Unterstützung); dieses
+        # Skript prüft die Echtzeit-Kanäle deshalb direkt über das Realtime-Protokoll (Node ≥ 22).
+        run: |
+          eval "$(supabase status -o env)"
+          PACE_SUPABASE_URL="$API_URL" PACE_SUPABASE_PUBLISHABLE_KEY="${PUBLISHABLE_KEY:-$ANON_KEY}" \
+            node supabase/scripts/realtime_smoke_test.mjs
+
       - name: Backend integration tests (Swift on Linux)
         run: |
           eval "$(supabase status -o env)"

@@ -382,6 +382,21 @@ begin
 
   -- Eigene Nachrichten werden gelöscht, nicht nur vom Konto getrennt.
   delete from public.chat_messages m where m.sender_id = v_me;
+  -- Gruppenbilder, die die App vorher über account_own_media gelöscht hat (Bilder eigener Gruppen und eigene
+  -- Uploads), nicht weiter referenzieren – die Gruppe zeigt dann wieder das Symbol ihrer Art.
+  update public.groups g
+     set image_path = null
+   where g.image_path is not null
+     and (
+       exists (
+         select 1 from public.group_members m
+          where m.group_id = g.id and m.user_id = v_me and m.role = 'owner'
+       )
+       or exists (
+         select 1 from storage.objects o
+          where o.bucket_id = 'group-images' and o.name = g.image_path and o.owner_id = v_me::text
+       )
+     );
   delete from auth.users u where u.id = v_me;
 end;
 $$;

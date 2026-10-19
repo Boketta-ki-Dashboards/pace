@@ -1,6 +1,6 @@
 -- Pace: Meldungen, Rückmeldungen, Datenexport, eigene Dateien und Konto löschen.
 begin;
-select plan(50);
+select plan(51);
 
 -- =============================================================================================================
 -- Struktur
@@ -74,6 +74,8 @@ values ('avatars', 'bd000000-0000-4000-8000-000000000001/ina.jpg', 'ad000000-000
        ('chat-media', 'dd000000-0000-4000-8000-000000000001/bild.jpg', 'ad000000-0000-4000-8000-000000000001', '{"mimetype":"image/jpeg"}'),
        ('group-images', 'cd000000-0000-4000-8000-000000000001/von-lou.jpg', 'ad000000-0000-4000-8000-000000000004', '{"mimetype":"image/jpeg"}'),
        ('avatars', 'bd000000-0000-4000-8000-000000000002/jan.jpg', 'ad000000-0000-4000-8000-000000000002', '{"mimetype":"image/jpeg"}');
+update public.groups set image_path = 'cd000000-0000-4000-8000-000000000001/von-lou.jpg'
+ where id = 'cd000000-0000-4000-8000-000000000001';
 
 create function pg_temp.as_user(n int) returns void language sql as $$
   select set_config('request.jwt.claims',
@@ -207,6 +209,10 @@ select is(
   (select p.username from public.group_members m join public.profiles p on p.id = m.user_id
     where m.group_id = 'cd000000-0000-4000-8000-000000000001' and m.role = 'owner'),
   'lou', 'Gruppe: dienstältestes Mitglied wird owner'
+);
+select is(
+  (select image_path from public.groups where id = 'cd000000-0000-4000-8000-000000000001'), null,
+  'Gruppe: Bild der gelöschten Eigentümerin wird nicht mehr referenziert'
 );
 select ok(
   not exists (select 1 from public.reports where reporter_id = 'ad000000-0000-4000-8000-000000000001')
