@@ -150,6 +150,20 @@ public final class ChatListViewModel {
         }
     }
 
+    /// Zeitpunkt der letzten Nachricht für eine Zeile (heute Uhrzeit, gestern, Wochentag, Datum).
+    public func timestamp(for conversation: ConversationSummary) -> String {
+        ChatFormatting.listTimestamp(conversation.lastMessage?.sentAt ?? conversation.updatedAt, now: now(), calendar: calendar)
+    }
+
+    /// VoiceOver-Text einer Zeile: Name, letzte Nachricht, Zeit und ungelesene Nachrichten.
+    public func accessibilityLabel(for conversation: ConversationSummary) -> String {
+        var parts = [conversation.title, ChatFormatting.preview(for: conversation), timestamp(for: conversation)]
+        if conversation.unreadCount > 0 {
+            parts.append(ChatFormatting.unread(conversation.unreadCount))
+        }
+        return parts.joined(separator: ", ")
+    }
+
     /// Angezeigte Zeilen: Suche und Filter kombiniert.
     public func displayedConversations(searchText: String) -> [ConversationSummary] {
         conversations(matching: searchText).filter(filter.includes)

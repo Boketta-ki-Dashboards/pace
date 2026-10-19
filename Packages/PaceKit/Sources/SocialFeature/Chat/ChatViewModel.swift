@@ -181,6 +181,23 @@ public final class ChatViewModel {
         )
     }
 
+    /// ID des untersten Eintrags im Verlauf (zum Mitscrollen bei neuen Nachrichten).
+    public var lastEntryID: String? {
+        if let pendingMessage = pending.max(by: { $0.createdAt < $1.createdAt }) {
+            return "pending-\(pendingMessage.clientID.uuidString)"
+        }
+        return messages.last.map { "message-\($0.id.uuidString)" }
+    }
+
+    /// Streak-Zeile der Gruppe („12 Tage Streak“) und Stand von heute („Flamme gesichert“).
+    public var streakTitle: String? {
+        group.map { ChatFormatting.streakTitle($0.currentStreak) }
+    }
+
+    public var streakStatus: String? {
+        group.map { ChatFormatting.streakStatus(reached: $0.todayReachedCount, required: $0.todayRequiredCount, complete: $0.todayComplete) }
+    }
+
     /// Uhrzeit einer Nachricht in der App-Sprache.
     public func time(of date: Date) -> String {
         ChatFormatting.time(date, calendar: calendar)
