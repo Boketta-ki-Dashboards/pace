@@ -1,6 +1,7 @@
 import Auth
 import Foundation
 import PaceCore
+import Storage
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
@@ -22,6 +23,8 @@ enum BackendErrorMapping {
             case "23514":
                 if message.contains("invalid_municipality") { return .invalidRegion }
                 if message.contains("display_name") { return .invalidDisplayName }
+                // Profilbild außerhalb des eigenen Ordners, nicht hochgeladen oder mit ungültigem Namen.
+                if message.contains("avatar") { return .unexpected("Ungültiges Profilbild.") }
                 return .invalidUsername
             case "23503":
                 // Ungültige Gemeinden fängt schon ein Trigger ab (23514). Ein Fremdschlüsselfehler auf die Auth-ID
@@ -31,6 +34,8 @@ enum BackendErrorMapping {
                 // Kein Profil getroffen (z. B. fremde oder fehlende Zeile): wie eine fehlende Anmeldung behandeln.
                 return .notAuthenticated
             default:
+                // Benutzername zu oft geändert bzw. zu viele Verfügbarkeitsprüfungen (Migration 20261019100000).
+                if message.contains("rate_limited") { return .rateLimited }
                 return .unexpected("\(code): \(message)")
             }
         case .unknown(let description):
@@ -113,9 +118,15 @@ enum BackendErrorMapping {
         ("invalid_description", .invalidDescription),
         ("invalid_goal", .invalidGoal),
         ("invalid_kind", .invalidInput),
+        ("invalid_privacy", .invalidInput),
+        ("invalid_image_path", .invalidInput),
         ("invalid_time_zone", .invalidInput),
         ("invalid_period", .invalidInput),
         ("invalid_date", .invalidInput),
+        ("invalid_message", .invalidMessage),
+        ("invalid_input", .invalidInput),
+        ("read_only", .readOnly),
+        ("blocked", .blocked),
         ("self_request", .selfRequest),
         ("rate_limited", .rateLimited),
         ("cooldown", .cooldown),
@@ -125,6 +136,64 @@ enum BackendErrorMapping {
         ("profile_required", .notAuthenticated),
         ("not_authenticated", .notAuthenticated),
     ]
+
+    /// Fehler von Supabase Storage (eigenes Fehlerformat mit `statusCode` als Text) und der Größen-/Typprüfung.
+    static func mediaError(_ error: any Error) -> MediaError {
+        if let error = error as? MediaError {
+            return error
+        }
+        if error is URLError {
+            return .network
+        }
+        if let error = error as? StorageError {
+            return mediaError(status: error.statusCode.flatMap { Int($0) }, text: "\(error.error ?? "") \(error.message)")
+        }
+        if let error = error as? HTTPError {
+            return mediaError(status: error.response.statusCode, text: String(decoding: error.data, as: UTF8.self))
+        }
+        return .unexpected(String(describing: error))
+    }
+
+    private static func mediaError(status: Int?, text: String) -> MediaError {
+        let lowered = text.lowercased()
+        if lowered.contains("bucket not found") {
+            // Buckets fehlen: Migration 20261019100300 ist auf dem Server noch nicht eingespielt.
+            return .unavailable
+        }
+        if status == 413 || lowered.contains("maximum allowed size") || lowered.contains("too large") {
+            return .tooLarge
+        }
+        if status == 415 || lowered.contains("mime") {
+            return .unsupportedType
+        }
+        if status == 404 || lowered.contains("not found") {
+            return .notFound
+        }
+        if status == 401 || status == 403 || lowered.contains("row-level security") || lowered.contains("unauthorized") {
+            return .notAllowed
+        }
+        return .unexpected("\(status.map(String.init) ?? "–"): \(text)")
+    }
+
+    /// Fehler der Datenschutz-RPCs (`account_*`, `submit_feedback`).
+    static func accountError(_ error: any Error) -> AccountError {
+        switch BackendFailure(error) {
+        case .network:
+            return .network
+        case .unauthenticated, .permissionDenied:
+            return .notAuthenticated
+        case .database(let code, let message):
+            if code == "PGRST202" || code == "42883" {
+                return .unavailable
+            }
+            if message.contains("rate_limited") { return .rateLimited }
+            if message.contains("invalid_input") { return .invalidInput }
+            if message.contains("profile_required") || message.contains("not_authenticated") { return .notAuthenticated }
+            return .unexpected("\(code): \(message)")
+        case .unknown(let description):
+            return .unexpected(description)
+        }
+    }
 
     static func authError(_ error: any Error) -> PaceCore.AuthError {
         if error is URLError {

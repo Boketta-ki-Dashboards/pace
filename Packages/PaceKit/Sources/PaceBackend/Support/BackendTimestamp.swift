@@ -36,6 +36,29 @@ enum BackendTimestamp {
         return date.addingTimeInterval(fraction - TimeInterval(offset))
     }
 
+    /// `timestamptz`-Literal in UTC mit Mikrosekunden, z. B. `2026-10-16T12:34:56.123456Z` – dieselbe Genauigkeit wie
+    /// in Postgres, damit z. B. „Nachrichten vor diesem Zeitpunkt“ genau an einer Nachricht trennt.
+    static func string(from date: Date) -> String {
+        let totalMicroseconds = Int64((date.timeIntervalSince1970 * 1_000_000).rounded())
+        var seconds = totalMicroseconds / 1_000_000
+        var microseconds = totalMicroseconds % 1_000_000
+        if microseconds < 0 {
+            microseconds += 1_000_000
+            seconds -= 1
+        }
+        let components = utcCalendar.dateComponents(
+            [.year, .month, .day, .hour, .minute, .second],
+            from: Date(timeIntervalSince1970: TimeInterval(seconds))
+        )
+        func padded(_ value: Int?, _ width: Int) -> String {
+            let digits = String(value ?? 0)
+            return String(repeating: "0", count: max(0, width - digits.count)) + digits
+        }
+        return "\(padded(components.year, 4))-\(padded(components.month, 2))-\(padded(components.day, 2))"
+            + "T\(padded(components.hour, 2)):\(padded(components.minute, 2)):\(padded(components.second, 2))"
+            + ".\(padded(Int(microseconds), 6))Z"
+    }
+
     private static let utcCalendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -118,6 +141,19 @@ extension KeyedDecodingContainer {
     /// Dekodiert einen `timestamptz`-String mit `BackendTimestamp`.
     func decodeTimestamp(forKey key: Key) throws -> Date {
         let string = try decode(String.self, forKey: key)
+        guard let date = BackendTimestamp.date(from: string) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: key,
+                in: self,
+                debugDescription: "Ungültiger Zeitstempel: \(string)"
+            )
+        }
+        return date
+    }
+
+    /// Wie `decodeTimestamp(forKey:)`, aber `nil`, wenn der Wert fehlt oder `null` ist.
+    func decodeTimestampIfPresent(forKey key: Key) throws -> Date? {
+        guard let string = try decodeIfPresent(String.self, forKey: key) else { return nil }
         guard let date = BackendTimestamp.date(from: string) else {
             throw DecodingError.dataCorruptedError(
                 forKey: key,
