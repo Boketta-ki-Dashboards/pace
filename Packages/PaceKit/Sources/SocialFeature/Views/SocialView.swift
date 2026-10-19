@@ -5,560 +5,384 @@ import SwiftUI
 /// Ziel einer Navigation im Social-Tab.
 public enum SocialRoute: Hashable, Sendable {
     case group(UUID)
+    /// Profil einer Person (gleich wie ``profile(_:)``; bleibt für bestehende Aufrufer erhalten).
     case friend(SocialProfile)
+    case profile(SocialProfile)
+    case addFriend
+    case requests
+    case createGroup
+    case groups
+    case groupMembers(UUID)
+    case groupSettings(UUID)
+    case friendsRanking
+    case settings
+    case shareProfile(SocialProfile)
+    case report(SocialReportSubject)
 }
 
-/// Social-Tab: Freunde finden, Anfragen, Freundesranking, Gruppen mit Gruppen-Streak und Einladungen.
-/// Einen Gruppenchat gibt es bewusst (noch) nicht – siehe docs/SOCIAL.md.
+/// Social-Tab (Referenzbild 9): Freunde, Anfragen, Gruppen und Chats mit allen Unterseiten.
 public struct SocialView: View {
     @Bindable private var viewModel: SocialViewModel
-    @State private var sheet: Sheet?
-
-    private enum Sheet: String, Identifiable {
-        case createGroup
-        case joinGroup
-
-        var id: String { rawValue }
-    }
+    @State private var path = NavigationPath()
 
     public init(viewModel: SocialViewModel) {
         self.viewModel = viewModel
     }
 
     public var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 SocialContent(
                     viewModel: viewModel,
-                    onCreateGroup: { sheet = .createGroup },
-                    onJoinGroup: { sheet = .joinGroup }
+                    onOpen: { path.append($0) },
+                    onOpenChat: { path.append($0) }
                 )
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.l)
             }
             .scrollDismissesKeyboard(.interactively)
-            .refreshable { [viewModel] in await viewModel.load() }
+            .refreshable { [viewModel] in
+                await viewModel.load()
+                await viewModel.chats.load()
+            }
             .paceScreenBackground()
-            .navigationTitle("Social")
+            .paceRootPage()
             .navigationDestination(for: SocialRoute.self) { route in
-                switch route {
-                case .group(let id):
-                    if let group = viewModel.groups.first(where: { $0.id == id }), let detail = viewModel.detail(for: group) {
-                        GroupDetailView(viewModel: detail)
-                    } else {
-                        PaceStatusView(
-                            systemImage: "person.3",
-                            title: "Gruppe nicht gefunden",
-                            message: "Du bist kein Mitglied dieser Gruppe mehr."
-                        )
-                    }
-                case .friend(let profile):
-                    if let friend = viewModel.profile(for: profile) {
-                        FriendProfileView(viewModel: friend)
-                    }
-                }
+                SocialDestination(
+                    route: route,
+                    viewModel: viewModel,
+                    onOpen: { path.append($0) },
+                    onOpenChat: { path.append($0) },
+                    onReplace: { route in
+                        if !path.isEmpty { path.removeLast() }
+                        path.append(route)
+                    },
+                    onPopToRoot: { path = NavigationPath() }
+                )
+            }
+            .navigationDestination(for: ChatTarget.self) { target in
+                ChatView(
+                    viewModel: viewModel.chats.chat(for: target),
+                    onOpenProfile: { path.append(SocialRoute.profile($0)) }
+                )
             }
         }
-        .task { [viewModel] in await viewModel.loadIfNeeded() }
-        .sheet(item: $sheet) { sheet in
-            switch sheet {
-            case .createGroup:
-                CreateGroupSheet(viewModel: viewModel)
-            case .joinGroup:
-                JoinGroupSheet(viewModel: viewModel)
-            }
+        .task { [viewModel] in
+            await viewModel.loadIfNeeded()
+            await viewModel.chats.loadIfNeeded()
         }
+        .task(id: viewModel.requestedProfile) {
+            await openRequestedProfile()
+        }
+        .task(id: viewModel.requestedGroup) {
+            openRequestedGroup()
+        }
+    }
+
+    /// Ein geteilter Link (`pace://u/<name>`): Profil öffnen oder auf der Hauptseite erklären, dass es fehlt.
+    private func openRequestedProfile() async {
+        guard viewModel.requestedProfile != nil else { return }
+        let profile = await viewModel.resolveRequestedProfile()
+        path = NavigationPath()
+        if let profile {
+            path.append(SocialRoute.profile(profile))
+        }
+    }
+
+    /// Eine Gruppe von außen (z. B. aus einem Home-Widget).
+    private func openRequestedGroup() {
+        guard let groupID = viewModel.requestedGroup else { return }
+        viewModel.clearRequestedGroup()
+        path = NavigationPath()
+        path.append(SocialRoute.group(groupID))
     }
 }
 
-/// Inhalt des Social-Tabs (ohne Navigation und Scrollen).
+/// Inhalt der Social-Hauptseite (ohne Navigation und Scrollen) – auch für Snapshot-Tests.
 struct SocialContent: View {
     @Bindable var viewModel: SocialViewModel
-    var onCreateGroup: () -> Void = {}
-    var onJoinGroup: () -> Void = {}
+    var onOpen: (SocialRoute) -> Void = { _ in }
+    var onOpenChat: (ChatTarget) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
+            header
+            actionButtons
+            PaceSearchField(SocialText.searchFriendsAndChats, text: $viewModel.filterText)
+                .disabled(!viewModel.isAvailable)
             if let notice = viewModel.notice {
                 NoticeBanner(notice: notice) { viewModel.dismissNotice() }
             }
             switch viewModel.state {
             case .unavailable(let message):
-                unavailableCard(message)
+                SocialUnavailableCard(message: message)
             case .failed(let message):
-                PaceCard {
-                    VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                        Label(message, systemImage: "wifi.exclamationmark")
-                            .font(PaceFont.callout)
-                            .foregroundStyle(PaceColor.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Button("Erneut versuchen") {
-                            Task { await viewModel.load() }
-                        }
-                        .buttonStyle(.paceSecondary)
-                    }
+                SocialFailedCard(message: message) {
+                    Task { await viewModel.load() }
                 }
             case .idle, .loading:
-                PaceCard {
-                    HStack(spacing: PaceSpacing.s) {
-                        ProgressView()
-                        Text("Freunde und Gruppen werden geladen …")
-                            .font(PaceFont.callout)
-                            .foregroundStyle(PaceColor.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 80)
-                }
+                SocialLoadingCard(message: SocialText.loading)
             case .loaded:
-                addFriendCard
-                if !viewModel.requests.isEmpty {
-                    requestsCard
+                if viewModel.isFiltering {
+                    searchResults
+                } else {
+                    topFriends
+                    SocialNavigationRow(
+                        systemImage: "person.badge.plus",
+                        title: SocialText.friendRequests,
+                        count: viewModel.incomingRequests.count,
+                        action: { onOpen(.requests) }
+                    )
+                    .accessibilityValue(SocialText.openRequests(viewModel.incomingRequests.count))
+                    SocialNavigationRow(
+                        systemImage: "person.3",
+                        title: SocialText.groups,
+                        detail: groupsDetail,
+                        count: viewModel.invitations.count,
+                        action: { onOpen(.groups) }
+                    )
+                    chats
                 }
-                if !viewModel.invitations.isEmpty {
-                    invitationsCard
-                }
-                rankingCard
-                groupsCard
-                privacyNote
             }
         }
     }
 
-    // MARK: Nicht verfügbar
+    // MARK: Kopf
 
-    private func unavailableCard(_ message: String) -> some View {
-        PaceCard {
-            HStack(alignment: .top, spacing: PaceSpacing.m) {
-                Image(systemName: "person.2.slash")
-                    .font(.title2)
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .frame(width: 52, height: 52)
-                    .background(PaceColor.track.opacity(0.5), in: RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous))
+    private var header: some View {
+        VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
+            HStack(alignment: .center) {
+                PaceWordmark(height: 38)
+                Spacer()
+                Button {
+                    onOpen(.settings)
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .buttonStyle(.paceIcon)
+                .accessibilityLabel(SocialText.socialSettings)
+            }
+            Text(SocialText.social)
+                .font(.system(.largeTitle, weight: .bold))
+                .foregroundStyle(PaceColor.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+        }
+        .padding(.top, PaceSpacing.xs)
+    }
+
+    private var actionButtons: some View {
+        HStack(spacing: PaceSpacing.s) {
+            actionButton(SocialText.addFriend, systemImage: "person.badge.plus") { onOpen(.addFriend) }
+            actionButton(SocialText.createGroup, systemImage: "person.3.fill") { onOpen(.createGroup) }
+        }
+        .disabled(!viewModel.isAvailable)
+    }
+
+    private func actionButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: PaceSpacing.xs) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 20, weight: .medium))
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
-                    Text("Freunde und Gruppen")
-                        .font(PaceFont.cardTitle)
-                        .foregroundStyle(PaceColor.textPrimary)
-                    Text(message)
-                        .font(PaceFont.callout)
-                        .foregroundStyle(PaceColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("Deine regionalen Rankings funktionieren unabhängig davon.")
-                        .font(PaceFont.caption)
-                        .foregroundStyle(PaceColor.textSecondary)
+                Text(title)
+                    .font(.system(.subheadline, weight: .semibold))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .multilineTextAlignment(.leading)
+            }
+            .frame(maxWidth: .infinity, minHeight: 40)
+        }
+        .buttonStyle(.paceSoft)
+    }
+
+    // MARK: Top-Freunde
+
+    @ViewBuilder
+    private var topFriends: some View {
+        SocialSectionTitle(title: SocialText.topFriends) {
+            if viewModel.hasFriends {
+                Button {
+                    onOpen(.friendsRanking)
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(SocialText.seeAll)
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .accessibilityHidden(true)
+                    }
+                    .font(.system(.subheadline, weight: .semibold))
+                    .foregroundStyle(PaceColor.accent)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        if viewModel.topFriends.isEmpty {
+            PaceCard {
+                Text(SocialText.noFriendsYet)
+                    .font(PaceFont.callout)
+                    .foregroundStyle(PaceColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            HStack(alignment: .top, spacing: PaceSpacing.xs) {
+                ForEach(viewModel.topFriends) { entry in
+                    TopFriendCard(entry: entry) {
+                        onOpen(.profile(SocialProfile(
+                            publicID: entry.publicUserID, username: entry.username, displayName: entry.displayName
+                        )))
+                    }
+                }
+                // Gleiche Breite wie bei drei Freunden, auch wenn es weniger sind.
+                ForEach(viewModel.topFriends.count..<3, id: \.self) { _ in
+                    Color.clear.frame(maxWidth: .infinity)
                 }
             }
         }
     }
 
-    // MARK: Freunde finden
+    // MARK: Gruppen und Chats
 
-    private var addFriendCard: some View {
-        PaceCard {
-            VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                PaceCardHeader("Freund hinzufügen")
-                HStack(spacing: PaceSpacing.xs) {
-                    TextField("Benutzername, z. B. mia_lauf", text: $viewModel.searchText)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.search)
-                        .onSubmit { Task { await viewModel.searchProfile() } }
-                        .padding(.horizontal, PaceSpacing.s)
-                        .padding(.vertical, PaceSpacing.xs)
-                        .background(PaceColor.surfaceSecondary, in: RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous).strokeBorder(PaceColor.border, lineWidth: 1))
-                    Button("Suchen") {
-                        Task { await viewModel.searchProfile() }
-                    }
-                    .buttonStyle(.paceCompact)
-                    .disabled(viewModel.searchText.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.search == .searching)
-                }
-                searchResult
-                if let username = viewModel.username, let shareText = viewModel.shareText {
-                    HStack {
-                        Text("Dein Benutzername: \(username)")
-                            .font(PaceFont.caption)
-                            .foregroundStyle(PaceColor.textSecondary)
-                            .textSelection(.enabled)
-                        Spacer(minLength: PaceSpacing.xs)
-                        ShareLink(item: shareText) {
-                            Label("Teilen", systemImage: "square.and.arrow.up")
-                                .font(PaceFont.caption.weight(.semibold))
-                        }
-                        .tint(PaceColor.accent)
-                    }
-                }
-                Text("Gesucht wird nur nach dem genauen Benutzernamen – so bleibt dein Profil für Fremde unsichtbar.")
-                    .font(PaceFont.micro)
+    private var groupsDetail: String {
+        let groups = SocialText.groupCount(viewModel.groups.count)
+        guard !viewModel.invitations.isEmpty else { return groups }
+        return "\(groups) · \(SocialText.openInvitations(viewModel.invitations.count))"
+    }
+
+    @ViewBuilder
+    private var chats: some View {
+        SocialSectionTitle(SocialText.chats)
+        ChatListSection(viewModel: viewModel.chats, onOpen: onOpenChat)
+    }
+
+    // MARK: Suche
+
+    @ViewBuilder
+    private var searchResults: some View {
+        let friends = viewModel.matchingFriends
+        let conversations = viewModel.matchingConversations
+        if friends.isEmpty && conversations.isEmpty {
+            PaceCard {
+                Text(SocialText.noMatches(viewModel.normalizedFilter))
+                    .font(PaceFont.callout)
                     .foregroundStyle(PaceColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-    }
-
-    @ViewBuilder
-    private var searchResult: some View {
-        switch viewModel.search {
-        case .idle:
-            EmptyView()
-        case .searching:
-            ProgressView()
-                .frame(maxWidth: .infinity)
-        case .notFound(let text), .failed(let text):
-            Text(text)
-                .font(PaceFont.callout)
-                .foregroundStyle(PaceColor.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        case .found(let result):
-            PersonRow(profile: result.profile) {
-                searchAction(result)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func searchAction(_ result: ProfileSearchResult) -> some View {
-        let isBusy = viewModel.busyIDs.contains(result.profile.publicID) || result.requestID.map(viewModel.busyIDs.contains) == true
-        switch result.relationship {
-        case .none:
-            Button("Anfrage senden") {
-                Task { await viewModel.sendRequest(to: result.profile) }
-            }
-            .buttonStyle(.paceCompact)
-            .disabled(isBusy)
-        case .incomingRequest:
-            if let requestID = result.requestID {
-                Button("Annehmen") {
-                    let request = FriendRequest(id: requestID, direction: .incoming, profile: result.profile, createdAt: .now)
-                    Task { await viewModel.respond(to: request, accept: true) }
-                }
-                .buttonStyle(.paceCompact)
-                .disabled(isBusy)
-            }
-        case .outgoingRequest:
-            StatusChip(text: "Angefragt", systemImage: "clock")
-        case .friend:
-            StatusChip(text: "Befreundet", systemImage: "checkmark")
-        case .me:
-            StatusChip(text: "Das bist du", systemImage: "person.fill")
-        }
-    }
-
-    // MARK: Anfragen & Einladungen
-
-    private var requestsCard: some View {
-        PaceCard {
-            VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                PaceCardHeader("Freundschaftsanfragen")
-                ForEach(viewModel.incomingRequests) { request in
-                    PersonRow(profile: request.profile, detail: "möchte mit dir befreundet sein") {
-                        HStack(spacing: PaceSpacing.xs) {
-                            Button {
-                                Task { await viewModel.respond(to: request, accept: false) }
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .frame(width: 36, height: 36)
-                            }
-                            .buttonStyle(.paceSecondary)
-                            .accessibilityLabel("Anfrage von \(request.profile.displayName) ablehnen")
-                            Button("Annehmen") {
-                                Task { await viewModel.respond(to: request, accept: true) }
-                            }
-                            .buttonStyle(.paceCompact)
-                        }
-                        .disabled(viewModel.busyIDs.contains(request.id))
+        if !friends.isEmpty {
+            SocialSectionTitle(SocialText.friends)
+            ForEach(friends) { friend in
+                SocialPersonCard(profile: friend.profile, onOpenProfile: { onOpen(.profile(friend.profile)) }) {
+                    Button {
+                        onOpenChat(.direct(friend.profile))
+                    } label: {
+                        Image(systemName: "message")
                     }
-                }
-                ForEach(viewModel.outgoingRequests) { request in
-                    PersonRow(profile: request.profile, detail: "Anfrage gesendet") {
-                        Button("Zurückziehen") {
-                            Task { await viewModel.cancel(request) }
-                        }
-                        .font(PaceFont.caption.weight(.semibold))
-                        .tint(PaceColor.accent)
-                        .disabled(viewModel.busyIDs.contains(request.id))
-                    }
+                    .buttonStyle(.paceIcon)
+                    .accessibilityLabel(SocialText.writeMessage)
                 }
             }
         }
-    }
-
-    private var invitationsCard: some View {
-        PaceCard {
-            VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                PaceCardHeader("Gruppeneinladungen")
-                ForEach(viewModel.invitations) { invitation in
-                    PaceTile {
-                        VStack(alignment: .leading, spacing: PaceSpacing.xs) {
-                            HStack(spacing: PaceSpacing.s) {
-                                Image(systemName: invitation.groupKind.systemImage)
-                                    .foregroundStyle(PaceColor.accent)
-                                    .frame(width: 28)
-                                    .accessibilityHidden(true)
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(invitation.groupName)
-                                        .font(PaceFont.headline)
-                                        .foregroundStyle(PaceColor.textPrimary)
-                                    Text("von \(invitation.inviterDisplayName) · \(invitation.memberCount == 1 ? "1 Mitglied" : "\(invitation.memberCount) Mitglieder")")
-                                        .font(PaceFont.caption)
-                                        .foregroundStyle(PaceColor.textSecondary)
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            HStack(spacing: PaceSpacing.xs) {
-                                Button("Ablehnen") {
-                                    Task { await viewModel.respond(to: invitation, accept: false) }
-                                }
-                                .buttonStyle(.paceSecondary)
-                                Button("Beitreten") {
-                                    Task { await viewModel.respond(to: invitation, accept: true) }
-                                }
-                                .buttonStyle(.paceCompact)
-                            }
-                            .disabled(viewModel.busyIDs.contains(invitation.id))
-                        }
-                        .padding(.vertical, PaceSpacing.xxs)
-                    }
+        if !conversations.isEmpty {
+            SocialSectionTitle(SocialText.chats)
+            ForEach(conversations) { conversation in
+                ConversationMatchRow(conversation: conversation) {
+                    onOpenChat(.conversation(id: conversation.id, kind: conversation.kind, title: conversation.title))
                 }
             }
         }
-    }
-
-    // MARK: Freundesranking
-
-    private var rankingCard: some View {
-        PaceCard {
-            VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                PaceCardHeader("Freunde heute")
-                if viewModel.ranking.count <= 1 && viewModel.friends.isEmpty {
-                    Text("Noch keine Freunde. Suche oben nach einem Benutzernamen – sobald ihr befreundet seid, "
-                        + "vergleicht ihr hier jeden Tag eure Schritte.")
-                        .font(PaceFont.callout)
-                        .foregroundStyle(PaceColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    ForEach(viewModel.ranking) { entry in
-                        if entry.isCurrentUser {
-                            RankingRow(entry: entry)
-                        } else {
-                            NavigationLink(value: SocialRoute.friend(SocialProfile(
-                                publicID: entry.publicUserID, username: entry.username, displayName: entry.displayName
-                            ))) {
-                                RankingRow(entry: entry, showsChevron: true)
-                            }
-                            .buttonStyle(.pacePressable)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: Gruppen
-
-    private var groupsCard: some View {
-        PaceCard {
-            VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                PaceCardHeader("Deine Gruppen")
-                if viewModel.groups.isEmpty {
-                    Text("Gründe eine Gruppe für deine Klasse, dein Team oder deine Freunde – oder tritt mit einem "
-                        + "Einladungscode bei. Eure Gruppen-Serie wächst jeden Tag, an dem mindestens ein Drittel "
-                        + "das Gruppenziel erreicht.")
-                        .font(PaceFont.callout)
-                        .foregroundStyle(PaceColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    ForEach(viewModel.groups) { group in
-                        NavigationLink(value: SocialRoute.group(group.id)) {
-                            GroupStreakRow(group: group, showsChevron: true)
-                        }
-                        .buttonStyle(.pacePressable)
-                    }
-                }
-                HStack(spacing: PaceSpacing.xs) {
-                    Button(action: onCreateGroup) {
-                        Label("Gruppe erstellen", systemImage: "plus")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.paceCompact)
-                    Button(action: onJoinGroup) {
-                        Label("Mit Code beitreten", systemImage: "ticket")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.paceSecondary)
-                }
-            }
-        }
-    }
-
-    private var privacyNote: some View {
-        Label(
-            "Freunde und Mitglieder deiner Gruppen sehen deinen Anzeigenamen, Benutzernamen und deine "
-                + "Wettbewerbsschritte – keine anderen Gesundheitsdaten und nicht deine Gemeinde.",
-            systemImage: "lock.shield"
-        )
-        .font(PaceFont.caption)
-        .foregroundStyle(PaceColor.textSecondary)
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.horizontal, PaceSpacing.xxs)
     }
 }
 
-// MARK: - Bausteine
-
-/// Rückmeldung der letzten Aktion, z. B. „Anfrage gesendet“.
-struct NoticeBanner: View {
-    let notice: SocialViewModel.Notice
-    let onDismiss: () -> Void
+/// Karte eines Top-Freundes: Platz, Profilbild, Name, Schritte (Referenzbild 9).
+private struct TopFriendCard: View {
+    let entry: LeaderboardEntry
+    let action: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: PaceSpacing.s) {
-            Image(systemName: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                .foregroundStyle(notice.isError ? PaceColor.danger : PaceColor.accent)
-                .accessibilityHidden(true)
-            Text(notice.text)
-                .font(PaceFont.callout)
-                .foregroundStyle(PaceColor.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            Button(action: onDismiss) {
-                Image(systemName: "xmark")
+        Button(action: action) {
+            VStack(spacing: PaceSpacing.xxs) {
+                ZStack(alignment: .topLeading) {
+                    PaceAvatar(name: entry.displayName, seed: entry.publicUserID.uuidString, size: 58)
+                        .frame(maxWidth: .infinity)
+                    Text(verbatim: "#\(entry.rank.paceFormatted)")
+                        .font(.system(.subheadline, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(PaceColor.textPrimary)
+                }
+                Text(entry.displayName)
+                    .font(PaceFont.headline)
+                    .foregroundStyle(PaceColor.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                HStack(spacing: 4) {
+                    Image(systemName: "shoeprints.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .accessibilityHidden(true)
+                    Text(entry.competitionSteps.paceFormatted)
+                        .font(.system(.headline, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(PaceColor.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+            .padding(PaceSpacing.xs)
+            .frame(maxWidth: .infinity)
+            .paceCardBackground(cornerRadius: PaceRadius.tile)
+        }
+        .buttonStyle(.pacePressable)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(PaceLocalization.text(
+            de: "Platz \(entry.rank.paceFormatted), \(entry.displayName)",
+            en: "Rank \(entry.rank.paceFormatted), \(entry.displayName)",
+            ru: "Место \(entry.rank.paceFormatted), \(entry.displayName)"
+        ) + ", " + PaceLocalization.steps(entry.competitionSteps))
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// Treffer der Hauptseitensuche in den Chats (Name und Art der Unterhaltung).
+private struct ConversationMatchRow: View {
+    let conversation: ConversationSummary
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: PaceSpacing.s) {
+                if let peer = conversation.peer {
+                    PaceAvatar(name: peer.displayName, seed: peer.publicID.uuidString, size: 48, image: peer.avatar)
+                } else {
+                    GroupAvatar(name: conversation.title, kind: .friends, image: .groupImage(conversation.groupImagePath), size: 48)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(conversation.title)
+                        .font(PaceFont.headline)
+                        .foregroundStyle(PaceColor.textPrimary)
+                        .lineLimit(1)
+                    Text(conversation.kind == .group ? SocialText.members(conversation.memberCount) : (conversation.peer.map { "@\($0.username)" } ?? ""))
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: PaceSpacing.xs)
+                if conversation.unreadCount > 0 {
+                    PaceCountBadge(conversation.unreadCount)
+                }
+                Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(PaceColor.textSecondary)
-                    .frame(width: 28, height: 28)
+                    .accessibilityHidden(true)
             }
-            .accessibilityLabel("Hinweis schließen")
+            .padding(.horizontal, PaceSpacing.s)
+            .padding(.vertical, PaceSpacing.xs)
+            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+            .paceCardBackground(cornerRadius: PaceRadius.tile)
         }
-        .padding(PaceSpacing.s)
-        .background(notice.isError ? PaceColor.danger.opacity(0.1) : PaceColor.accentSoft, in: RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous))
+        .buttonStyle(.pacePressable)
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// Person mit Avatar, Namen und einer Aktion rechts.
-struct PersonRow<Action: View>: View {
-    let profile: SocialProfile
-    var detail: String?
-    @ViewBuilder let action: () -> Action
-
-    var body: some View {
-        PaceTile {
-            HStack(spacing: PaceSpacing.s) {
-                PaceAvatar(name: profile.displayName, seed: profile.publicID.uuidString, size: 38)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(profile.displayName)
-                        .font(PaceFont.headline)
-                        .foregroundStyle(PaceColor.textPrimary)
-                        .lineLimit(1)
-                    Text(detail ?? "@\(profile.username)")
-                        .font(PaceFont.caption)
-                        .foregroundStyle(PaceColor.textSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                Spacer(minLength: PaceSpacing.xs)
-                action()
-            }
-            .padding(.vertical, PaceSpacing.xxs)
-        }
-    }
-}
-
-struct StatusChip: View {
-    let text: String
-    let systemImage: String
-
-    var body: some View {
-        Label(text, systemImage: systemImage)
-            .font(PaceFont.caption.weight(.semibold))
-            .foregroundStyle(PaceColor.accentStrong)
-            .padding(.horizontal, PaceSpacing.xs)
-            .padding(.vertical, 4)
-            .background(PaceColor.accentSoft, in: Capsule())
-    }
-}
-
-/// Zeile im Freundes- bzw. Gruppenranking.
-struct RankingRow: View {
-    let entry: LeaderboardEntry
-    var showsChevron = false
-    var reachedGoal: Bool?
-
-    var body: some View {
-        PaceTile(isHighlighted: entry.isCurrentUser) {
-            HStack(spacing: PaceSpacing.s) {
-                Text("#\(entry.rank)")
-                    .font(.system(.headline, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(PaceColor.textPrimary)
-                    .frame(minWidth: 40, alignment: .leading)
-                PaceAvatar(name: entry.displayName, seed: entry.publicUserID.uuidString, size: 34, isHighlighted: entry.isCurrentUser)
-                Text(entry.isCurrentUser ? "DU" : entry.displayName)
-                    .font(PaceFont.headline)
-                    .foregroundStyle(PaceColor.textPrimary)
-                    .lineLimit(1)
-                Spacer(minLength: PaceSpacing.xs)
-                if reachedGoal == true {
-                    Image(systemName: "checkmark.seal.fill")
-                        .foregroundStyle(PaceColor.accentStrong)
-                        .accessibilityLabel("Ziel erreicht")
-                }
-                Text(entry.competitionSteps.paceFormatted)
-                    .font(.system(.headline, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(PaceColor.textPrimary)
-                if showsChevron {
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(PaceColor.textSecondary)
-                }
-            }
-            .padding(.vertical, 2)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// Zeile einer Gruppe mit Flamme, Serie und heutigem Stand (auch für das Gruppen-Modul auf Home).
-public struct GroupStreakRow: View {
-    private let group: GroupSummary
-    private let showsChevron: Bool
-
-    public init(group: GroupSummary, showsChevron: Bool = false) {
-        self.group = group
-        self.showsChevron = showsChevron
-    }
-
-    public var body: some View {
-        PaceTile(isHighlighted: group.todayComplete) {
-            HStack(spacing: PaceSpacing.s) {
-                PaceStreakFlame(isActive: group.currentStreak > 0, isTodayReached: group.todayComplete, size: 36)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(group.name)
-                        .font(PaceFont.headline)
-                        .foregroundStyle(PaceColor.textPrimary)
-                        .lineLimit(1)
-                    Text("Heute \(group.todayReachedCount) von \(group.todayRequiredCount) nötig · \(group.memberCount == 1 ? "1 Mitglied" : "\(group.memberCount) Mitglieder")")
-                        .font(PaceFont.caption)
-                        .foregroundStyle(group.todayComplete ? PaceColor.accent : PaceColor.textSecondary)
-                        // Darf umbrechen: auf schmalen iPhones passt die Zeile neben Flamme und Serie nicht immer.
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: PaceSpacing.xs)
-                Text(group.currentStreak == 1 ? "1 Tag" : "\(group.currentStreak) Tage")
-                    .font(PaceFont.headline)
-                    .monospacedDigit()
-                    .foregroundStyle(PaceColor.textPrimary)
-                    .lineLimit(1)
-                if showsChevron {
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(PaceColor.textSecondary)
-                }
-            }
-            .padding(.vertical, 2)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(group.name), Serie \(group.currentStreak == 1 ? "1 Tag" : "\(group.currentStreak) Tage"), heute \(group.todayReachedCount) von \(group.todayRequiredCount) nötigen Mitgliedern")
+        .accessibilityAddTraits(.isButton)
     }
 }

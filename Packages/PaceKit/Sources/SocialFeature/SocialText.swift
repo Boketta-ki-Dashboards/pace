@@ -16,7 +16,6 @@ enum SocialText {
     static var cancel: String { t("Abbrechen", "Cancel", "Отмена") }
     static var retry: String { t("Erneut versuchen", "Try again", "Попробовать снова") }
     static var save: String { t("Speichern", "Save", "Сохранить") }
-    static var remove: String { t("Entfernen", "Remove", "Удалить") }
     static var closeNotice: String { t("Hinweis schließen", "Dismiss notice", "Закрыть уведомление") }
     static var settings: String { t("Einstellungen", "Settings", "Настройки") }
     static var friends: String { t("Freunde", "Friends", "Друзья") }
@@ -118,27 +117,11 @@ enum SocialText {
         )
     }
 
-    static var exactSearchOnly: String {
-        t(
-            "Gerade findet die Suche nur genaue Benutzernamen.",
-            "Right now the search only finds exact usernames.",
-            "Сейчас поиск находит только точные имена пользователей."
-        )
-    }
-
     static func nobodyStartsWith(_ query: String) -> String {
         t(
             "Niemand gefunden, dessen Benutzername mit „\(query)“ beginnt.",
             "No one found whose username starts with “\(query)”.",
             "Не найдено пользователей, чьё имя начинается с «\(query)»."
-        )
-    }
-
-    static func nobodyNamed(_ username: String) -> String {
-        t(
-            "Niemand mit dem Benutzernamen @\(username) gefunden.",
-            "No one with the username @\(username) found.",
-            "Пользователь @\(username) не найден."
         )
     }
 
@@ -155,14 +138,6 @@ enum SocialText {
 
     static func moreActions(for name: String) -> String {
         t("Weitere Aktionen für \(name)", "More actions for \(name)", "Другие действия: \(name)")
-    }
-
-    static var messageOnlyFriends: String {
-        t(
-            "Nachrichten schreiben kannst du nur Freunden.",
-            "You can only message friends.",
-            "Писать сообщения можно только друзьям."
-        )
     }
 
     // MARK: Anfragen
@@ -280,7 +255,6 @@ enum SocialText {
     static var profile: String { t("Profil", "Profile", "Профиль") }
     static var removeFriend: String { t("Freund entfernen", "Remove friend", "Удалить из друзей") }
     static var unblock: String { t("Blockierung aufheben", "Unblock", "Разблокировать") }
-    static var report: String { t("Melden", "Report", "Пожаловаться") }
     static var stepsOnlyForFriends: String {
         t("Nur Freunde sehen die Schritte des anderen.", "Only friends see each other's steps.", "Шаги видят только друзья.")
     }
@@ -295,8 +269,6 @@ enum SocialText {
         )
     }
 
-    static var profileNotLoaded: String { t("Profil nicht geladen", "Profile not loaded", "Профиль не загружен") }
-    static var friend: String { t("Befreundet", "Friends", "Друзья") }
     static var incomingRequest: String { t("Möchte mit dir befreundet sein", "Wants to be friends", "Хочет добавить тебя в друзья") }
 
     static func friendsSince(_ date: Date) -> String {
@@ -375,7 +347,6 @@ enum SocialText {
 
     // MARK: Melden
 
-    static var reportTitle: String { t("Melden", "Report", "Пожаловаться") }
     static var reportReasonPrompt: String { t("Warum meldest du das?", "Why are you reporting this?", "Укажи причину жалобы") }
     static var reportDetailsPlaceholder: String {
         t("Weitere Angaben (optional)", "Additional details (optional)", "Подробности (необязательно)")
@@ -390,7 +361,6 @@ enum SocialText {
         )
     }
 
-    static func reportSubtitleUser(_ username: String) -> String { "@\(username)" }
     static var reportGroup: String { t("Gruppe melden", "Report group", "Пожаловаться на группу") }
     static var reportUser: String { t("Nutzer melden", "Report user", "Пожаловаться на пользователя") }
 
@@ -499,17 +469,9 @@ enum SocialText {
     }
 
     static var removeImage: String { t("Bild entfernen", "Remove photo", "Удалить фото") }
-    static var choosePhoto: String { t("Foto auswählen", "Choose photo", "Выбрать фото") }
     static var groupImage: String { t("Gruppenbild", "Group photo", "Фото группы") }
     static var groupImageSaved: String { t("Gruppenbild gespeichert.", "Group photo saved.", "Фото группы сохранено.") }
     static var groupImageRemoved: String { t("Gruppenbild entfernt.", "Group photo removed.", "Фото группы удалено.") }
-    static var groupDayTimeZoneHint: String {
-        t(
-            "Der Gruppentag richtet sich nach der Zeitzone deines iPhones. Mitglieder sehen Anzeigenamen, Benutzernamen und Wettbewerbsschritte der anderen.",
-            "The group day follows your iPhone's time zone. Members see each other's display names, usernames and competition steps.",
-            "День группы считается по часовому поясу твоего iPhone. Участники видят отображаемые имена, имена пользователей и шаги для рейтинга друг друга."
-        )
-    }
 
     static var goalPresets: String { t("Häufige Ziele", "Common goals", "Популярные цели") }
     static var decreaseGoal: String { t("Ziel verringern", "Decrease goal", "Уменьшить цель") }
@@ -629,11 +591,8 @@ enum SocialText {
         )
     }
 
-    static var groupNotFoundTitle: String { t("Gruppe nicht gefunden", "Group not found", "Группа не найдена") }
-    static var groupNotLoaded: String { t("Gruppe nicht geladen", "Group not loaded", "Группа не загружена") }
     static var group: String { t("Gruppe", "Group", "Группа") }
     static var goalReached: String { t("Ziel erreicht", "Goal reached", "Цель достигнута") }
-    static var goalOpen: String { t("Ziel offen", "Goal open", "Цель не достигнута") }
 
     // MARK: Mitglieder
 
@@ -767,14 +726,6 @@ enum SocialText {
         )
     }
 
-    static var otherWorkInProgress: String {
-        t(
-            "Gerade läuft noch eine andere Änderung. Versuche es gleich noch einmal.",
-            "Another change is still in progress. Please try again in a moment.",
-            "Сейчас выполняется другое изменение. Попробуй ещё раз через минуту."
-        )
-    }
-
     // MARK: Freundesliste
 
     static var friendsEmptyTitle: String { t("Noch keine Freunde", "No friends yet", "Пока нет друзей") }
@@ -826,8 +777,54 @@ enum SocialText {
     }
 
     static var groupInvitations: String { t("Gruppeneinladungen", "Group invitations", "Приглашения в группы") }
-    static var blockedNotLoaded: String {
-        t("Die Liste konnte nicht geladen werden.", "The list couldn't be loaded.", "Не удалось загрузить список.")
+
+    // MARK: Ergänzungen der Unterseiten
+
+    static var openProfileHint: String { t("Öffnet das Profil", "Opens the profile", "Открывает профиль") }
+    static func ownUsername(_ username: String) -> String {
+        t("Dein Benutzername: \(username)", "Your username: \(username)", "Твоё имя пользователя: \(username)")
+    }
+
+    static var profileLoading: String { t("Profil wird geladen …", "Loading profile …", "Загружаем профиль …") }
+    static var sendRequest: String { t("Freundschaftsanfrage senden", "Send friend request", "Отправить заявку в друзья") }
+    static func charactersLeft(_ count: Int) -> String {
+        PaceLocalization.plural(
+            count,
+            de: ("Noch \(count.paceFormatted) Zeichen", "Noch \(count.paceFormatted) Zeichen"),
+            en: ("\(count.paceFormatted) character left", "\(count.paceFormatted) characters left"),
+            ru: ("Остался \(count.paceFormatted) символ", "Осталось \(count.paceFormatted) символа", "Осталось \(count.paceFormatted) символов")
+        )
+    }
+
+    static var groupsNeverPublic: String {
+        t(
+            "Gruppen sind nie öffentlich auffindbar. Beitreten kann nur, wer eingeladen wurde oder den Code kennt.",
+            "Groups are never publicly searchable. Only people who were invited or know the code can join.",
+            "Группы никогда не видны в поиске. Вступить может только тот, кого пригласили или кто знает код."
+        )
+    }
+
+    /// Einheit unter einer großen Schrittzahl, z. B. „Schritte“.
+    static func stepsUnit(_ count: Int) -> String {
+        PaceLocalization.plural(
+            count,
+            de: ("Schritt", "Schritte"),
+            en: ("step", "steps"),
+            ru: ("шаг", "шага", "шагов")
+        )
+    }
+
+    /// Eigener Name in Listen, z. B. „Niklas (du)“.
+    static func youName(_ name: String) -> String {
+        t("\(name) (du)", "\(name) (you)", "\(name) (ты)")
+    }
+
+    static var removeImageMessage: String {
+        t(
+            "Die Gruppe zeigt danach wieder das Symbol ihrer Gruppenart.",
+            "The group will show the symbol of its type again.",
+            "Группа снова будет показывать значок своего типа."
+        )
     }
 
     // MARK: Fehler

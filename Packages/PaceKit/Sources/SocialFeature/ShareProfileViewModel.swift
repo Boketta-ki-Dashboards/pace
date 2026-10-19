@@ -107,6 +107,10 @@ public final class ShareProfileViewModel {
         SocialText.shareProfileText(username: profile.username, isOwn: profile.username == social?.ownUsernameValue)
     }
 
+    public func dismissError() {
+        errorMessage = nil
+    }
+
     /// Schickt die Profilnachricht in alle gewählten Chats. Fehler stehen in `errorMessage`.
     @discardableResult
     public func send() async -> Bool {
