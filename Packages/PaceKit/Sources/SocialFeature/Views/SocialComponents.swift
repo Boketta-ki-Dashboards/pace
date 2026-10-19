@@ -238,24 +238,14 @@ struct SocialPersonCard<Actions: View>: View {
                     }
                 }
             } else {
-                // Wie Referenzbild 1 in einer Zeile; reicht die Breite nicht (schmale iPhones, lange Namen oder
-                // Status), stehen die Aktionen unter dem Namen – ohne abgeschnittene Texte.
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: PaceSpacing.xs) {
-                        profileButton
-                        Spacer(minLength: 0)
-                        HStack(spacing: PaceSpacing.xxs) {
-                            actions()
-                        }
-                        .fixedSize()
+                // Wie Referenzbild 1 in einer Zeile; bleibt für den Namen zu wenig Platz (schmale iPhones, lange
+                // Status wie „Bereits befreundet“), stehen die Aktionen darunter – ohne abgeschnittene Texte.
+                InlineOrStackedLayout {
+                    profileButton
+                    HStack(spacing: PaceSpacing.xxs) {
+                        actions()
                     }
-                    VStack(alignment: .leading, spacing: PaceSpacing.xs) {
-                        profileButton
-                        HStack(spacing: PaceSpacing.xxs) {
-                            Spacer(minLength: 0)
-                            actions()
-                        }
-                    }
+                    .fixedSize()
                 }
             }
         }
@@ -519,5 +509,58 @@ struct SocialSelectableRow<Leading: View>: View {
         .buttonStyle(.pacePressable)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
+    }
+}
+
+/// Zwei Bausteine: links der Name, rechts die Aktionen – in einer Zeile, solange links mindestens
+/// `minimumLeadingWidth` bleibt, sonst die Aktionen rechtsbündig in einer zweiten Zeile. Die Aktionen behalten immer
+/// ihre volle Breite (keine gekürzten Knopftexte).
+struct InlineOrStackedLayout: Layout {
+    var spacing: CGFloat = PaceSpacing.xs
+    var minimumLeadingWidth: CGFloat = 96
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard subviews.count == 2 else { return .zero }
+        let trailing = subviews[1].sizeThatFits(.unspecified)
+        guard let width = proposal.width else {
+            let leading = subviews[0].sizeThatFits(.unspecified)
+            return CGSize(width: leading.width + spacing + trailing.width, height: max(leading.height, trailing.height))
+        }
+        if isInline(width: width, trailing: trailing) {
+            let leading = subviews[0].sizeThatFits(ProposedViewSize(width: width - trailing.width - spacing, height: nil))
+            return CGSize(width: width, height: max(leading.height, trailing.height))
+        }
+        let leading = subviews[0].sizeThatFits(ProposedViewSize(width: width, height: nil))
+        return CGSize(width: width, height: leading.height + spacing + trailing.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 2 else { return }
+        let trailing = subviews[1].sizeThatFits(.unspecified)
+        if isInline(width: bounds.width, trailing: trailing) {
+            let leadingWidth = bounds.width - trailing.width - spacing
+            subviews[0].place(
+                at: CGPoint(x: bounds.minX, y: bounds.midY),
+                anchor: .leading,
+                proposal: ProposedViewSize(width: leadingWidth, height: nil)
+            )
+            subviews[1].place(at: CGPoint(x: bounds.maxX, y: bounds.midY), anchor: .trailing, proposal: ProposedViewSize(trailing))
+        } else {
+            let leading = subviews[0].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+            subviews[0].place(
+                at: CGPoint(x: bounds.minX, y: bounds.minY),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: bounds.width, height: nil)
+            )
+            subviews[1].place(
+                at: CGPoint(x: bounds.maxX, y: bounds.minY + leading.height + spacing),
+                anchor: .topTrailing,
+                proposal: ProposedViewSize(trailing)
+            )
+        }
+    }
+
+    private func isInline(width: CGFloat, trailing: CGSize) -> Bool {
+        width - trailing.width - spacing >= minimumLeadingWidth
     }
 }
