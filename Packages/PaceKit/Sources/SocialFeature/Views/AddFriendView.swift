@@ -111,7 +111,7 @@ struct AddFriendContent: View {
     }
 
     private func resultCard(_ result: ProfileSearchResult) -> some View {
-        SocialPersonCard(profile: result.profile, onOpenProfile: { onOpenProfile(result.profile) }) {
+        SocialPersonCard(profile: result.profile, onOpenProfile: { onOpenProfile(result.profile) }, compact: true) {
             HStack(spacing: PaceSpacing.xxs) {
                 primaryAction(result)
                 if result.relationship != .me {

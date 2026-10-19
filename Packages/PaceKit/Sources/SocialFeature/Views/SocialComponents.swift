@@ -223,9 +223,13 @@ struct SocialPersonCard<Actions: View>: View {
     let profile: SocialProfile
     var detail: String?
     var onOpenProfile: (() -> Void)?
+    /// Kompakte Zeile wie die Suchergebnisse in Referenzbild 1 (kleineres Bild und kleinere Schrift).
+    var compact = false
     @ViewBuilder let actions: () -> Actions
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var avatarSize: CGFloat { compact ? 52 : 56 }
 
     var body: some View {
         Group {
@@ -240,7 +244,7 @@ struct SocialPersonCard<Actions: View>: View {
             } else {
                 // Wie Referenzbild 1 in einer Zeile; bleibt für den Namen zu wenig Platz (schmale iPhones, lange
                 // Status wie „Bereits befreundet“), stehen die Aktionen darunter – ohne abgeschnittene Texte.
-                InlineOrStackedLayout {
+                InlineOrStackedLayout(minimumLeadingWidth: avatarSize + PaceSpacing.s + 70) {
                     profileButton
                     HStack(spacing: PaceSpacing.xxs) {
                         actions()
@@ -271,16 +275,16 @@ struct SocialPersonCard<Actions: View>: View {
 
     private var identity: some View {
         HStack(spacing: PaceSpacing.s) {
-            PaceAvatar(name: profile.displayName, seed: profile.publicID.uuidString, size: 56, image: profile.avatar)
+            PaceAvatar(name: profile.displayName, seed: profile.publicID.uuidString, size: avatarSize, image: profile.avatar)
             VStack(alignment: .leading, spacing: 2) {
                 Text(profile.displayName)
-                    .font(.system(.headline, weight: .semibold))
+                    .font(.system(compact ? Font.TextStyle.subheadline : Font.TextStyle.headline, weight: .semibold))
                     .foregroundStyle(PaceColor.textPrimary)
                     .lineLimit(2)
                     .minimumScaleFactor(0.9)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(detail ?? "@\(profile.username)")
-                    .font(PaceFont.callout)
+                    .font(compact ? Font.footnote : PaceFont.callout)
                     .foregroundStyle(PaceColor.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
