@@ -32,9 +32,9 @@ struct SocialBackHeader: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(.body, weight: .semibold))
                     Text(backTitle)
-                        .font(.system(.title3))
+                        .font(.body)
                         .lineLimit(1)
                 }
                 .foregroundStyle(PaceColor.accent)
@@ -45,7 +45,7 @@ struct SocialBackHeader: View {
             .accessibilityLabel(PaceLocalization.text(
                 de: "Zurück zu \(backTitle)", en: "Back to \(backTitle)", ru: "Назад: \(backTitle)"
             ))
-            PaceWordmark(height: 38)
+            PaceWordmark(height: 33)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -238,10 +238,24 @@ struct SocialPersonCard<Actions: View>: View {
                     }
                 }
             } else {
-                HStack(spacing: PaceSpacing.xs) {
-                    profileButton
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    actions()
+                // Wie Referenzbild 1 in einer Zeile; reicht die Breite nicht (schmale iPhones, lange Namen oder
+                // Status), stehen die Aktionen unter dem Namen – ohne abgeschnittene Texte.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: PaceSpacing.xs) {
+                        profileButton
+                        Spacer(minLength: 0)
+                        HStack(spacing: PaceSpacing.xxs) {
+                            actions()
+                        }
+                        .fixedSize()
+                    }
+                    VStack(alignment: .leading, spacing: PaceSpacing.xs) {
+                        profileButton
+                        HStack(spacing: PaceSpacing.xxs) {
+                            Spacer(minLength: 0)
+                            actions()
+                        }
+                    }
                 }
             }
         }

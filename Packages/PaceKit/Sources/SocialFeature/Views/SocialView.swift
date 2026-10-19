@@ -152,7 +152,7 @@ struct SocialContent: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
             HStack(alignment: .center) {
-                PaceWordmark(height: 38)
+                PaceWordmark(height: 33)
                 Spacer()
                 Button {
                     onOpen(.settings)
@@ -163,7 +163,7 @@ struct SocialContent: View {
                 .accessibilityLabel(SocialText.socialSettings)
             }
             Text(SocialText.social)
-                .font(.system(.largeTitle, weight: .bold))
+                .font(.system(.title, weight: .bold))
                 .foregroundStyle(PaceColor.textPrimary)
                 .accessibilityAddTraits(.isHeader)
         }
@@ -182,13 +182,12 @@ struct SocialContent: View {
         Button(action: action) {
             HStack(spacing: PaceSpacing.xs) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.system(size: 17, weight: .medium))
                     .accessibilityHidden(true)
                 Text(title)
                     .font(.system(.subheadline, weight: .semibold))
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-                    .multilineTextAlignment(.leading)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
             .frame(maxWidth: .infinity, minHeight: 40)
         }

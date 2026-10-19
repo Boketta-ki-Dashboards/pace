@@ -89,11 +89,11 @@ struct GroupDetailContent: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(SocialText.streakTitle(group.currentStreak))
-                        .font(.system(.title2, weight: .bold))
+                        .font(.system(.title3, weight: .bold))
                         .foregroundStyle(PaceColor.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(SocialText.goalPerMember(group.dailyGoal))
-                        .font(PaceFont.callout)
+                        .font(.subheadline)
                         .foregroundStyle(PaceColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     if let next = group.nextDailyGoal, next != group.dailyGoal {

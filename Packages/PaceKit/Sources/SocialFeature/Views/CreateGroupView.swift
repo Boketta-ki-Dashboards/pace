@@ -330,10 +330,7 @@ struct GroupKindPicker: View {
                 Button {
                     selection = kind
                 } label: {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: PaceSpacing.xs) { tileContent(kind) }
-                        VStack(spacing: 4) { tileContent(kind) }
-                    }
+                    HStack(spacing: 6) { tileContent(kind) }
                     .foregroundStyle(isSelected ? PaceColor.onSelection : PaceColor.textPrimary)
                     .padding(.horizontal, PaceSpacing.xs)
                     .frame(maxWidth: .infinity, minHeight: 50)
@@ -362,12 +359,12 @@ struct GroupKindPicker: View {
     @ViewBuilder
     private func tileContent(_ kind: GroupKind) -> some View {
         Image(systemName: kind.systemImage.replacingOccurrences(of: ".fill", with: ""))
-            .font(.system(size: 18, weight: .medium))
+            .font(.system(size: 16, weight: .medium))
             .accessibilityHidden(true)
         Text(kind.title)
             .font(.system(.subheadline, weight: .medium))
             .lineLimit(1)
-            .minimumScaleFactor(0.8)
+            .minimumScaleFactor(0.7)
     }
 }
 

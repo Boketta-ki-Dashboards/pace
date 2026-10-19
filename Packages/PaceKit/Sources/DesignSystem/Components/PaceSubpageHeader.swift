@@ -50,9 +50,9 @@ public struct PaceSubpageHeader<Trailing: View>: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(.body, weight: .semibold))
                     Text(backTitle)
-                        .font(.system(.title3))
+                        .font(.body)
                         .lineLimit(1)
                 }
                 .foregroundStyle(PaceColor.accent)
@@ -65,15 +65,17 @@ public struct PaceSubpageHeader<Trailing: View>: View {
             ))
 
             HStack(alignment: .center, spacing: PaceSpacing.s) {
-                PaceWordmark(height: 38)
+                PaceWordmark(height: titleSize == .large ? 33 : 56)
                 Spacer(minLength: PaceSpacing.xs)
                 trailing
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(titleSize == .large ? .system(.largeTitle, weight: .bold) : .system(.title, weight: .bold))
+                    .font(titleSize == .large ? .system(.title, weight: .bold) : .system(.title2, weight: .bold))
                     .foregroundStyle(PaceColor.textPrimary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
                 if let subtitle {
