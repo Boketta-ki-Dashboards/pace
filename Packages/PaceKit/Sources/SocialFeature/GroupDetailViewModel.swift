@@ -2,8 +2,11 @@ import Foundation
 import Observation
 import PaceCore
 
-/// Detailansicht einer Gruppe: Gruppen-Streak, Ranking (heute/Woche), Verlauf der Gruppentage, Einladungen und – für
-/// die Person, die die Gruppe verwaltet – Einstellungen.
+/// Eine Gruppe: Details mit Gruppen-Streak und Ranking (Referenzbild 4), Mitglieder und Einstellungen.
+///
+/// Details, Mitglieder- und Einstellungsseite teilen sich dieses ViewModel, damit eine Änderung (z. B. ein neuer Name
+/// oder ein entferntes Mitglied) sofort überall erscheint. Alle Werte der Gruppen-Streak – wie viele Mitglieder das Ziel
+/// erreicht haben und wie viele es heute braucht – kommen vom Server und werden hier nicht neu berechnet.
 @MainActor
 @Observable
 public final class GroupDetailViewModel: Identifiable {
@@ -28,12 +31,15 @@ public final class GroupDetailViewModel: Identifiable {
     public private(set) var outgoingInvitations: [OutgoingGroupInvitation] = []
     public private(set) var notice: SocialViewModel.Notice?
     public private(set) var isWorking = false
+    /// IDs (Personen, Einladungen), für die gerade eine Aktion läuft.
+    public private(set) var busyIDs: Set<UUID> = []
 
     public nonisolated var id: UUID { groupID }
 
     @ObservationIgnored private nonisolated let groupID: UUID
     @ObservationIgnored private let repository: any SocialRepository
     @ObservationIgnored private weak var social: SocialViewModel?
+    @ObservationIgnored let media: (any MediaRepository)?
     /// Zählt Ranking-Anfragen. Eine Antwort gilt nur für den noch gewählten Zeitraum und nur, wenn keine später
     /// gestartete schon angewendet wurde – sonst überschriebe eine langsame ältere Antwort (z. B. „Heute“) die gerade
     /// gewählte Ansicht („Diese Woche“). Scheitert die neueste Anfrage, bleibt eine gültige ältere so erhalten.
@@ -41,16 +47,75 @@ public final class GroupDetailViewModel: Identifiable {
     @ObservationIgnored private var appliedRankingGeneration = 0
     @ObservationIgnored private var loadErrorNotice: SocialViewModel.Notice?
 
-    public init(group: GroupSummary, repository: any SocialRepository, social: SocialViewModel?) {
+    public init(
+        group: GroupSummary,
+        repository: any SocialRepository,
+        social: SocialViewModel?,
+        media: (any MediaRepository)? = nil
+    ) {
         self.group = group
         groupID = group.id
         self.repository = repository
         self.social = social
+        self.media = media
     }
 
     /// Das Ranking des gewählten Zeitraums; `nil`, solange es lädt oder nur das des anderen Zeitraums da ist.
     public var currentRanking: GroupRanking? {
         rankingPeriod == period ? ranking : nil
+    }
+
+    // MARK: Gruppen-Streak (Werte vom Server)
+
+    /// z. B. „4 von 12 Mitgliedern haben heute das Ziel erreicht“.
+    public var todayText: String {
+        SocialText.reachedToday(group.todayReachedCount, of: group.memberCount)
+    }
+
+    /// Erreichte Ziele, die für die Flamme zählen – höchstens so viele, wie heute nötig sind („4 von 4 benötigten“).
+    public var countedGoals: Int {
+        min(group.todayReachedCount, group.todayRequiredCount)
+    }
+
+    /// Ziele, die heute noch fehlen, damit die Flamme gesichert ist.
+    public var missingGoals: Int {
+        max(group.todayRequiredCount - group.todayReachedCount, 0)
+    }
+
+    /// Fortschritt zur gesicherten Flamme (0…1).
+    public var requiredProgress: Double {
+        guard group.todayRequiredCount > 0 else { return group.todayComplete ? 1 : 0 }
+        return min(Double(group.todayReachedCount) / Double(group.todayRequiredCount), 1)
+    }
+
+    /// Eine Pille je Mitglied: `true` für jedes Mitglied, das heute das Ziel erreicht hat (Reihenfolge ohne Bedeutung).
+    public var memberPills: [Bool] {
+        let members = max(group.memberCount, 0)
+        let reached = min(max(group.todayReachedCount, 0), members)
+        return Array(repeating: true, count: reached) + Array(repeating: false, count: members - reached)
+    }
+
+    public var requiredGoalsText: String {
+        SocialText.requiredGoals(countedGoals, of: group.todayRequiredCount)
+    }
+
+    /// „Flamme gesichert“ bzw. „Noch 2 Ziele“.
+    public var flameStatusText: String {
+        group.todayComplete ? SocialText.flameSecured : SocialText.goalsMissing(max(missingGoals, 1))
+    }
+
+    public var thirdRuleText: String {
+        SocialText.thirdRule(required: group.todayRequiredCount, members: group.memberCount)
+    }
+
+    // MARK: Mitglieder
+
+    /// Mitglieder laut Ranking: wer die Gruppe verwaltet zuerst, dann nach Namen.
+    public var members: [GroupRankingEntry] {
+        (ranking?.entries ?? []).sorted { lhs, rhs in
+            if lhs.role != rhs.role { return lhs.role == .owner }
+            return lhs.profile.displayName.localizedStandardCompare(rhs.profile.displayName) == .orderedAscending
+        }
     }
 
     /// Freunde, die noch nicht in der Gruppe sind und eingeladen werden können.
@@ -60,12 +125,17 @@ public final class GroupDetailViewModel: Identifiable {
         return (social?.friends ?? []).filter { !members.contains($0.profile.publicID) && !invited.contains($0.profile.publicID) }
     }
 
-    /// z. B. `1 von 2 nötigen Mitgliedern haben das Ziel erreicht`.
-    public var todayText: String {
-        let needed = group.todayRequiredCount
-        return "\(group.todayReachedCount) von \(needed) \(needed == 1 ? "nötigem Mitglied" : "nötigen Mitgliedern") "
-            + "\(group.todayReachedCount == 1 ? "hat" : "haben") das Ziel erreicht"
+    /// Darf diese Person aus der Gruppe entfernt werden? Nur wer verwaltet, und nie sich selbst.
+    public func canRemove(_ member: GroupRankingEntry) -> Bool {
+        group.isOwner && !member.isCurrentUser
     }
+
+    /// Ohne Bildspeicher (kein Backend) kann kein Gruppenbild gesetzt werden.
+    public var canChangeImage: Bool {
+        group.isOwner && media != nil
+    }
+
+    // MARK: Laden
 
     public func load() async {
         // „Erneut versuchen“ zeigt wieder den Ladezustand statt unverändert den Fehler.
@@ -100,11 +170,11 @@ public final class GroupDetailViewModel: Identifiable {
                 rankingFailed = true
             }
             if state == .loaded {
-                let notice = SocialViewModel.Notice(text: SocialViewModel.message(for: error), isError: true)
+                let notice = SocialViewModel.Notice(text: SocialText.message(for: error), isError: true)
                 self.notice = notice
                 loadErrorNotice = notice
             } else {
-                state = .failed(SocialViewModel.message(for: error))
+                state = .failed(SocialText.message(for: error))
             }
         }
     }
@@ -134,7 +204,7 @@ public final class GroupDetailViewModel: Identifiable {
         } catch {
             guard generation == rankingGeneration else { return }
             rankingFailed = true
-            let notice = SocialViewModel.Notice(text: SocialViewModel.message(for: error), isError: true)
+            let notice = SocialViewModel.Notice(text: SocialText.message(for: error), isError: true)
             self.notice = notice
             loadErrorNotice = notice
         }
@@ -150,34 +220,45 @@ public final class GroupDetailViewModel: Identifiable {
 
     // MARK: Einladen
 
-    public func invite(_ friend: Friend) async {
-        await perform {
+    @discardableResult
+    public func invite(_ friend: Friend) async -> Bool {
+        await perform(busy: friend.profile.publicID) {
             switch try await self.repository.invite(friend.profile.publicID, to: self.groupID) {
-            case .invited: "\(friend.profile.displayName) wurde eingeladen."
-            case .alreadyMember: "\(friend.profile.displayName) ist bereits Mitglied."
-            case .alreadyInvited: "\(friend.profile.displayName) ist bereits eingeladen."
+            case .invited: SocialText.invitedNotice(friend.profile.displayName)
+            case .alreadyMember: SocialText.alreadyMember(friend.profile.displayName)
+            case .alreadyInvited: SocialText.alreadyInvited(friend.profile.displayName)
             }
         }
     }
 
-    public func cancel(_ invitation: OutgoingGroupInvitation) async {
-        await perform {
+    @discardableResult
+    public func cancel(_ invitation: OutgoingGroupInvitation) async -> Bool {
+        await perform(busy: invitation.id) {
             try await self.repository.cancelInvitation(invitation.id)
-            return "Einladung zurückgezogen."
+            return SocialText.invitationWithdrawn
         }
     }
 
-    // MARK: Verwalten (nur Eigentümer – der Server prüft das zusätzlich)
+    // MARK: Verwalten (nur wer die Gruppe verwaltet – der Server prüft das zusätzlich)
 
-    public func regenerateInviteCode() async {
+    @discardableResult
+    public func regenerateInviteCode() async -> Bool {
         await perform {
             self.group = try await self.repository.regenerateInviteCode(self.groupID)
-            return "Neuer Einladungscode erstellt. Der alte Code gilt nicht mehr."
+            return SocialText.newCodeCreated
         }
     }
 
+    /// Name, Beschreibung und Art (Privatsphäre bleibt).
+    @discardableResult
     public func update(name: String, description: String, kind: GroupKind) async -> Bool {
-        let draft = GroupDraft(name: name, description: description, kind: kind)
+        await updateDetails(name: name, description: description, kind: kind, privacy: group.privacy)
+    }
+
+    /// Name, Beschreibung, Art und Privatsphäre. Prüft Länge wie der Server, bevor gesendet wird.
+    @discardableResult
+    public func updateDetails(name: String, description: String, kind: GroupKind, privacy: GroupPrivacy) async -> Bool {
+        let draft = GroupDraft(name: name, description: description, kind: kind, privacy: privacy)
         guard let validName = draft.validName else {
             show(SocialViewModel.Notice(text: SocialError.invalidName.message, isError: true))
             return false
@@ -186,138 +267,138 @@ public final class GroupDetailViewModel: Identifiable {
             show(SocialViewModel.Notice(text: SocialError.invalidDescription.message, isError: true))
             return false
         }
-        return await perform {
-            self.group = try await self.repository.updateGroup(self.groupID, name: validName, description: validDescription, kind: kind)
-            return "Gruppe gespeichert."
+        let saved = await perform {
+            self.group = try await self.repository.updateGroupDetails(
+                self.groupID, name: validName, description: validDescription, kind: kind, privacy: privacy
+            )
+            return SocialText.groupSaved
         }
+        if saved { await social?.load() }
+        return saved
     }
 
-    /// Das neue Ziel gilt ab dem nächsten Gruppentag – heute und vergangene Tage ändern sich nicht.
+    /// Das neue Ziel gilt ab dem nächsten Gruppentag – heute und vergangene Tage ändern sich nicht. Persönliche
+    /// Tagesziele der Mitglieder bleiben unberührt.
+    @discardableResult
     public func setGoal(_ goal: Int) async -> Bool {
-        await perform {
+        guard GroupGoalRules.range.contains(goal) else {
+            show(SocialViewModel.Notice(text: SocialError.invalidGoal.message, isError: true))
+            return false
+        }
+        return await perform {
             self.group = try await self.repository.setGroupGoal(self.groupID, dailyGoal: goal)
-            return "Das neue Gruppenziel gilt ab morgen."
+            return SocialText.goalFromTomorrow
         }
     }
 
-    public func remove(_ member: GroupRankingEntry) async {
-        await perform {
-            try await self.repository.removeMember(member.profile.publicID, from: self.groupID)
-            return "\(member.profile.displayName) wurde aus der Gruppe entfernt."
+    /// Lädt ein neues, bereits verkleinertes Gruppenbild hoch und setzt es.
+    @discardableResult
+    public func setImage(_ image: SocialViewModel.GroupImageUpload) async -> Bool {
+        guard let media else {
+            show(SocialViewModel.Notice(text: SocialText.imageStorageUnavailable, isError: true))
+            return false
         }
+        guard image.data.count <= MediaRules.maximumBytes(for: .groupImage(groupID: groupID)) else {
+            show(SocialViewModel.Notice(text: SocialText.imageTooLarge, isError: true))
+            return false
+        }
+        let saved = await perform {
+            let reference = try await media.upload(image.data, contentType: image.contentType, to: .groupImage(groupID: self.groupID))
+            self.group = try await self.repository.setGroupImage(self.groupID, path: reference.path)
+            return SocialText.groupImageSaved
+        }
+        if saved { await social?.load() }
+        return saved
+    }
+
+    @discardableResult
+    public func removeImage() async -> Bool {
+        let removed = await perform {
+            self.group = try await self.repository.setGroupImage(self.groupID, path: nil)
+            return SocialText.groupImageRemoved
+        }
+        if removed { await social?.load() }
+        return removed
+    }
+
+    @discardableResult
+    public func remove(_ member: GroupRankingEntry) async -> Bool {
+        let removed = await perform(busy: member.profile.publicID) {
+            try await self.repository.removeMember(member.profile.publicID, from: self.groupID)
+            return SocialText.memberRemoved(member.profile.displayName)
+        }
+        if removed { await social?.load() }
+        return removed
     }
 
     /// Verlässt die Gruppe. Verwaltet man sie, übernimmt das am längsten beigetretene Mitglied; als letztes Mitglied
     /// wird die Gruppe gelöscht.
+    @discardableResult
     public func leave() async -> Bool {
+        let name = group.name
         let left = await perform(reload: false) {
             try await self.repository.leaveGroup(self.groupID)
-            return "Du hast „\(self.group.name)“ verlassen."
+            return SocialText.leftGroup(name)
         }
-        if left { state = .gone }
-        await social?.load()
+        await finishLeaving(left, text: SocialText.leftGroup(name))
         return left
     }
 
+    @discardableResult
     public func delete() async -> Bool {
+        let name = group.name
         let deleted = await perform(reload: false) {
             try await self.repository.deleteGroup(self.groupID)
-            return "Gruppe „\(self.group.name)“ gelöscht."
+            return SocialText.groupDeleted(name)
         }
-        if deleted { state = .gone }
-        await social?.load()
+        await finishLeaving(deleted, text: SocialText.groupDeleted(name))
         return deleted
+    }
+
+    private func finishLeaving(_ succeeded: Bool, text: String) async {
+        if succeeded {
+            state = .gone
+            social?.discardDetail(for: groupID)
+            social?.show(SocialViewModel.Notice(text: text, isError: false))
+        }
+        await social?.load()
+    }
+
+    /// Text zum Teilen des Einladungscodes (nur sinnvoll bei Privatsphäre „Mit Einladungscode“).
+    public var inviteShareText: String {
+        SocialText.joinGroupShareText(name: group.name, code: group.inviteCode)
     }
 
     public func dismissNotice() {
         show(nil)
     }
 
-    /// Hinweis einer Aktion; ein späteres erfolgreiches Laden entfernt ihn nicht (siehe `SocialViewModel.show`).
-    private func show(_ notice: SocialViewModel.Notice?) {
+    /// Hinweis von außen, z. B. „Gruppe erstellt – Bild konnte nicht gespeichert werden“ direkt nach dem Anlegen.
+    func show(_ notice: SocialViewModel.Notice?) {
         self.notice = notice
         loadErrorNotice = nil
     }
 
     @discardableResult
-    private func perform(reload: Bool = true, _ action: @MainActor () async throws -> String) async -> Bool {
-        guard !isWorking else { return false }
-        isWorking = true
-        defer { isWorking = false }
+    private func perform(reload: Bool = true, busy id: UUID? = nil, _ action: @MainActor () async throws -> String) async -> Bool {
+        if let id {
+            guard !busyIDs.contains(id) else { return false }
+        } else {
+            guard !isWorking else { return false }
+        }
+        if let id { busyIDs.insert(id) } else { isWorking = true }
+        defer {
+            if let id { busyIDs.remove(id) } else { isWorking = false }
+        }
         do {
             let text = try await action()
             show(SocialViewModel.Notice(text: text, isError: false))
             if reload { await load() }
             return true
         } catch {
-            show(SocialViewModel.Notice(text: SocialViewModel.message(for: error), isError: true))
+            show(SocialViewModel.Notice(text: SocialText.actionMessage(for: error), isError: true))
             if reload { await load() }
             return false
-        }
-    }
-}
-
-/// Profil eines Freundes: nur Namen und Wettbewerbsschritte (heute, diese Woche).
-@MainActor
-@Observable
-public final class FriendProfileViewModel {
-    public enum State: Equatable {
-        case loading
-        case loaded(FriendProfileDetails)
-        case failed(String)
-        case removed
-    }
-
-    public let profile: SocialProfile
-    public private(set) var state: State = .loading
-    public private(set) var isRemoving = false
-    public private(set) var errorMessage: String?
-
-    @ObservationIgnored private let repository: any SocialRepository
-    @ObservationIgnored private weak var social: SocialViewModel?
-    @ObservationIgnored private let calendar: ActivityCalendar
-    @ObservationIgnored private let now: @Sendable () -> Date
-
-    public init(
-        profile: SocialProfile,
-        repository: any SocialRepository,
-        social: SocialViewModel?,
-        calendar: ActivityCalendar = ActivityCalendar(),
-        now: @escaping @Sendable () -> Date = { Date() }
-    ) {
-        self.profile = profile
-        self.repository = repository
-        self.social = social
-        self.calendar = calendar
-        self.now = now
-    }
-
-    public func load() async {
-        if case .failed = state {
-            state = .loading
-        }
-        do {
-            state = .loaded(try await repository.friendProfile(profile.publicID, date: calendar.day(containing: now())))
-        } catch SocialError.notFound {
-            state = .removed
-        } catch is CancellationError {
-            return
-        } catch {
-            state = .failed(SocialViewModel.message(for: error))
-        }
-    }
-
-    public func remove() async {
-        guard !isRemoving else { return }
-        isRemoving = true
-        errorMessage = nil
-        defer { isRemoving = false }
-        do {
-            try await repository.removeFriend(profile.publicID)
-            state = .removed
-            await social?.load()
-        } catch {
-            errorMessage = SocialViewModel.message(for: error)
         }
     }
 }

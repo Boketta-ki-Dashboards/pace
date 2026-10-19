@@ -1,7 +1,7 @@
 import Foundation
 import PaceCore
 import PaceTestSupport
-import SocialFeature
+@testable import SocialFeature
 import Testing
 
 @MainActor
@@ -69,28 +69,122 @@ struct SocialViewModelTests {
         #expect(repository.state.current.calls.count == calls)
     }
 
-    @Test func searchFindsExactUsernamesAndSendsRequests() async throws {
+    @Test func aSharedProfileLinkIsResolvedByUsername() async throws {
         let repository = SocialRepositoryStub { $0.profiles["mia"] = self.mia }
         let viewModel = makeViewModel(repository)
 
-        viewModel.searchText = "  @Mia "
-        await viewModel.searchProfile()
-        guard case .found(let result) = viewModel.search else { throw UnexpectedStateError() }
-        #expect(result.profile == mia)
-        #expect(result.relationship == .none)
+        viewModel.showProfile(username: "@Mia")
+        #expect(viewModel.requestedProfile == "@Mia")
+        let profile = await viewModel.resolveRequestedProfile()
+        #expect(profile == mia)
+        #expect(viewModel.requestedProfile == nil)
 
-        await viewModel.sendRequest(to: mia)
-        #expect(viewModel.notice == .init(text: "Anfrage an Mia gesendet.", isError: false))
-        guard case .found(let updated) = viewModel.search else { throw UnexpectedStateError() }
-        #expect(updated.relationship == .outgoingRequest)
+        viewModel.showProfile(username: "unbekannt")
+        #expect(await viewModel.resolveRequestedProfile() == nil)
+        #expect(viewModel.notice == .init(text: "Das Profil @unbekannt gibt es nicht oder es ist nicht sichtbar.", isError: true))
 
-        viewModel.searchText = "x"
-        await viewModel.searchProfile()
-        if case .notFound = viewModel.search {} else { Issue.record("Ungültiger Name sollte nicht gesucht werden") }
+        // Ungültige Namen gehen gar nicht erst an den Server.
+        let calls = repository.state.current.calls.count
+        viewModel.showProfile(username: "x")
+        #expect(await viewModel.resolveRequestedProfile() == nil)
+        #expect(repository.state.current.calls.count == calls)
+    }
 
-        viewModel.searchText = "unbekannt"
-        await viewModel.searchProfile()
-        #expect(viewModel.search == .notFound("Niemand mit dem Benutzernamen @unbekannt gefunden."))
+    @Test func sendingARequestReportsTheServerOutcome() async {
+        let repository = SocialRepositoryStub { $0.friendRequestOutcome = .accepted }
+        let viewModel = makeViewModel(repository)
+        await viewModel.load()
+
+        let outcome = await viewModel.sendRequest(to: mia)
+
+        #expect(outcome == .accepted)
+        #expect(viewModel.notice == .init(text: "Du und Mia seid jetzt befreundet.", isError: false))
+    }
+
+    @Test func theMainSearchFiltersFriendsAndChatsLocally() async {
+        let repository = SocialRepositoryStub { state in
+            state.friends = [Friend(profile: self.mia, friendsSince: .distantPast), Friend(profile: self.ben, friendsSince: .distantPast)]
+        }
+        let viewModel = makeViewModel(repository)
+        await viewModel.load()
+        let calls = repository.state.current.calls.count
+
+        viewModel.filterText = "  @mI "
+        #expect(viewModel.isFiltering)
+        #expect(viewModel.matchingFriends.map(\.profile) == [mia])
+        viewModel.filterText = "BEN"
+        #expect(viewModel.matchingFriends.map(\.profile) == [ben])
+        viewModel.filterText = "   "
+        #expect(!viewModel.isFiltering)
+        #expect(viewModel.matchingFriends.isEmpty)
+        #expect(repository.state.current.calls.count == calls) // rein lokal
+    }
+
+    @Test func topFriendsAreTheFirstThreeWithoutMe() async {
+        func entry(_ rank: Int, _ name: String, me: Bool = false) -> LeaderboardEntry {
+            LeaderboardEntry(rank: rank, publicUserID: UUID(), username: name.lowercased(), displayName: name, competitionSteps: 10_000 - rank, isCurrentUser: me)
+        }
+        let repository = SocialRepositoryStub { state in
+            state.ranking = [entry(1, "Leon"), entry(2, "Niklas", me: true), entry(3, "Marie"), entry(4, "Gotscha"), entry(5, "Flavio")]
+        }
+        let viewModel = makeViewModel(repository)
+        await viewModel.load()
+
+        #expect(viewModel.topFriends.map(\.displayName) == ["Leon", "Marie", "Gotscha"])
+        #expect(viewModel.topFriends.map(\.rank) == [1, 3, 4]) // Plätze wie in der vollständigen Liste
+        #expect(viewModel.hasFriends)
+    }
+
+    @Test func blockingAndReportingUseTheServer() async {
+        let repository = SocialRepositoryStub { state in
+            state.friends = [Friend(profile: self.mia, friendsSince: .distantPast)]
+        }
+        let viewModel = makeViewModel(repository)
+        await viewModel.load()
+
+        #expect(await viewModel.block(mia))
+        #expect(viewModel.friends.isEmpty)
+        #expect(repository.state.current.blocked == [mia])
+        #expect(viewModel.notice == .init(text: "Mia ist blockiert.", isError: false))
+
+        #expect(await viewModel.report(.user(publicID: mia.publicID), reason: .spam, details: "  Werbung  "))
+        let report = repository.state.current.reports.first
+        #expect(report?.0 == .user(publicID: mia.publicID))
+        #expect(report?.1 == .spam)
+        #expect(report?.2 == "Werbung")
+
+        #expect(await viewModel.unblock(mia))
+        #expect(repository.state.current.blocked.isEmpty)
+    }
+
+    @Test func unavailableServerFeaturesAreNamedHonestly() async {
+        let repository = SocialRepositoryStub { $0.actionError = .unavailable }
+        let viewModel = makeViewModel(repository)
+        await viewModel.load()
+
+        #expect(await viewModel.block(mia) == false)
+        #expect(viewModel.notice == .init(text: "Diese Funktion ist auf dem Server noch nicht eingerichtet.", isError: true))
+        #expect(viewModel.state == .loaded) // der Rest bleibt nutzbar
+    }
+
+    @Test func textsFollowTheLanguage() async {
+        let repository = SocialRepositoryStub()
+        let viewModel = makeViewModel(repository)
+        await viewModel.load()
+
+        PaceLocalization.$languageOverride.withValue(.english) {
+            #expect(viewModel.shareText?.hasPrefix("Add me on Pace: @niklas") == true)
+            #expect(SocialText.members(1) == "1 member")
+            #expect(SocialText.members(12) == "12 members")
+        }
+        PaceLocalization.$languageOverride.withValue(.russian) {
+            #expect(viewModel.shareText?.hasPrefix("Добавь меня в Pace: @niklas") == true)
+            #expect(SocialText.members(1) == "1 участник")
+            #expect(SocialText.members(3) == "3 участника")
+            #expect(SocialText.members(12) == "12 участников")
+            #expect(SocialText.members(21) == "21 участник")
+        }
+        #expect(viewModel.shareText?.hasSuffix("pace://u/niklas") == true)
     }
 
     @Test func acceptingARequestMakesAFriend() async {
@@ -122,7 +216,7 @@ struct SocialViewModelTests {
         try await waitUntil { repository.state.current.calls.contains("respondToFriendRequest") }
         try await Task.sleep(for: .milliseconds(20)) // die Aktion wartet jetzt auf das laufende Laden
         repository.gate.open("myGroups")
-        await accept.value
+        _ = await accept.value
         await refresh.value
 
         // Nicht der Stand von vor dem Annehmen.
@@ -242,7 +336,7 @@ struct GroupDetailViewModelTests {
 
         #expect(detail.state == .loaded)
         #expect(detail.invitableFriends.map(\.profile) == [ben]) // Mia ist schon Mitglied
-        #expect(detail.todayText == "1 von 2 nötigen Mitgliedern hat das Ziel erreicht")
+        #expect(detail.todayText == "1 von 6 Mitgliedern hat heute das Ziel erreicht")
 
         await detail.invite(Friend(profile: ben, friendsSince: .distantPast))
         #expect(detail.outgoingInvitations.map(\.profile) == [ben])
