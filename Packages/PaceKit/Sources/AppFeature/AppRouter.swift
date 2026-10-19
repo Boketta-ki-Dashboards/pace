@@ -126,7 +126,12 @@ public final class AppRouter {
             refreshActivity: { [weak home] in await home?.refreshForRanking() }
         )
         let navigation = MainNavigation()
-        let social = SocialViewModel(repository: services.social, ownUsername: { [store] in store.profile.username })
+        let social = SocialViewModel(
+            repository: services.social,
+            chats: ChatListViewModel(repository: services.chat, media: services.media),
+            media: services.media,
+            ownUsername: { [store] in store.profile.username }
+        )
         // Das Tagesziel älterer Versionen wird einmalig in den Zielverlauf übernommen.
         let goals = StepGoalSettings(
             store: dependencies.stepGoals,

@@ -51,7 +51,14 @@ public final class SocialViewModel {
         }
     }
 
+    /// Chats (privat und Gruppen) – geteilt zwischen Social-Hauptseite, Gruppendetails und Profilen.
+    public let chats: ChatListViewModel
+    /// Profil, das von außen geöffnet werden soll (z. B. über einen geteilten Link `pace://u/<name>`).
+    public private(set) var requestedProfile: String?
+
     @ObservationIgnored private let repository: (any SocialRepository)?
+    /// Profil- und Gruppenbilder; `nil` ohne Backend.
+    @ObservationIgnored let media: (any MediaRepository)?
     @ObservationIgnored private let calendar: ActivityCalendar
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private let ownUsername: @MainActor () -> String?
@@ -65,13 +72,19 @@ public final class SocialViewModel {
     /// - Parameters:
     ///   - repository: `nil`, wenn kein Backend konfiguriert ist.
     ///   - ownUsername: Eigener Benutzername zum Teilen.
+    ///   - chats: Chatliste; ohne Angabe ohne Chats.
+    ///   - media: Profil- und Gruppenbilder.
     public init(
         repository: (any SocialRepository)?,
+        chats: ChatListViewModel? = nil,
+        media: (any MediaRepository)? = nil,
         ownUsername: @escaping @MainActor () -> String? = { nil },
         calendar: ActivityCalendar = ActivityCalendar(),
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.repository = repository
+        self.chats = chats ?? ChatListViewModel(repository: nil, media: media)
+        self.media = media
         self.ownUsername = ownUsername
         self.calendar = calendar
         self.now = now
@@ -95,6 +108,16 @@ public final class SocialViewModel {
 
     public var username: String? {
         ownUsername().map { "@\($0)" }
+    }
+
+    /// Öffnet ein Profil über den Benutzernamen (z. B. aus einem geteilten Link). Die Social-Ansicht zeigt es an und
+    /// setzt die Anfrage danach mit ``clearRequestedProfile()`` zurück.
+    public func showProfile(username: String) {
+        requestedProfile = username
+    }
+
+    public func clearRequestedProfile() {
+        requestedProfile = nil
     }
 
     // MARK: Laden

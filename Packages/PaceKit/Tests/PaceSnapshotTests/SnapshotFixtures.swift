@@ -1,146 +1,15 @@
 @testable import ActivityFeature
-import DesignSystem
 import Foundation
 @testable import HomeFeature
 @testable import LeaderboardFeature
 import PaceCore
 import PaceTestSupport
-@testable import ProfileFeature
 @testable import SocialFeature
-import SwiftUI
-import Testing
-import UIKit
 
-/// Rendert die wichtigsten Screens mit Beispieldaten als PNG – zur visuellen Kontrolle in der CI (Artefakt
-/// „snapshots“). Läuft nur, wenn `PACE_SNAPSHOT_DIR` gesetzt ist, und prüft nichts: Es entstehen nur Bilder.
-///
-/// Gerendert werden die Inhalte ohne Navigation und Scrollen (`ImageRenderer` kann keine UIKit-Container zeichnen);
-/// systemeigene Controls wie Schalter erscheinen dabei als Platzhalter.
+/// Beispieldaten für die Snapshot-Bilder (nur für Bilder, nie in der App).
 @MainActor
-@Suite(.enabled(if: ProcessInfo.processInfo.environment["PACE_SNAPSHOT_DIR"] != nil))
-struct ScreenSnapshotTests {
-    private let width: CGFloat = 393
-
-    @Test func homeDashboard() async throws {
-        let (dashboard, _) = try await makeDashboard()
-        await dashboard.loadStreakIfNeeded()
-        let content = VStack(alignment: .leading, spacing: PaceSpacing.s) {
-            HomeHeaderView(greeting: dashboard.greeting, onCustomize: {}, onNotifications: {})
-            RegionRankCardsView(standings: dashboard.standings) { _ in }
-            StepsTodayCardView(
-                state: dashboard.activity.state,
-                summary: dashboard.stepsToday,
-                onEditGoal: {},
-                onRetry: {}
-            )
-            WeekOverviewCardView(week: dashboard.week)
-            StreakCardView(summary: dashboard.streakSummary, state: dashboard.streak.history.state)
-            NeighborhoodCardView(standings: dashboard.standings) { _ in }
-            FriendsPreviewCardView(social: dashboard.social) {}
-            GroupsPreviewCardView(social: dashboard.social) {}
-        }
-        .padding(.horizontal, PaceSpacing.m)
-        .padding(.vertical, PaceSpacing.m)
-        try render(content, name: "home")
-    }
-
-    /// Kleine und große Varianten der Module.
-    @Test func homeModuleSizes() async throws {
-        let (dashboard, _) = try await makeDashboard()
-        await dashboard.loadStreakIfNeeded()
-        let small = VStack(alignment: .leading, spacing: PaceSpacing.s) {
-            RegionRankCardsView(standings: dashboard.standings, size: .small) { _ in }
-            WeekOverviewCardView(week: dashboard.week, size: .small)
-            StreakCardView(summary: dashboard.streakSummary, state: dashboard.streak.history.state, size: .small)
-            NeighborhoodCardView(standings: dashboard.standings, size: .small) { _ in }
-            FriendsPreviewCardView(social: dashboard.social, size: .small) {}
-            GroupsPreviewCardView(social: dashboard.social, size: .small) {}
-        }
-        .padding(PaceSpacing.m)
-        try render(small, name: "home-small")
-
-        let large = VStack(alignment: .leading, spacing: PaceSpacing.s) {
-            RegionRankCardsView(standings: dashboard.standings, size: .large) { _ in }
-            StepsTodayCardView(
-                state: dashboard.activity.state,
-                summary: dashboard.stepsToday,
-                size: .large,
-                onEditGoal: {},
-                onRetry: {}
-            )
-            WeekOverviewCardView(week: dashboard.week, size: .large)
-            StreakCardView(summary: dashboard.streakSummary, state: dashboard.streak.history.state, size: .large)
-            NeighborhoodCardView(standings: dashboard.standings, level: .district, size: .large) { _ in }
-            FriendsPreviewCardView(social: dashboard.social, size: .large) {}
-            GroupsPreviewCardView(social: dashboard.social, size: .large) {}
-        }
-        .padding(PaceSpacing.m)
-        try render(large, name: "home-large")
-    }
-
-    @Test func otherTabs() async throws {
-        let (_, store) = try await makeDashboard()
-        let leaderboard = LeaderboardViewModel(
-            store: store,
-            leaderboards: Self.leaderboards(),
-            syncing: nil,
-            calendar: Fixtures.activityCalendar,
-            now: { Fixtures.date(2026, 10, 16, 12) },
-            topLimit: 8
-        )
-        await leaderboard.loadIfNeeded()
-        let (dashboard, _) = try await makeDashboard()
-        let profile = ProfileViewModel(
-            store: store,
-            regions: RegionRepositoryStub(),
-            appIcons: AppIconSettingStub(),
-            streak: dashboard.streak,
-            statistics: { dashboard.statistics(for: $0) },
-            formatter: ActivityFormatter(locale: Locale(identifier: "de_DE"), calendar: Fixtures.activityCalendar)
-        )
-        await profile.load()
-        await profile.loadActivity()
-
-        try render(LeaderboardContent(viewModel: leaderboard).padding(PaceSpacing.m), name: "rankings")
-        try render(SocialContent(viewModel: dashboard.social).padding(PaceSpacing.m), name: "social")
-        let group = try #require(dashboard.social.groups.first)
-        let detail = try #require(dashboard.social.detail(for: group))
-        await detail.load()
-        try render(GroupDetailContent(viewModel: detail).padding(PaceSpacing.m), name: "group")
-        try render(ProfileContent(viewModel: profile).padding(PaceSpacing.m), name: "profile")
-    }
-
-    @Test func statistics() async throws {
-        let (dashboard, _) = try await makeDashboard()
-        await dashboard.streak.loadIfNeeded()
-        let routes: [(StatisticsRoute, String)] = [
-            (StatisticsRoute(period: .day, metric: .steps), "statistics-day"),
-            (StatisticsRoute(period: .week, metric: .steps), "statistics-week"),
-            (StatisticsRoute(period: .month, metric: .distance), "statistics-month-distance"),
-        ]
-        for (route, name) in routes {
-            let statistics = dashboard.statistics(for: route)
-            await statistics.loadHourly()
-            guard case .report(let report) = statistics.content else {
-                Issue.record("Kein Bericht für \(name)")
-                continue
-            }
-            let content = StatisticsContent(
-                report: report,
-                hourly: statistics.hourly,
-                onSelectPeriod: { _ in },
-                onSelectMetric: { _ in },
-                onPrevious: {},
-                onNext: {},
-                onSelectDay: { _ in }
-            )
-            try render(content.padding(PaceSpacing.m), name: name)
-        }
-    }
-
-    // MARK: Beispieldaten (nur für Bilder)
-
-    private func makeDashboard() async throws -> (HomeDashboardViewModel, ProfileStore) {
+enum SnapshotFixtures {
+    static func makeDashboard() async throws -> (HomeDashboardViewModel, ProfileStore) {
         let profile = Fixtures.profile(displayName: "Niklas", regionalLeaderboardEnabled: true)
         let profiles = ProfileRepositoryStub { $0.profiles[profile.id] = profile }
         let store = ProfileStore(profile: profile, profiles: profiles, regions: RegionRepositoryStub(), cache: InMemoryProfileCache())
@@ -216,7 +85,7 @@ struct ScreenSnapshotTests {
         return (dashboard, store)
     }
 
-    private static func socialRepository() -> SocialRepositoryStub {
+    static func socialRepository() -> SocialRepositoryStub {
         func profile(_ index: Int, _ name: String) -> SocialProfile {
             SocialProfile(
                 publicID: UUID(uuidString: String(format: "40000000-0000-4000-8000-%012d", index))!,
@@ -269,7 +138,7 @@ struct ScreenSnapshotTests {
         }
     }
 
-    private static func leaderboards() -> LeaderboardRepositoryStub {
+    static func leaderboards() -> LeaderboardRepositoryStub {
         let names = ["Leon", "Flavio", "Mia", "Jonas", "Emma", "Ben", "Lina", "Paul", "Lea", "Finn", "Leon", "Niklas", "Flavio"]
         func ranking(count: Int, me: Int, myRankSteps: Int) -> [LeaderboardEntry] {
             (1...count).map { rank in
@@ -289,29 +158,6 @@ struct ScreenSnapshotTests {
             $0.rankings[Fixtures.darmstadtDieburg.id] = ranking(count: 160, me: 148, myRankSteps: 8_432)
             $0.rankings[Fixtures.hessen.id] = ranking(count: 2_500, me: 2_410, myRankSteps: 8_432)
             $0.rankings[Fixtures.germany.id] = ranking(count: 18_600, me: 18_520, myRankSteps: 8_432)
-        }
-    }
-
-    // MARK: Rendern
-
-    private var directory: URL {
-        URL(fileURLWithPath: ProcessInfo.processInfo.environment["PACE_SNAPSHOT_DIR"] ?? NSTemporaryDirectory())
-    }
-
-    /// Rendert reine SwiftUI-Inhalte (ohne ScrollView/Navigation) in Hell und Dunkel.
-    private func render(_ content: some View, name: String) throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        for scheme in [ColorScheme.light, .dark] {
-            let view = content
-                .frame(width: width)
-                .background(PaceColor.background)
-                .environment(\.colorScheme, scheme)
-                .environment(\.locale, Locale(identifier: "de_DE"))
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = 2
-            renderer.proposedSize = ProposedViewSize(width: width, height: nil)
-            let image = try #require(renderer.uiImage)
-            try #require(image.pngData()).write(to: directory.appendingPathComponent("\(name)-\(scheme == .dark ? "dark" : "light").png"))
         }
     }
 }
