@@ -51,6 +51,11 @@ public final class ChatListViewModel {
 
     public func load() async {}
 
+    /// Teilt ein Profil als Profilnachricht in die gewählten Chats (Freunde und eigene Gruppen).
+    public func shareProfile(_ profile: SocialProfile, with targets: [ChatTarget]) async throws {
+        throw SocialError.unavailable
+    }
+
     /// ViewModel für einen einzelnen Chat.
     public func chat(for target: ChatTarget) -> ChatViewModel {
         ChatViewModel(target: target, repository: repository, media: media)

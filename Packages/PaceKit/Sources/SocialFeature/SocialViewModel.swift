@@ -55,6 +55,8 @@ public final class SocialViewModel {
     public let chats: ChatListViewModel
     /// Profil, das von außen geöffnet werden soll (z. B. über einen geteilten Link `pace://u/<name>`).
     public private(set) var requestedProfile: String?
+    /// Gruppe, die von außen geöffnet werden soll (z. B. aus einem Gruppen-Widget auf Home).
+    public private(set) var requestedGroup: UUID?
 
     @ObservationIgnored private let repository: (any SocialRepository)?
     /// Profil- und Gruppenbilder; `nil` ohne Backend.
@@ -118,6 +120,16 @@ public final class SocialViewModel {
 
     public func clearRequestedProfile() {
         requestedProfile = nil
+    }
+
+    /// Öffnet die Details einer Gruppe (z. B. aus einem Home-Widget). Die Social-Ansicht zeigt sie an und setzt die
+    /// Anfrage danach mit ``clearRequestedGroup()`` zurück.
+    public func showGroup(_ groupID: UUID) {
+        requestedGroup = groupID
+    }
+
+    public func clearRequestedGroup() {
+        requestedGroup = nil
     }
 
     // MARK: Laden
