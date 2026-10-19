@@ -11,6 +11,9 @@ import Realtime
 /// wird. Die App fällt dann auf regelmäßiges Aktualisieren zurück (Vertrag von `ChatRepository`).
 struct RealtimeEvents: Sendable {
     let client: RealtimeClientV2
+    /// Der Realtime-Client teilt Kanäle je Topic (z. B. `user:<public_id>` für Chat-Liste und Ungelesen-Zähler).
+    /// Entfernt wird ein Kanal erst, wenn der letzte Stream dieses Topics endet.
+    let usage = TopicUsage()
 
     init(configuration: BackendConfiguration, tokens: AccessTokenProvider) {
         client = RealtimeClientV2(
@@ -29,9 +32,10 @@ struct RealtimeEvents: Sendable {
     /// Stream nicht mehr liest.
     func stream(topic: String, event: String) -> AsyncStream<Void> {
         let client = client
+        let usage = usage
         return AsyncStream { continuation in
             let task = Task {
-                await Self.forward(client: client, topic: topic, event: event, to: continuation)
+                await Self.forward(client: client, usage: usage, topic: topic, event: event, to: continuation)
             }
             continuation.onTermination = { _ in task.cancel() }
         }
@@ -41,13 +45,14 @@ struct RealtimeEvents: Sendable {
     /// Scheitert das, endet der Stream sofort.
     func stream(event: String, topic: @escaping @Sendable () async throws -> String) -> AsyncStream<Void> {
         let client = client
+        let usage = usage
         return AsyncStream { continuation in
             let task = Task {
                 guard let resolved = try? await topic() else {
                     continuation.finish()
                     return
                 }
-                await Self.forward(client: client, topic: resolved, event: event, to: continuation)
+                await Self.forward(client: client, usage: usage, topic: resolved, event: event, to: continuation)
             }
             continuation.onTermination = { _ in task.cancel() }
         }
@@ -55,10 +60,12 @@ struct RealtimeEvents: Sendable {
 
     private static func forward(
         client: RealtimeClientV2,
+        usage: TopicUsage,
         topic: String,
         event: String,
         to continuation: AsyncStream<Void>.Continuation
     ) async {
+        await usage.acquire(topic)
         let channel = client.channel(topic) { $0.isPrivate = true }
         // Vor dem Beitritt registrieren, damit kein Hinweis verloren geht.
         let broadcasts = channel.broadcastStream(event: event)
@@ -66,7 +73,7 @@ struct RealtimeEvents: Sendable {
         do {
             try await channel.subscribeWithError()
         } catch {
-            await client.removeChannel(channel)
+            await release(channel, topic: topic, client: client, usage: usage)
             continuation.finish()
             return
         }
@@ -88,8 +95,30 @@ struct RealtimeEvents: Sendable {
         }
 
         watcher.cancel()
-        await client.removeChannel(channel)
+        await release(channel, topic: topic, client: client, usage: usage)
         continuation.finish()
+    }
+
+    private static func release(_ channel: RealtimeChannelV2, topic: String, client: RealtimeClientV2, usage: TopicUsage) async {
+        if await usage.release(topic) {
+            await client.removeChannel(channel)
+        }
+    }
+}
+
+/// Wie viele Streams ein Topic gerade nutzen.
+actor TopicUsage {
+    private var counts: [String: Int] = [:]
+
+    func acquire(_ topic: String) {
+        counts[topic, default: 0] += 1
+    }
+
+    /// Gibt eine Nutzung frei; `true`, wenn das Topic danach von niemandem mehr genutzt wird.
+    func release(_ topic: String) -> Bool {
+        let remaining = (counts[topic] ?? 1) - 1
+        counts[topic] = remaining > 0 ? remaining : nil
+        return remaining <= 0
     }
 }
 
