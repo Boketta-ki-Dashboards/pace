@@ -5,16 +5,14 @@ import SwiftUI
 /// „Profil teilen“: Empfängerauswahl (Freunde und eigene Gruppen) und Link zum Teilen außerhalb von Pace.
 struct ShareProfileView: View {
     @State private var model: ShareProfileViewModel
-    private let social: SocialViewModel
     @Environment(\.dismiss) private var dismiss
 
-    init(model: ShareProfileViewModel, social: SocialViewModel) {
+    init(model: ShareProfileViewModel) {
         _model = State(initialValue: model)
-        self.social = social
     }
 
     var body: some View {
-        ShareProfileContent(model: model, social: social) {
+        ShareProfileContent(model: model) {
             Task {
                 if await model.send() { dismiss() }
             }
@@ -26,7 +24,6 @@ struct ShareProfileView: View {
 /// Inhalt der Empfängerauswahl mit Kopfzeile (ohne Scrollen) – auch für Snapshot-Tests.
 struct ShareProfileContent: View {
     let model: ShareProfileViewModel
-    let social: SocialViewModel
     var onSend: () -> Void = {}
 
     var body: some View {

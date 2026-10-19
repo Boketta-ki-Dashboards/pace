@@ -168,7 +168,13 @@ public final class FriendSearchViewModel {
         result.relationship == .friend ? .direct(result.profile) : nil
     }
 
-    /// Wiederholt die Suche ohne Verzögerung, damit Beziehungen dem Server entsprechen.
+    /// Wiederholt die Suche ohne Verzögerung, damit Beziehungen dem Server entsprechen (z. B. beim Zurückkehren aus
+    /// einem Profil, in dem eine Anfrage gesendet wurde).
+    public func refreshResults() async {
+        guard case .results = state else { return }
+        await refresh()
+    }
+
     private func refresh() async {
         let term = normalizedQuery
         guard Self.isSearchable(term) else { return }

@@ -36,6 +36,7 @@ struct AddFriendView: View {
             }
         )
         .socialSubpageScroll()
+        .task { [model] in await model.refreshResults() }
         .confirmationDialog(
             blockCandidate.map { SocialText.blockTitle($0.profile.displayName) } ?? SocialText.blockUser,
             isPresented: $showsBlockDialog,

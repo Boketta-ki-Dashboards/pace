@@ -56,7 +56,7 @@ struct SocialDestination: View {
         case .settings:
             SocialSettingsView(model: viewModel.settings(), social: viewModel, onOpen: onOpen)
         case .shareProfile(let profile):
-            ShareProfileView(model: viewModel.shareProfile(profile), social: viewModel)
+            ShareProfileView(model: viewModel.shareProfile(profile))
         case .report(let subject):
             ReportView(model: viewModel.reportForm(subject), social: viewModel)
         }

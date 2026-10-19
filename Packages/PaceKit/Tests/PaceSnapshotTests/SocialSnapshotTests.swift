@@ -84,7 +84,7 @@ struct SocialSnapshotTests {
         let settings = social.settings()
         await settings.load()
         try Snapshot.render(page(SocialSettingsContent(model: settings, social: social)), name: "social-settings")
-        try Snapshot.render(page(ShareProfileContent(model: social.shareProfile(SocialSnapshotData.leon), social: social)), name: "share-profile")
+        try Snapshot.render(page(ShareProfileContent(model: social.shareProfile(SocialSnapshotData.leon))), name: "share-profile")
         let report = social.reportForm(.user(SocialSnapshotData.leon))
         report.reason = .spam
         try Snapshot.render(page(ReportContent(model: report, social: social)), name: "report")
