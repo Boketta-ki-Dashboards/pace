@@ -20,6 +20,14 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
         public var calls: [String] = []
         public var me = SocialProfile(publicID: Fixtures.publicUserID, username: "niklas", displayName: "Niklas")
         public var now = Date(timeIntervalSince1970: 1_792_000_000)
+        /// `false`: Echtzeit-Streams enden sofort (die App fällt auf regelmäßiges Abfragen zurück).
+        public var realtimeAvailable = true
+        /// Gesendete Entwürfe in Reihenfolge (auch Wiederholungen).
+        public var sentDrafts: [(ChatMessageDraft, UUID)] = []
+        /// Fehler nur beim Löschen.
+        public var deleteError: SocialError?
+        /// Profile, die bei geteilten Profilen zurückgegeben werden (sonst ein Platzhalter).
+        public var sharedProfiles: [UUID: SocialProfile] = [:]
     }
 
     public let state: Locked<State>
@@ -72,6 +80,7 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
         try check("send")
         await gate.pass("send")
         let message = try state.withLock { state -> ChatMessage in
+            state.sentDrafts.append((draft, conversationID))
             if let error = state.sendError { throw error }
             if let existing = state.messages[conversationID]?.first(where: { $0.clientID == draft.clientID }) {
                 return existing
@@ -86,7 +95,9 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
                 kind: draft.kind,
                 text: draft.text,
                 media: .chatMedia(draft.mediaPath),
-                sharedProfile: draft.sharedProfileID.map { SocialProfile(publicID: $0, username: "geteilt", displayName: "Geteilt") },
+                sharedProfile: draft.sharedProfileID.map { id in
+                    state.sharedProfiles[id] ?? SocialProfile(publicID: id, username: "geteilt", displayName: "Geteilt")
+                },
                 sentAt: state.now
             )
             state.messages[conversationID, default: []].append(message)
@@ -102,7 +113,8 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
 
     public func deleteMessage(_ messageID: UUID) async throws {
         try check("deleteMessage")
-        state.withLock { state in
+        try state.withLock { state in
+            if let error = state.deleteError { throw error }
             state.deleted.append(messageID)
             for key in state.messages.keys {
                 state.messages[key]?.removeAll { $0.id == messageID }
@@ -112,14 +124,40 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
 
     public func messageEvents(in conversationID: UUID) -> AsyncStream<Void> {
         AsyncStream { continuation in
+            guard state.withLock({ $0.realtimeAvailable }) else {
+                continuation.finish()
+                return
+            }
             messageContinuations.withLock { $0[conversationID, default: []].append(continuation) }
         }
     }
 
     public func conversationEvents() -> AsyncStream<Void> {
         AsyncStream { continuation in
+            guard state.withLock({ $0.realtimeAvailable }) else {
+                continuation.finish()
+                return
+            }
             listContinuations.withLock { $0.append(continuation) }
         }
+    }
+
+    /// Anzahl der Aufrufe einer Methode.
+    public func callCount(_ name: String) -> Int {
+        state.withLock { $0.calls.filter { $0 == name }.count }
+    }
+
+    /// Anzahl der offenen Echtzeit-Abos (Chatliste bzw. eine Unterhaltung).
+    public func subscriberCount(conversationID: UUID? = nil) -> Int {
+        if let conversationID {
+            return messageContinuations.withLock { $0[conversationID]?.count ?? 0 }
+        }
+        return listContinuations.withLock { $0.count }
+    }
+
+    /// Legt eine Nachricht auf dem Server ab, ohne ein Echtzeit-Ereignis zu senden (z. B. für den Polling-Rückfall).
+    public func store(_ message: ChatMessage) {
+        state.withLock { $0.messages[message.conversationID, default: []].append(message) }
     }
 
     /// Simuliert eine eingehende Nachricht (z. B. von einem zweiten Nutzer) inklusive Echtzeit-Ereignis.
@@ -180,5 +218,150 @@ public final class MediaRepositoryStub: MediaRepository, Sendable {
             state.deleted.append(reference)
             state.files[reference] = nil
         }
+    }
+}
+
+// MARK: - Steuerbares Warten
+
+/// Ersatz für `Task.sleep` in Tests: Wartende laufen erst weiter, wenn der Test `tick()` aufruft. Damit lässt sich das
+/// regelmäßige Aktualisieren (Polling-Rückfall) ohne echte Wartezeit prüfen.
+public final class ManualTicker: Sendable {
+    private struct State {
+        var waiting: [UUID: CheckedContinuation<Void, any Error>] = [:]
+        var cancelled: Set<UUID> = []
+        var sleepCount = 0
+    }
+
+    private let state = Locked(State())
+
+    public init() {}
+
+    /// Wartet bis zum nächsten `tick()` (oder bis die Aufgabe abgebrochen wird).
+    public func sleep(_ duration: Duration) async throws {
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+                let cancelled = state.withLock { state -> Bool in
+                    if state.cancelled.remove(id) != nil { return true }
+                    state.waiting[id] = continuation
+                    state.sleepCount += 1
+                    return false
+                }
+                if cancelled {
+                    continuation.resume(throwing: CancellationError())
+                }
+            }
+        } onCancel: {
+            let continuation = state.withLock { state -> CheckedContinuation<Void, any Error>? in
+                if let continuation = state.waiting.removeValue(forKey: id) { return continuation }
+                state.cancelled.insert(id)
+                return nil
+            }
+            continuation?.resume(throwing: CancellationError())
+        }
+    }
+
+    /// Anzahl der gerade Wartenden.
+    public var waitingCount: Int {
+        state.withLock { $0.waiting.count }
+    }
+
+    /// Anzahl aller bisherigen Warteaufrufe.
+    public var sleepCount: Int {
+        state.withLock { $0.sleepCount }
+    }
+
+    /// Lässt alle Wartenden weiterlaufen.
+    public func tick() {
+        let continuations = state.withLock { state in
+            let waiting = Array(state.waiting.values)
+            state.waiting.removeAll()
+            return waiting
+        }
+        continuations.forEach { $0.resume() }
+    }
+}
+
+// MARK: - Beispieldaten für Chats
+
+/// Beispiel-Unterhaltungen und -Nachrichten (nur Tests und Snapshots).
+public enum ChatFixtures {
+    public static let mia = SocialProfile(publicID: UUID(uuidString: "cccccccc-0000-4000-8000-000000000001")!, username: "mia", displayName: "Mia")
+    public static let leon = SocialProfile(publicID: UUID(uuidString: "cccccccc-0000-4000-8000-000000000002")!, username: "leon", displayName: "Leon")
+    public static let marie = SocialProfile(publicID: UUID(uuidString: "cccccccc-0000-4000-8000-000000000003")!, username: "marie", displayName: "Marie")
+    public static let gotscha = SocialProfile(publicID: UUID(uuidString: "cccccccc-0000-4000-8000-000000000004")!, username: "gotscha", displayName: "Gotscha")
+
+    public static func direct(
+        id: UUID = UUID(),
+        peer: SocialProfile = mia,
+        last: ChatMessagePreview? = nil,
+        unread: Int = 0,
+        canSend: Bool = true,
+        updatedAt: Date = Date(timeIntervalSince1970: 1_792_000_000)
+    ) -> ConversationSummary {
+        ConversationSummary(
+            id: id,
+            kind: .direct,
+            title: peer.displayName,
+            peer: peer,
+            groupID: nil,
+            groupImagePath: nil,
+            memberCount: 2,
+            lastMessage: last,
+            unreadCount: unread,
+            canSend: canSend,
+            updatedAt: updatedAt
+        )
+    }
+
+    public static func group(
+        id: UUID = UUID(),
+        groupID: UUID = UUID(),
+        title: String = "Smoking red",
+        memberCount: Int = 12,
+        last: ChatMessagePreview? = nil,
+        unread: Int = 0,
+        canSend: Bool = true,
+        updatedAt: Date = Date(timeIntervalSince1970: 1_792_000_000)
+    ) -> ConversationSummary {
+        ConversationSummary(
+            id: id,
+            kind: .group,
+            title: title,
+            peer: nil,
+            groupID: groupID,
+            groupImagePath: nil,
+            memberCount: memberCount,
+            lastMessage: last,
+            unreadCount: unread,
+            canSend: canSend,
+            updatedAt: updatedAt
+        )
+    }
+
+    public static func message(
+        id: UUID = UUID(),
+        in conversationID: UUID,
+        from sender: SocialProfile?,
+        isOwn: Bool = false,
+        kind: ChatMessageKind = .text,
+        text: String? = nil,
+        mediaPath: String? = nil,
+        sharedProfile: SocialProfile? = nil,
+        clientID: UUID? = nil,
+        at sentAt: Date
+    ) -> ChatMessage {
+        ChatMessage(
+            id: id,
+            conversationID: conversationID,
+            clientID: clientID,
+            sender: sender,
+            isOwn: isOwn,
+            kind: kind,
+            text: text,
+            media: .chatMedia(mediaPath),
+            sharedProfile: sharedProfile,
+            sentAt: sentAt
+        )
     }
 }
