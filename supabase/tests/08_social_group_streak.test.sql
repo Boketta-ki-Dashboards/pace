@@ -112,7 +112,8 @@ set local request.jwt.claims = '{"sub":"a8000000-0000-4000-8000-000000000001","r
 
 select is(
   public.social_group(pg_temp.gid('streak'))
-    - 'group_id' - 'name' - 'description' - 'kind' - 'role' - 'time_zone' - 'invite_code' - 'created_at' - 'group_today',
+    - 'group_id' - 'name' - 'description' - 'kind' - 'role' - 'time_zone' - 'invite_code' - 'created_at' - 'group_today'
+    - 'image_path' - 'privacy',
   '{"member_count": 3, "daily_goal": 11000, "next_daily_goal": null, "current_streak": 5, "best_streak": 8,
     "today_reached_count": 0, "today_required_count": 1, "today_complete": false}'::jsonb,
   'laufender Tag ohne Erfolg bricht die Streak nicht; best_streak über Lücke hinweg'

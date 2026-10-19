@@ -3,7 +3,8 @@ import PaceBackend
 import PaceCore
 import Testing
 
-/// Freunde und Gruppen Ende-zu-Ende über den Swift-Client gegen die echte Datenbank (Migration 20261018100000_social).
+/// Freunde und Gruppen Ende-zu-Ende über den Swift-Client gegen die echte Datenbank (Migration 20261018100000_social
+/// und Erweiterungen ab 20261019100000).
 @Suite(.enabled(if: IntegrationEnvironment.configuration != nil, "PACE_SUPABASE_URL/PACE_SUPABASE_PUBLISHABLE_KEY fehlen"))
 struct SocialIntegrationTests {
     private struct User {
@@ -78,7 +79,7 @@ struct SocialIntegrationTests {
         let outsider = try await newUser("Aussen", steps: 1_000)
 
         let created = try await owner.backend.social.createGroup(
-            GroupDraft(name: "Klasse 8b", description: "Wir laufen!", kind: .schoolClass, dailyGoal: 10_000),
+            GroupDraft(name: "Klasse 8b", description: "Wir laufen!", kind: .schoolClass, dailyGoal: 10_000, privacy: .code),
             timeZone: "Europe/Berlin"
         )
         #expect(created.isOwner)

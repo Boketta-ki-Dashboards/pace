@@ -61,7 +61,7 @@ struct ProfileRepositoryTests {
         let profile = try #require(try await harness.backend.profiles.fetchProfile(for: userID))
 
         let request = try #require(harness.lastRequest("GET", "/rest/v1/profiles"))
-        #expect(request.query("select") == "id,public_id,username,display_name,municipality_id,regional_leaderboard_enabled,created_at,updated_at")
+        #expect(request.query("select") == "id,public_id,username,display_name,municipality_id,regional_leaderboard_enabled,created_at,updated_at,avatar_path,is_discoverable")
         #expect(request.query("id") == "eq.\(userID.description)")
         #expect(request.header("apikey") == BackendTestHarness.publishableKey)
         #expect(request.header("Authorization") == "Bearer \(BackendTestHarness.accessToken)")

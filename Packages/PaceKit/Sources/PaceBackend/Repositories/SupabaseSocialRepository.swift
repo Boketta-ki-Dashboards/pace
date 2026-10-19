@@ -16,6 +16,29 @@ struct SupabaseSocialRepository: SocialRepository {
         return row?.result
     }
 
+    /// Unter 3 Zeichen fragt der Server nicht (leere Liste) – die Anfrage spart sich die App dann ganz.
+    func searchProfiles(query: String) async throws -> [ProfileSearchResult] {
+        var trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("@") {
+            trimmed.removeFirst()
+        }
+        guard trimmed.count >= 3 else { return [] }
+        let rows: [ProfileSearchRow] = try await mapped {
+            try await client.rpc("social_search_profiles", params: ["p_query": trimmed]).execute().value
+        }
+        return rows.map(\.result)
+    }
+
+    func publicProfile(_ publicID: UUID, date: LocalDate) async throws -> PublicProfile {
+        let row: PublicProfileRow = try await mapped {
+            try await client.rpc(
+                "social_public_profile",
+                params: FriendProfileParams(publicID: publicID, date: date.isoString)
+            ).execute().value
+        }
+        return row.publicProfile
+    }
+
     func sendFriendRequest(to publicID: UUID) async throws -> FriendRequestOutcome {
         let row: FriendRequestOutcomeRow = try await mapped {
             try await client.rpc("social_send_friend_request", params: PublicIDParams(publicID: publicID)).execute().value
@@ -80,14 +103,30 @@ struct SupabaseSocialRepository: SocialRepository {
 
     // MARK: Gruppen
 
+    /// Gruppe, Privatsphäre und Einladungen in einer Transaktion. Fehlt die neue Fassung auf dem Server (vor Migration
+    /// 20261019100100), wird nur dann die alte verwendet, wenn sie genau dasselbe ergibt (Code-Gruppe ohne
+    /// Einladungen); sonst meldet die App „noch nicht eingerichtet“.
     func createGroup(_ draft: GroupDraft, timeZone: String) async throws -> GroupSummary {
-        try await summary("social_create_group", CreateGroupParams(
+        let params = CreateGroupParams(
             name: draft.name,
             description: draft.description,
             kind: draft.kind.rawValue,
             dailyGoal: draft.dailyGoal,
-            timeZone: timeZone
-        ))
+            timeZone: timeZone,
+            privacy: draft.privacy.rawValue,
+            inviteePublicIDs: draft.inviteePublicIDs
+        )
+        do {
+            return try await summary("social_create_group", params)
+        } catch SocialError.unavailable where draft.privacy == .code && draft.inviteePublicIDs.isEmpty {
+            return try await summary("social_create_group", LegacyCreateGroupParams(
+                name: draft.name,
+                description: draft.description,
+                kind: draft.kind.rawValue,
+                dailyGoal: draft.dailyGoal,
+                timeZone: timeZone
+            ))
+        }
     }
 
     func updateGroup(_ groupID: UUID, name: String, description: String, kind: GroupKind) async throws -> GroupSummary {
@@ -203,6 +242,60 @@ struct SupabaseSocialRepository: SocialRepository {
         }
     }
 
+    // MARK: Gruppen (Erweiterungen)
+
+    func updateGroupDetails(
+        _ groupID: UUID,
+        name: String,
+        description: String,
+        kind: GroupKind,
+        privacy: GroupPrivacy
+    ) async throws -> GroupSummary {
+        try await summary("social_update_group_details", UpdateGroupDetailsParams(
+            groupID: groupID,
+            name: name,
+            description: description,
+            kind: kind.rawValue,
+            privacy: privacy.rawValue
+        ))
+    }
+
+    func setGroupImage(_ groupID: UUID, path: String?) async throws -> GroupSummary {
+        try await summary("social_set_group_image", GroupImageParams(groupID: groupID, path: path))
+    }
+
+    // MARK: Schutz
+
+    func block(_ publicID: UUID) async throws {
+        try await mapped {
+            try await client.rpc("social_block_user", params: PublicIDParams(publicID: publicID)).execute()
+        }
+    }
+
+    func unblock(_ publicID: UUID) async throws {
+        try await mapped {
+            try await client.rpc("social_unblock_user", params: PublicIDParams(publicID: publicID)).execute()
+        }
+    }
+
+    func blockedUsers() async throws -> [SocialProfile] {
+        let rows: [SocialProfileRow] = try await mapped {
+            try await client.rpc("social_blocked_users").execute().value
+        }
+        return rows.map(\.profile)
+    }
+
+    func report(_ target: ReportTarget, reason: ReportReason, details: String?) async throws {
+        let trimmed = details?.trimmingCharacters(in: .whitespacesAndNewlines)
+        try await mapped {
+            try await client.rpc("social_report", params: ReportParams(
+                target: target,
+                reason: reason.rawValue,
+                details: trimmed?.isEmpty == false ? trimmed : nil
+            )).execute()
+        }
+    }
+
     // MARK: Hilfen
 
     private func summary(_ function: String, _ params: some Encodable & Sendable) async throws -> GroupSummary {
@@ -272,6 +365,8 @@ private struct CreateGroupParams: Encodable {
     let kind: String
     let dailyGoal: Int
     let timeZone: String
+    let privacy: String
+    let inviteePublicIDs: [UUID]
 
     enum CodingKeys: String, CodingKey {
         case name = "p_name"
@@ -279,6 +374,88 @@ private struct CreateGroupParams: Encodable {
         case kind = "p_kind"
         case dailyGoal = "p_daily_goal"
         case timeZone = "p_time_zone"
+        case privacy = "p_privacy"
+        case inviteePublicIDs = "p_invitee_public_ids"
+    }
+}
+
+/// Fassung aus Migration 20261018100000 (ohne Privatsphäre und Einladungen).
+private struct LegacyCreateGroupParams: Encodable {
+    let name: String
+    let description: String
+    let kind: String
+    let dailyGoal: Int
+    let timeZone: String
+
+    enum CodingKeys: String, CodingKey {
+        case name = "p_name"
+        case description = "p_description"
+        case kind = "p_kind"
+        case dailyGoal = "p_daily_goal"
+        case timeZone = "p_time_zone"
+    }
+}
+
+private struct UpdateGroupDetailsParams: Encodable {
+    let groupID: UUID
+    let name: String
+    let description: String
+    let kind: String
+    let privacy: String
+
+    enum CodingKeys: String, CodingKey {
+        case groupID = "p_group_id"
+        case name = "p_name"
+        case description = "p_description"
+        case kind = "p_kind"
+        case privacy = "p_privacy"
+    }
+}
+
+private struct GroupImageParams: Encodable {
+    let groupID: UUID
+    let path: String?
+
+    enum CodingKeys: String, CodingKey {
+        case groupID = "p_group_id"
+        case path = "p_path"
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(groupID, forKey: .groupID)
+        // `null` entfernt das Bild; der Parameter hat keinen Standardwert und muss deshalb immer gesendet werden.
+        try container.encode(path, forKey: .path)
+    }
+}
+
+private struct ReportParams: Encodable {
+    let target: ReportTarget
+    let reason: String
+    let details: String?
+
+    enum CodingKeys: String, CodingKey {
+        case targetType = "p_target_type"
+        case targetID = "p_target_id"
+        case reason = "p_reason"
+        case details = "p_details"
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch target {
+        case .user(let publicID):
+            try container.encode("user", forKey: .targetType)
+            try container.encode(publicID, forKey: .targetID)
+        case .message(let id):
+            try container.encode("message", forKey: .targetType)
+            try container.encode(id, forKey: .targetID)
+        case .group(let id):
+            try container.encode("group", forKey: .targetType)
+            try container.encode(id, forKey: .targetID)
+        }
+        try container.encode(reason, forKey: .reason)
+        try container.encodeIfPresent(details, forKey: .details)
     }
 }
 

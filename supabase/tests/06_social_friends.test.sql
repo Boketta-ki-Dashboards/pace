@@ -35,16 +35,19 @@ select is(
 );
 
 select is(
-  (select array_agg(p.proname::text order by p.proname) from pg_proc p
+  (select array_agg(distinct p.proname::text order by p.proname::text) from pg_proc p
     where p.pronamespace = 'public'::regnamespace and p.proname like 'social\_%'),
-  array['social_cancel_friend_request', 'social_cancel_group_invitation', 'social_create_group',
-        'social_delete_group', 'social_find_profile', 'social_friend_profile', 'social_friend_ranking',
-        'social_friend_requests', 'social_friends', 'social_group', 'social_group_days', 'social_group_invitations',
-        'social_group_outgoing_invitations', 'social_group_ranking', 'social_invite_to_group', 'social_join_group',
-        'social_leave_group', 'social_my_groups', 'social_regenerate_invite_code', 'social_remove_friend',
-        'social_remove_group_member', 'social_respond_friend_request', 'social_respond_group_invitation',
-        'social_send_friend_request', 'social_set_group_goal', 'social_update_group'],
-  'alle 26 Social-RPCs vorhanden'
+  array['social_block_user', 'social_blocked_users', 'social_cancel_friend_request',
+        'social_cancel_group_invitation', 'social_create_group', 'social_delete_group', 'social_find_profile',
+        'social_friend_profile', 'social_friend_ranking', 'social_friend_requests', 'social_friends', 'social_group',
+        'social_group_days', 'social_group_invitations', 'social_group_outgoing_invitations',
+        'social_group_ranking', 'social_invite_to_group', 'social_join_group', 'social_leave_group',
+        'social_my_groups', 'social_public_profile', 'social_regenerate_invite_code', 'social_remove_friend',
+        'social_remove_group_member', 'social_report', 'social_respond_friend_request',
+        'social_respond_group_invitation', 'social_search_profiles', 'social_send_friend_request',
+        'social_set_group_goal', 'social_set_group_image', 'social_unblock_user', 'social_update_group',
+        'social_update_group_details'],
+  'alle 34 Social-RPCs vorhanden (social_create_group in zwei Fassungen)'
 );
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p
@@ -142,7 +145,7 @@ select is(public.social_find_profile('ben%'), null, 'Suche: Platzhalter sind ung
 select is(public.social_find_profile(null), null, 'Suche: null → null');
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(public.social_find_profile('benjamin')) k),
-  array['display_name', 'public_id', 'relationship', 'request_id', 'username'], 'Suche: nur öffentliche Felder'
+  array['avatar_path', 'display_name', 'public_id', 'relationship', 'request_id', 'username'], 'Suche: nur öffentliche Felder'
 );
 select is(public.social_find_profile('benjamin')->>'relationship', 'none', 'Beziehung: none');
 select is(public.social_find_profile('benjamin')->'request_id', 'null'::jsonb, 'request_id null ohne offene Anfrage');
@@ -162,7 +165,7 @@ select is(
   'erneut senden: already_requested mit derselben ID'
 );
 select is(
-  public.social_find_profile('benjamin') - 'public_id' - 'username' - 'display_name',
+  public.social_find_profile('benjamin') - 'public_id' - 'username' - 'display_name' - 'avatar_path',
   jsonb_build_object('relationship', 'outgoing_request', 'request_id', (select result->'request_id' from t_results where name = 'anna_benjamin')),
   'Suche: outgoing_request mit request_id'
 );
@@ -173,7 +176,7 @@ select is(
 );
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(public.social_friend_requests()->0) k),
-  array['created_at', 'direction', 'display_name', 'public_id', 'request_id', 'username'],
+  array['avatar_path', 'created_at', 'direction', 'display_name', 'public_id', 'request_id', 'username'],
   'offene Anfragen: nur öffentliche Felder'
 );
 select throws_ok(
@@ -243,7 +246,7 @@ select is(
 );
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(public.social_friends()->0) k),
-  array['display_name', 'friends_since', 'public_id', 'username'], 'Freundesliste: nur öffentliche Felder'
+  array['avatar_path', 'display_name', 'friends_since', 'public_id', 'username'], 'Freundesliste: nur öffentliche Felder'
 );
 select is(
   (select array_agg(e->>'username') from jsonb_array_elements(public.social_friend_requests()) e),
@@ -476,7 +479,7 @@ select is(
 );
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(public.social_friend_ranking('daily', (select stichtag from t_dates))->'entries'->0) k),
-  array['competition_steps', 'display_name', 'is_current_user', 'public_user_id', 'rank', 'username'],
+  array['avatar_path', 'competition_steps', 'display_name', 'is_current_user', 'public_user_id', 'rank', 'username'],
   'Einträge wie leaderboard_page'
 );
 select is(
@@ -505,7 +508,7 @@ select throws_ok(
 
 select is(
   public.social_friend_profile('b6000000-0000-4000-8000-000000000002', (select stichtag from t_dates)) - 'friends_since',
-  '{"public_id": "b6000000-0000-4000-8000-000000000002", "username": "benjamin", "display_name": "Benjamin", "steps_today": 12000, "steps_week": 12000}'::jsonb,
+  '{"public_id": "b6000000-0000-4000-8000-000000000002", "username": "benjamin", "display_name": "Benjamin", "avatar_path": null, "steps_today": 12000, "steps_week": 12000}'::jsonb,
   'Freundesprofil: Tag und ISO-Woche'
 );
 select ok(

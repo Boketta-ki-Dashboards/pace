@@ -17,7 +17,8 @@ let package = Package(
         .library(name: "DesignSystem", targets: ["DesignSystem"]),
     ],
     dependencies: [
-        // Offizieller Supabase-Client. Verwendet werden nur Auth und PostgREST (kein Realtime/Storage/Functions).
+        // Offizieller Supabase-Client. Verwendet werden Auth, PostgREST, Storage (Bilder) und Realtime (Chat-Hinweise);
+        // Functions nicht.
         .package(url: "https://github.com/supabase/supabase-swift.git", from: "2.55.4"),
     ],
     targets: [
@@ -34,6 +35,8 @@ let package = Package(
                 "PaceCore",
                 .product(name: "Auth", package: "supabase-swift"),
                 .product(name: "PostgREST", package: "supabase-swift"),
+                .product(name: "Realtime", package: "supabase-swift"),
+                .product(name: "Storage", package: "supabase-swift"),
             ]
         ),
 

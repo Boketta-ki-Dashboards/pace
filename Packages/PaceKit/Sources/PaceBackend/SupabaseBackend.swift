@@ -2,6 +2,7 @@ import Auth
 import Foundation
 import PaceCore
 import PostgREST
+import Storage
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
@@ -9,8 +10,8 @@ import FoundationNetworking
 /// Supabase-Anbindung von Pace. Wird einmal im Composition Root der App erzeugt; Features sehen nur die Protokolle
 /// aus PaceCore.
 ///
-/// - Auth und PostgREST werden direkt verwendet (ohne `SupabaseClient`), damit der Publishable Key nur im Header
-///   `apikey` steht und `Authorization` ausschließlich das Access Token einer Sitzung trägt.
+/// - Auth, PostgREST, Storage und Realtime werden direkt verwendet (ohne `SupabaseClient`), damit der Publishable Key
+///   nur im Header `apikey` steht und `Authorization` ausschließlich das Access Token einer Sitzung trägt.
 /// - Automatische Wiederholungen von PostgREST sind aus: Die App wiederholt selbst (nächster Sync-Anlass,
 ///   „Erneut versuchen“, Pull-to-Refresh), statt offline mehrere Sekunden zu warten.
 public final class SupabaseBackend: Sendable {
@@ -21,10 +22,13 @@ public final class SupabaseBackend: Sendable {
     public let activitySync: any ActivitySyncRepository
     public let leaderboards: any LeaderboardRepository
     public let social: any SocialRepository
+    public let chat: any ChatRepository
+    public let media: any MediaRepository
+    public let account: any AccountRepository
 
     /// - Parameters:
     ///   - localStorage: Speicher der Sitzung (in der App die Keychain, in Tests `InMemoryAuthStorage`).
-    ///   - session: Für alle Anfragen an Auth und PostgREST.
+    ///   - session: Für alle Anfragen an Auth, PostgREST und Storage (Realtime nutzt einen eigenen WebSocket).
     public init(
         configuration: BackendConfiguration,
         localStorage: any AuthLocalStorage,
@@ -49,6 +53,9 @@ public final class SupabaseBackend: Sendable {
             retryEnabled: false
         )
 
+        let storage = SupabaseStorageClient.pace(configuration: configuration, session: session, tokens: tokens)
+        let ownPublicID = OwnPublicID(client: database, currentUserID: { authClient.currentSession?.user.id })
+
         self.configuration = configuration
         auth = SupabaseAuthService(client: authClient)
         profiles = SupabaseProfileRepository(client: database)
@@ -56,6 +63,14 @@ public final class SupabaseBackend: Sendable {
         activitySync = SupabaseActivitySyncRepository(client: database, tokens: tokens)
         leaderboards = SupabaseLeaderboardRepository(client: database)
         social = SupabaseSocialRepository(client: database)
+        chat = SupabaseChatRepository(
+            client: database,
+            storage: storage,
+            realtime: RealtimeEvents(configuration: configuration, tokens: tokens),
+            ownPublicID: ownPublicID
+        )
+        media = SupabaseMediaRepository(storage: storage, ownPublicID: ownPublicID)
+        account = SupabaseAccountRepository(client: database, storage: storage, auth: authClient)
     }
 
     #if !os(Linux) && !os(Windows) && !os(Android)

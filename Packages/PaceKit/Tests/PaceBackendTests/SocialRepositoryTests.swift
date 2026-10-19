@@ -92,7 +92,10 @@ struct SocialRepositoryTests {
         harness.stub("POST", "/rest/v1/rpc/social_create_group", .json(Self.groupJSON))
 
         let group = try await harness.backend.social.createGroup(
-            GroupDraft(name: "Klasse 8b", description: "Wir laufen!", kind: .schoolClass, dailyGoal: 8_000),
+            GroupDraft(
+                name: "Klasse 8b", description: "Wir laufen!", kind: .schoolClass, dailyGoal: 8_000,
+                privacy: .inviteOnly, inviteePublicIDs: [Self.friendID]
+            ),
             timeZone: "Europe/Berlin"
         )
 
@@ -100,6 +103,7 @@ struct SocialRepositoryTests {
         #expect(try request.jsonBody() == .object([
             "p_name": .string("Klasse 8b"), "p_description": .string("Wir laufen!"), "p_kind": .string("class"),
             "p_daily_goal": .number(8_000), "p_time_zone": .string("Europe/Berlin"),
+            "p_privacy": .string("invite_only"), "p_invitee_public_ids": .array([.string(Self.friendID.uuidString)]),
         ]))
         #expect(group.id == Self.groupID)
         #expect(group.kind == .schoolClass)

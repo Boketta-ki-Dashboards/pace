@@ -8,15 +8,18 @@ struct SocialProfileRow: Decodable {
     let publicID: UUID
     let username: String
     let displayName: String
+    /// Fehlt bei Servern ohne Migration 20261019100000.
+    let avatarPath: String?
 
     enum CodingKeys: String, CodingKey {
         case publicID = "public_id"
         case username
         case displayName = "display_name"
+        case avatarPath = "avatar_path"
     }
 
     var profile: SocialProfile {
-        SocialProfile(publicID: publicID, username: username, displayName: displayName)
+        SocialProfile(publicID: publicID, username: username, displayName: displayName, avatarPath: avatarPath)
     }
 }
 
@@ -136,6 +139,8 @@ struct GroupSummaryRow: Decodable {
     let todayRequiredCount: Int
     let todayComplete: Bool
     let createdAt: Date
+    let imagePath: String?
+    let privacy: GroupPrivacy
 
     enum CodingKeys: String, CodingKey {
         case id = "group_id"
@@ -155,6 +160,8 @@ struct GroupSummaryRow: Decodable {
         case todayRequiredCount = "today_required_count"
         case todayComplete = "today_complete"
         case createdAt = "created_at"
+        case imagePath = "image_path"
+        case privacy
     }
 
     init(from decoder: Decoder) throws {
@@ -176,6 +183,9 @@ struct GroupSummaryRow: Decodable {
         todayRequiredCount = try container.decode(Int.self, forKey: .todayRequiredCount)
         todayComplete = try container.decode(Bool.self, forKey: .todayComplete)
         createdAt = try container.decodeTimestamp(forKey: .createdAt)
+        imagePath = try container.decodeIfPresent(String.self, forKey: .imagePath)
+        // Vor Migration 20261019100100 gibt es nur Gruppen mit Einladungscode.
+        privacy = try container.decodeIfPresent(String.self, forKey: .privacy).flatMap(GroupPrivacy.init(rawValue:)) ?? .code
     }
 
     var summary: GroupSummary {
@@ -196,7 +206,9 @@ struct GroupSummaryRow: Decodable {
             todayReachedCount: todayReachedCount,
             todayRequiredCount: todayRequiredCount,
             todayComplete: todayComplete,
-            createdAt: createdAt
+            createdAt: createdAt,
+            imagePath: imagePath,
+            privacy: privacy
         )
     }
 }
@@ -233,6 +245,7 @@ struct GroupRankingRow: Decodable {
     let isCurrentUser: Bool
     let role: String
     let reachedGoalToday: Bool
+    let avatarPath: String?
 
     enum CodingKeys: String, CodingKey {
         case rank
@@ -243,12 +256,13 @@ struct GroupRankingRow: Decodable {
         case isCurrentUser = "is_current_user"
         case role
         case reachedGoalToday = "reached_goal_today"
+        case avatarPath = "avatar_path"
     }
 
     var entry: GroupRankingEntry {
         GroupRankingEntry(
             rank: rank,
-            profile: SocialProfile(publicID: publicUserID, username: username, displayName: displayName),
+            profile: SocialProfile(publicID: publicUserID, username: username, displayName: displayName, avatarPath: avatarPath),
             competitionSteps: competitionSteps,
             isCurrentUser: isCurrentUser,
             role: role == "owner" ? .owner : .member,
@@ -298,6 +312,7 @@ struct GroupInvitationRow: Decodable {
     let inviterUsername: String
     let inviterDisplayName: String
     let createdAt: Date
+    let groupImagePath: String?
 
     enum CodingKeys: String, CodingKey {
         case id = "invitation_id"
@@ -308,6 +323,7 @@ struct GroupInvitationRow: Decodable {
         case inviterUsername = "inviter_username"
         case inviterDisplayName = "inviter_display_name"
         case createdAt = "created_at"
+        case groupImagePath = "group_image_path"
     }
 
     init(from decoder: Decoder) throws {
@@ -320,6 +336,7 @@ struct GroupInvitationRow: Decodable {
         inviterUsername = try container.decode(String.self, forKey: .inviterUsername)
         inviterDisplayName = try container.decode(String.self, forKey: .inviterDisplayName)
         createdAt = try container.decodeTimestamp(forKey: .createdAt)
+        groupImagePath = try container.decodeIfPresent(String.self, forKey: .groupImagePath)
     }
 
     var invitation: GroupInvitation {
@@ -331,7 +348,8 @@ struct GroupInvitationRow: Decodable {
             memberCount: memberCount,
             inviterUsername: inviterUsername,
             inviterDisplayName: inviterDisplayName,
-            createdAt: createdAt
+            createdAt: createdAt,
+            groupImagePath: groupImagePath
         )
     }
 }
@@ -365,4 +383,47 @@ struct GroupInviteOutcomeRow: Decodable {
 struct InvitationResponseRow: Decodable {
     let status: String
     let group: GroupSummaryRow?
+}
+
+/// Antwort von `social_public_profile`.
+struct PublicProfileRow: Decodable {
+    let profile: SocialProfileRow
+    let relationship: String
+    let requestID: UUID?
+    let friendsSince: Date?
+    let stepsToday: Int?
+    let stepsWeek: Int?
+    let isBlockedByMe: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case relationship
+        case requestID = "request_id"
+        case friendsSince = "friends_since"
+        case stepsToday = "steps_today"
+        case stepsWeek = "steps_week"
+        case isBlockedByMe = "is_blocked_by_me"
+    }
+
+    init(from decoder: Decoder) throws {
+        profile = try SocialProfileRow(from: decoder)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        relationship = try container.decode(String.self, forKey: .relationship)
+        requestID = try container.decodeIfPresent(UUID.self, forKey: .requestID)
+        friendsSince = try container.decodeTimestampIfPresent(forKey: .friendsSince)
+        stepsToday = try container.decodeIfPresent(Int.self, forKey: .stepsToday)
+        stepsWeek = try container.decodeIfPresent(Int.self, forKey: .stepsWeek)
+        isBlockedByMe = try container.decodeIfPresent(Bool.self, forKey: .isBlockedByMe) ?? false
+    }
+
+    var publicProfile: PublicProfile {
+        PublicProfile(
+            profile: profile.profile,
+            relationship: SocialRelationship(rawValue: relationship) ?? .none,
+            requestID: requestID,
+            friendsSince: friendsSince,
+            stepsToday: stepsToday,
+            stepsWeek: stepsWeek,
+            isBlockedByMe: isBlockedByMe
+        )
+    }
 }

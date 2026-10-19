@@ -20,6 +20,8 @@ struct LeaderboardEntryRow: Decodable, Equatable {
     let displayName: String
     let competitionSteps: Int
     let isCurrentUser: Bool
+    /// Fehlt bei Servern ohne Migration 20261019100000.
+    let avatarPath: String?
 
     enum CodingKeys: String, CodingKey {
         case rank
@@ -28,6 +30,7 @@ struct LeaderboardEntryRow: Decodable, Equatable {
         case displayName = "display_name"
         case competitionSteps = "competition_steps"
         case isCurrentUser = "is_current_user"
+        case avatarPath = "avatar_path"
     }
 
     var entry: LeaderboardEntry {
@@ -37,7 +40,8 @@ struct LeaderboardEntryRow: Decodable, Equatable {
             username: username,
             displayName: displayName,
             competitionSteps: competitionSteps,
-            isCurrentUser: isCurrentUser
+            isCurrentUser: isCurrentUser,
+            avatarPath: avatarPath
         )
     }
 }

@@ -66,11 +66,18 @@ supabase/
 │   ├── 20261016100300_daily_activity.sql             Tabelle daily_activity (nur Competition Steps)
 │   ├── 20261016100400_leaderboards.sql               Ranking-RPCs
 │   ├── 20261016100500_region_data_gv100ad_20260930.sql   generierte Regionsdaten (GV100AD)
-│   └── 20261018100000_social.sql                     Freunde, Gruppen, Einladungen, Gruppen-Streak (docs/SOCIAL.md)
+│   ├── 20261018100000_social.sql                     Freunde, Gruppen, Einladungen, Gruppen-Streak (docs/SOCIAL.md)
+│   ├── 20261019100000_profiles_blocks_search.sql     Profilbild, Auffindbarkeit, Präfixsuche, öffentliches Profil, Blockieren
+│   ├── 20261019100100_groups_privacy_images.sql      Gruppen-Privatsphäre, Einladungen beim Erstellen, Gruppenbild
+│   ├── 20261019100200_chat.sql                       Privat- und Gruppenchats, Lesestand, Echtzeit-Hinweise
+│   ├── 20261019100300_storage_realtime_access.sql    Buckets, Storage-Policies, Realtime-Policy
+│   └── 20261019100400_moderation_account.sql         Meldungen, Rückmeldungen, Auskunft, Konto löschen
 ├── seed/dev_seed.sql           DEV ONLY: erfundene dev_…-Nutzer für lokale Rankings
 ├── scripts/import_regions.py   Importer GV100AD → Migration (+ test_import_regions.py)
+├── scripts/realtime_smoke_test.mjs   Echtzeit-Kanäle Ende-zu-Ende gegen den lokalen Stack (Node ≥ 22)
 └── tests/*.test.sql            pgTAP-Tests (Rechte, RLS, Profile, Sync, Rankings, Regionen, Freunde, Gruppen,
-                                Gruppen-Streak)
+                                Gruppen-Streak, Suche/Blockieren, Gruppen-Privatsphäre, Chats, Storage/Realtime,
+                                Moderation/Konto)
 ```
 
 Die Swift-Seite liegt in `Packages/PaceKit/Sources/PaceBackend` (Repositories hinter den Protokollen aus `PaceCore`)
@@ -107,6 +114,8 @@ Regionen werden nie über Namen identifiziert und nie als Freitext gespeichert.
 | `display_name` | 1–30 Unicode-Codepoints, ohne Steuer- und unsichtbare Formatzeichen (z. B. Zero-Width Space, Richtungswechsel), ohne Leerzeichen am Rand |
 | `municipality_id` | gewählte Gemeinde (Fremdschlüssel; Trigger lässt nur aktive Gemeinden zu) |
 | `regional_leaderboard_enabled` | ausdrückliche Zustimmung zu öffentlichen Regionalrankings, Standard `false` |
+| `avatar_path` | Profilbild im privaten Bucket `avatars` (`<public_id>/<Name>.<Endung>`), `null` = Initialen (ab `20261019100000`) |
+| `is_discoverable` | erscheint in der Präfixsuche anderer, Standard `true`; exakt und für Freunde immer auffindbar (ab `20261019100000`) |
 | `created_at`, `updated_at` | vom Server gesetzt |
 
 Kreis, Bundesland und Land werden nicht im Profil gespeichert, sondern über die Gemeinde abgeleitet.
@@ -133,8 +142,8 @@ keine Quellen, keine Standorte.
     Tage lassen sich nachträglich nicht mehr ändern. Nutzer und Tag einer Zeile sind unveränderlich (Trigger), damit
     sich alte Werte nicht in das Fenster verschieben lassen.
 - **Explizite, spaltengenaue Rechte.** `anon` hat auf keine Tabelle Zugriff. `authenticated` darf in `profiles` nur
-  `username`, `display_name`, `municipality_id`, `regional_leaderboard_enabled` schreiben (nicht `public_id`,
-  Zeitstempel) und in `daily_activity` nur `user_id`, `activity_date`, `competition_steps`. Die Migrationen setzen
+  `username`, `display_name`, `municipality_id`, `regional_leaderboard_enabled` schreiben und zusätzlich
+  `avatar_path`, `is_discoverable` ändern (nicht `public_id`, Zeitstempel) und in `daily_activity` nur `user_id`, `activity_date`, `competition_steps`. Die Migrationen setzen
   alle Rechte selbst und hängen nicht von Supabase-Standardrechten ab (Supabase vergibt für neue Tabellen ab dem
   30.10.2026 keine Data-API-Rechte mehr automatisch).
 - **Funktionen**: öffentliche RPCs sind `security definer` mit `set search_path = ''` und geben nur öffentliche Felder
@@ -212,6 +221,182 @@ Zugriffsregeln der Ranking-RPCs (`private.assert_leaderboard_access`):
 - Ebenen in der App: identische Ebenen entfallen (Frankfurt am Main: Gemeinde, Hessen, Deutschland; Berlin: Berlin,
   Deutschland). Pfungstadt hat alle vier Ebenen.
 
+## Social-Erweiterungen, Chats, Medien und Konto (Migrationen ab 20261019100000)
+
+Fünf Migrationen bauen auf `20261018100000_social.sql` auf (Freunde, Gruppen, Gruppen-Streak – siehe
+[SOCIAL.md](SOCIAL.md)). Sie sind **rein additiv**: neue Tabellen, neue Spalten mit Standardwerten, neue bzw.
+ersetzte Funktionen (gleiche Signaturen, damit ältere App-Versionen weiterlaufen). Bestehende Daten bleiben
+unverändert; bestehende Gruppen behalten den Beitritt per Code (`privacy = 'code'`).
+
+| Migration | Inhalt |
+|---|---|
+| `20261019100000_profiles_blocks_search.sql` | `profiles.avatar_path`, `profiles.is_discoverable`, Präfixsuche, öffentliches Profil, `user_blocks`, Blockier-Wirkung in allen Freundes-RPCs, Rate Limits für Namensprüfung und Namensänderung |
+| `20261019100100_groups_privacy_images.sql` | `groups.privacy`, `groups.image_path`, Gruppe mit Einladungen in einer Transaktion, Details/Privatsphäre ändern, Gruppenbild, Code-Beitritt nur bei `privacy = 'code'` |
+| `20261019100200_chat.sql` | `conversations`, `chat_messages`, `conversation_reads`, `chat_*`-RPCs, Echtzeit-Hinweise per Trigger |
+| `20261019100300_storage_realtime_access.sql` | Buckets `avatars`, `group-images`, `chat-media`, Policies auf `storage.objects` und `realtime.messages`, Prüffunktionen im Schema `pace_access` |
+| `20261019100400_moderation_account.sql` | `reports`, `feedback`, `social_report`, `submit_feedback`, `account_export`, `account_own_media`, `account_delete` |
+
+### Tabellen
+
+| Tabelle | Zweck | Clientzugriff |
+|---|---|---|
+| `profiles` (+2 Spalten) | `avatar_path` (Pfad im Bucket `avatars`, Ordner = eigene `public_id`, Datei muss existieren – Trigger), `is_discoverable` (Standard `true`) | nur eigene Zeile; `update` auf `username`, `display_name`, `avatar_path`, `is_discoverable` (Spalten-Grants, Constraints und Trigger greifen) |
+| `user_blocks` | `blocker_id`, `blocked_id`, `created_at`; PK beide, kein Selbst-Block | keiner (nur RPCs) |
+| `groups` (+2 Spalten) | `privacy` (`invite_only` \| `code`, Standard `code`), `image_path` (Ordner = `group_id`, Datei muss existieren – Trigger) | keiner (nur RPCs) |
+| `conversations` | `kind` `direct` (genau eine je Paar, `user_a < user_b`) oder `group` (eine je Gruppe, per Trigger); `last_message_at` | keiner |
+| `chat_messages` | `kind` `text`/`image`/`gif`/`profile`, `body` ≤ 2000, `media_path` (`chat-media/<conversation_id>/…`), `shared_profile_id`, `client_id` (eindeutig je Absender → idempotentes Wiederholen), `sender_id` `on delete set null`, `deleted_at` | keiner |
+| `conversation_reads` | Lesestand je Teilnehmer (`last_read_at`) | keiner |
+| `reports` | `reporter_id`, `target_type` (`user`/`message`/`group`), `target_id`, `reason` (wie `ReportReason`), `details` ≤ 1000, `status` (`open`, `reviewing`, `resolved`, `dismissed`), `target_snapshot` (Zustand beim Melden), `created_at` | keiner – auch kein Lesen |
+| `feedback` | `kind` (`problem`/`idea`), `message` ≤ 2000, `app_version`; keine E-Mail-Adressen | keiner |
+| `private.auth_rate_limit_events` | Rate Limits, die schon **vor** dem Profil greifen (an `auth.users` gebunden) | keiner |
+
+Alle neuen Tabellen haben RLS ohne Policies und keine Tabellenrechte für `anon`/`authenticated`; gelesen und
+geschrieben wird ausschließlich über die RPCs (`security definer`, `set search_path = ''`, `execute` nur für
+`authenticated`).
+
+### RPCs
+
+| Funktion | Zweck |
+|---|---|
+| `social_search_profiles(p_query)` | Präfixsuche über Benutzernamen: ab 3 Zeichen (`@` am Anfang erlaubt), nur `[a-z0-9_]` (damit keine LIKE-Platzhalter), max. 20 Treffer, exakte und Freunde zuerst; ohne mich und ohne Blockierte (beide Richtungen); nicht auffindbare Profile nur bei exakter Eingabe oder unter Freunden. Index `profiles_username_prefix_idx` (`lower(username) text_pattern_ops`). Liefert Profilfelder inkl. `avatar_path`, `relationship`, `request_id` |
+| `social_find_profile(p_username)` | exakter Benutzername; respektiert Blockierungen (beide Richtungen). Exakt ist ein Profil auch bei `is_discoverable = false` auffindbar (Vertrag `UserProfile.isDiscoverable`) |
+| `social_public_profile(p_public_id, p_date)` | Felder von `PublicProfile`; Schritte heute/Woche und „Freunde seit“ **nur unter Freunden**; `is_blocked_by_me`. Wer mich blockiert hat: `not_found` |
+| `social_block_user`, `social_unblock_user`, `social_blocked_users` | Blockieren/Aufheben/Liste (Profilfelder + `blocked_at`) |
+| `social_create_group(…, p_privacy, p_invitee_public_ids)` | Gruppe samt Einladungen in **einer** Transaktion; nur Freunde einladbar (sonst `not_found`), höchstens 49 Eingeladene. Die alte Signatur ohne die beiden Parameter bleibt erhalten (`privacy = 'code'`) |
+| `social_update_group_details(p_group_id, p_name, p_description, p_kind, p_privacy)` | Name, Beschreibung, Art, Privatsphäre (nur owner) |
+| `social_set_group_image(p_group_id, p_path)` | Gruppenbild setzen oder mit `null` entfernen (nur owner; Pfad im Ordner der Gruppe, Datei muss existieren) |
+| `social_join_group(p_invite_code)` | ersetzt: nur `privacy = 'code'`; bei `invite_only` dieselbe Antwort wie bei falschem Code (`invalid_invite_code`) |
+| `chat_conversations()` | eigene Unterhaltungen mit letzter Nachricht, Ungelesen-Zähler, `can_send`, Gegenüber bzw. Gruppe (max. 200) |
+| `chat_open_direct(p_public_id)` | Privatchat öffnen bzw. **nur unter Freunden** anlegen; selbst blockiert → `blocked`, blockiert worden → `not_found` |
+| `chat_group_conversation(p_group_id)` | Gruppenchat (nur aktuelle Mitglieder) |
+| `chat_messages(p_conversation_id, p_before, p_limit)` | Seite vor `p_before` (aufsteigend sortiert, Limit 1–100, Standard 40); Nachrichten von Personen, die ich blockiert habe, werden nicht ausgeliefert |
+| `chat_send(p_conversation_id, p_client_id, p_kind, p_body, p_media_path, p_shared_profile_id)` | Senden; idempotent je `client_id`. Text 1–2000 Zeichen ohne Steuerzeichen; Bild/GIF nur eigene, bereits hochgeladene Datei im Ordner der Unterhaltung (GIF = `image/gif`); Profil per `public_id` (nicht blockiert) |
+| `chat_mark_read(p_conversation_id, p_through)` | Lesestand vorwärts setzen |
+| `chat_delete_message(p_message_id)` | nur eigene; Inhalt wird entfernt, Rückgabe `media_path`, damit die App die Datei löscht |
+| `social_report(p_target_type, p_target_id, p_reason, p_details)` | Person (jede bekannte außer mir), Nachricht (anderer, in Unterhaltungen, die ich lesen darf) oder Gruppe (Mitglied oder eingeladen); eine offene Meldung je Ziel |
+| `submit_feedback(p_kind, p_message, p_app_version)` | Rückmeldung ohne Kontaktdaten |
+| `account_export()` | jsonb mit allen personenbezogenen Serverdaten (siehe „Konto und Datenschutz“) |
+| `account_own_media()` | `[{bucket, path}]` – eigene Dateien und Bilder eigener Gruppen |
+| `account_delete()` | eigenes Konto löschen (auch ohne Profil) |
+| `is_username_available(p_username)` | ersetzt: jetzt `volatile` mit Rate Limit, das schon vor dem Anlegen des Profils greift |
+
+Fehler kommen als Text-Token in der Meldung (`not_found`, `not_allowed`, `blocked`, `read_only`, `invalid_message`,
+`invalid_input`, `invalid_invite_code`, `invalid_image_path`, `self_request`, `rate_limited`, …) und werden in
+`BackendErrorMapping` auf `SocialError`, `ProfileError`, `MediaError` bzw. `AccountError` abgebildet. Fehlt eine
+Funktion auf dem Server (Migration noch nicht eingespielt: `PGRST202`), wird daraus `.unavailable`; die DTOs lesen
+neue Felder optional, und Profilabfragen fallen bei fehlenden Spalten (`42703`) auf die alten Spalten zurück.
+
+### Rate Limits
+
+Gleitende Fenster je Nutzer und Aktion (`private.consume_rate_limit`, Advisory-Lock gegen parallele Anfragen).
+
+| Aktion | Limit |
+|---|---|
+| `is_username_available` | 60 je 10 Minuten (je Auth-Nutzer, auch ohne Profil) |
+| Benutzername ändern | 5 je 24 Stunden |
+| exakte Suche / Präfixsuche | 30 bzw. 120 je 10 Minuten (jede Anfrage zählt, auch zu kurze) |
+| Freundschaftsanfragen | 20 je 24 Stunden |
+| Blockieren | 50 je 24 Stunden |
+| Gruppen erstellen / Einladungen / Code-Beitritt | 5 je 24 h / 30 je 24 h / 20 Versuche je Stunde |
+| Nachrichten senden | 30 je Minute und 2000 je 24 Stunden |
+| Meldungen / Rückmeldungen | je 10 je 24 Stunden |
+| Datenexport | 5 je Stunde |
+
+### Blockieren
+
+- Blockieren beendet sofort eine bestehende Freundschaft, offene Freundschaftsanfragen und offene
+  Gruppeneinladungen zwischen beiden (in beide Richtungen).
+- Danach in **beide** Richtungen: keine neuen Anfragen, keine Einladungen, keine Privatchats und kein Senden; beide
+  finden sich weder in der Präfix- noch in der exakten Suche; das öffentliche Profil der blockierenden Person ist für
+  die blockierte nicht abrufbar; die blockierte Person sieht das Profilbild der blockierenden nicht.
+- **Privatchat:** solange eine Blockierung besteht, ist er für beide unsichtbar (`not_found`). Nach dem Aufheben ist
+  der alte Verlauf wieder lesbar, aber schreibgeschützt (`can_send = false`), bis beide wieder befreundet sind.
+- **Gemeinsame Gruppen bleiben bestehen.** Der Gruppenchat bleibt für beide nutzbar; der Server liefert der
+  blockierenden Person die Nachrichten der blockierten nicht aus (Listen-Vorschau und Verlauf). Rankings und
+  Gruppen-Streak zählen weiter alle Mitglieder – sonst könnte eine Blockierung die Gruppenwertung verfälschen.
+- Aufheben stellt nichts wieder her (keine Freundschaft, keine Anfragen).
+
+### Storage
+
+Private Buckets (keine öffentlichen URLs); Upload, Download und Löschen laufen über die authentifizierte Storage-API
+mit dem Access Token. Dateinamen sind zufällig (`<Ordner>/<UUID>.<Endung>`), Überschreiben ist nicht vorgesehen.
+
+| Bucket | Grenze | Lesen | Schreiben | Löschen |
+|---|---|---|---|---|
+| `avatars` | 5 MB | alle Angemeldeten mit Profil, außer die Besitzerin hat sie blockiert | nur Ordner der eigenen `public_id` | nur eigener Ordner |
+| `group-images` | 5 MB | Mitglieder und Personen mit offener Einladung | owner der Gruppe (Ordner = `group_id`) | owner oder wer die Datei hochgeladen hat |
+| `chat-media` | 10 MB | wer die Unterhaltung lesen darf | wer in ihr senden darf (Ordner = `conversation_id`) | wer die Datei hochgeladen hat |
+
+Erlaubte Formate (`allowed_mime_types`, wie `MediaRules`): `image/jpeg`, `image/png`, `image/gif`, `image/heic`,
+`image/webp`. Die Policies rufen `security definer`-Funktionen im Schema `pace_access` auf (nicht über die Data API
+erreichbar; `authenticated` darf nur diese Prüffunktionen ausführen). Die App prüft Größe und Format schon vor dem
+Upload (`SupabaseMediaRepository`), der Server erzwingt dieselben Grenzen.
+
+### Echtzeit (Chats)
+
+- Nach jeder neuen oder gelöschten Nachricht sendet ein Trigger per `realtime.send` einen **privaten Broadcast ohne
+  Inhalt** (`{conversation_id, event}`) an `chat:<conversation_id>` (Ereignis `message`) und an
+  `user:<public_id>` jedes Teilnehmers (Ereignis `conversation`). Die App lädt daraufhin über die RPCs.
+- Policy `pace_realtime_receive` auf `realtime.messages`: Empfangen nur, wer die Unterhaltung lesen darf bzw. nur die
+  Person selbst (`pace_access.can_receive_topic`). Clients können keine Broadcasts senden (keine insert-Policy).
+- Die App (`RealtimeEvents`) abonniert mit dem Access Token. Ist Realtime nicht erreichbar oder wird der Beitritt
+  abgelehnt, endet der Stream sofort und die App aktualisiert regelmäßig (Polling-Rückfall im Chat-Feature).
+- Der Realtime-Client teilt Kanäle je Topic (z. B. `user:<public_id>` für Chat-Liste und Ungelesen-Zähler).
+  `TopicUsage` zählt die Streams je Topic: Erst der letzte entfernt den Kanal, und ein neuer Stream desselben Topics
+  wartet, bis dieses Entfernen abgeschlossen ist (sonst übernähme er einen Kanal, der danach nicht mehr im Client
+  eingetragen ist und nie wieder Hinweise erhielte).
+- Fehlt `realtime.send` (Realtime nicht eingerichtet), werden Nachrichten trotzdem gespeichert.
+
+### Konto und Datenschutz
+
+- **Auskunft** (`account_export`): Profil, Tageswerte, Freundschaften, Anfragen, Blockierungen, Gruppen mit Rolle,
+  Mitgliedszeiträume, Einladungen, eigene Nachrichten, Lesestände, eigene Meldungen, Rückmeldungen und eigene
+  Dateien (Pfade). Keine Daten anderer außer den öffentlichen Profilfeldern der Gegenüber.
+- **Löschen** (`AccountRepository.deleteAccount`): Die App löscht zuerst alle Pfade aus `account_own_media` über die
+  Storage-API (direktes Löschen in `storage.objects` erlaubt Supabase nicht), dann ruft sie `account_delete` auf.
+  Das löscht die eigenen Nachrichten, entfernt Verweise auf gelöschte Gruppenbilder und löscht `auth.users`; über
+  Kaskaden verschwinden Profil, Tageswerte, Freundschaften, Anfragen, Blockierungen, Einladungen, Meldungen,
+  Rückmeldungen und Lesestände. Gruppen gehen über die vorhandenen Trigger an das dienstälteste Mitglied, leere
+  Gruppen werden gelöscht. Privatchats bleiben für das Gegenüber lesbar (Absender `null`, schreibgeschützt).
+
+### Moderation
+
+Meldungen landen in `public.reports` mit Status `open` und einem Schnappschuss des Ziels (`target_snapshot`), damit
+eine spätere Löschung die Prüfung nicht verhindert. Clients können Meldungen weder lesen noch ändern. Ablauf bis zu
+einem Moderationswerkzeug:
+
+1. Offene Meldungen sichtet eine berechtigte Person im Supabase-Dashboard (SQL Editor bzw. Table Editor mit
+   Projektrechten): `select * from public.reports where status = 'open' order by created_at;`
+2. Bewertung anhand von `reason`, `details` und `target_snapshot`; bei Nachrichten zusätzlich der Verlauf der
+   Unterhaltung (`conversation_id` im Schnappschuss).
+3. Maßnahmen (manuell, per SQL im Dashboard): Nachricht entfernen (`update public.chat_messages set body = null,
+   media_path = null, deleted_at = now() where id = …`; Datei im Storage-Bereich des Dashboards löschen),
+   Gruppenname/-bild zurücksetzen, bei schweren Verstößen das Konto über *Authentication → Users* löschen.
+4. Status setzen: `update public.reports set status = 'resolved' where id = …` (bzw. `dismissed`).
+5. Rückmeldungen (`public.feedback`) werden genauso nur im Dashboard gelesen.
+
+Die Sichtung ist bewusst nicht in der App: Es gibt keine Admin-Rolle im Client.
+
+### Tests
+
+- **pgTAP** (`supabase/tests/09_…`–`13_…`, zusammen mit 01–08: 643 Prüfungen): Spalten und Rechte, Präfixsuche
+  (Escaping, Mindestlänge, Limit, Auffindbarkeit, Blockierungen, Rate Limit), öffentliches Profil, Blockier-Wirkung,
+  Gruppen-Privatsphäre und Einladungen beim Erstellen, Gruppenbild-Pfade, Chats (fremde Chats, Nicht-Mitglied,
+  Austritt, Blockierung, Idempotenz, Pagination, Lesestand, Löschen, Rate Limit), Storage-Policies je Bucket,
+  Realtime-Policy auf `realtime.messages`, Meldungen, Rückmeldungen, Export, eigene Dateien, Konto löschen.
+- **Swift-Integrationstests** (`Packages/PaceBackendIntegrationTests`, 16 Tests): Zwei-Nutzer-Szenario (Präfixsuche →
+  Anfrage → Annahme → Status bei beiden → Privatchat → Empfang → Antwort → Verlauf → Gruppe mit Einladung →
+  Beitritt → Gruppenchat → Gruppen-Streak bei beiden gleich → Austritt entzieht Zugriff → Blockierung greift),
+  Medien (Upload/Download/Verbot, Ordnerregeln, Größen- und Formatgrenzen direkt gegen Storage), Auskunft,
+  Rückmeldung, Konto löschen, Präfixsuche mit Auffindbarkeit, Melden, Rate Limit der Namensprüfung.
+- **Echtzeit:** Unter Linux kann der Swift-Client keine WebSockets öffnen (libcurl in Ubuntu 24.04 ohne
+  WebSocket-Unterstützung); der Swift-Test `newChatMessagesArriveOverRealtime` läuft daher nur auf Apple-Plattformen.
+  Stattdessen prüft `supabase/scripts/realtime_smoke_test.mjs` (Node ≥ 22) gegen denselben lokalen Stack den echten
+  Realtime-Server: Teilnehmer dürfen abonnieren, Fremde werden abgewiesen, Hinweise kommen auf beiden Kanälen an und
+  enthalten keinen Inhalt. Das läuft auch in der CI.
+- **Unit-Tests** (`Packages/PaceKit/Tests/PaceBackendTests`): Anfrageform und Fehlerabbildung jeder Methode über
+  `StubURLProtocol`.
+
 ## Regionsdaten: Quelle und Aktualisierung
 
 - **Quelle:** Statistisches Bundesamt (Destatis), Gemeindeverzeichnis **GV100AD**, Quartalsausgabe
@@ -254,11 +439,18 @@ neu wählen (Milestone 3).
 Voraussetzungen: Docker, Supabase CLI ≥ 2.121, Python 3.
 
 ```sh
-supabase start            # lokaler Stack inkl. Migrationen und Dev-Seed (nur lokal)
-supabase test db          # pgTAP: Rechte, RLS, Profile, Sync, Rankings, Regionen
-supabase db lint --fail-on error
-supabase db advisors --fail-on warn
+# Lokaler Stack inkl. Migrationen und Dev-Seed (nur lokal). Storage und Realtime werden gebraucht (Buckets und
+# Policies auf storage.objects / realtime.messages); nicht benötigte Dienste bleiben aus.
+supabase start -x imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+supabase test db          # pgTAP (01–13)
+supabase db lint --local --fail-on error
+supabase db advisors --local --fail-on warn
 python3 -I supabase/scripts/test_import_regions.py
+
+# Echtzeit-Kanäle (privater Broadcast + Policy) gegen den lokalen Stack:
+eval "$(supabase status -o env)"
+PACE_SUPABASE_URL="$API_URL" PACE_SUPABASE_PUBLISHABLE_KEY="${PUBLISHABLE_KEY:-$ANON_KEY}" \
+  node supabase/scripts/realtime_smoke_test.mjs
 
 # Integrationstests (Swift) gegen den lokalen Stack – auf dem Mac:
 eval "$(supabase status -o env)"
@@ -276,6 +468,10 @@ führt alles davon gegen einen frischen lokalen Stack aus – **ohne Secrets und
 
 ## Migrationen auf das Pace-Projekt anwenden (manuell)
 
+> **Für die Migrationen ab `20261018100000_social.sql` gilt die ausführliche, freizugebende Anleitung
+> [SUPABASE_ROLLOUT.md](SUPABASE_ROLLOUT.md)** (Reihenfolge, Backup, Dry Run, Dashboard-Einstellungen für Storage
+> und Realtime, Prüfungen, Rücknahme). Der folgende Abschnitt beschreibt das grundsätzliche Vorgehen.
+
 Die Migrationen wurden bisher **nur lokal und in der CI** ausgeführt, nicht gegen das echte Projekt. So geht es
 sicher – ausschließlich gegen das Pace-Projekt `bnkrenfvfiaapsbkeejq`:
 
@@ -283,7 +479,7 @@ sicher – ausschließlich gegen das Pace-Projekt `bnkrenfvfiaapsbkeejq`:
 supabase login
 supabase link --project-ref bnkrenfvfiaapsbkeejq   # fragt nach dem Datenbank-Passwort des Pace-Projekts
 supabase projects list                             # die verknüpfte Zeile (●) muss Ref bnkrenfvfiaapsbkeejq zeigen
-supabase db push --dry-run                         # listet die noch fehlenden Migrationen (insgesamt 7), ändert nichts
+supabase db push --dry-run                         # listet die noch fehlenden Migrationen, ändert nichts
 supabase db push                                   # NIE mit --include-seed
 ```
 
@@ -309,7 +505,12 @@ Repository.
 ## Offene Punkte für den Produktivbetrieb
 
 - CAPTCHA für anonyme Anmeldungen und ggf. strengere Rate Limits.
-- Sign in with Apple (Kontoübertragung auf andere Geräte) und Konto-/Datenlöschung in der App.
+- Sign in with Apple (Kontoübertragung auf andere Geräte). Konto- und Datenlöschung sowie Auskunft sind serverseitig
+  vorhanden (`account_*`).
+- Moderationswerkzeug statt manueller Sichtung im Dashboard (siehe „Moderation“); automatische Inhaltsprüfung von
+  Bildern gibt es nicht.
+- Verwaiste Dateien: Ersetzt jemand sein Profil- oder Gruppenbild, bleibt die alte Datei liegen, bis die App sie
+  löscht oder das Konto gelöscht wird; eine regelmäßige Bereinigung (Dateien ohne Verweis) fehlt noch.
 - Bereinigung verwaister anonymer Nutzer (z. B. ohne Profil nach 30 Tagen).
 - Plausibilitätsprüfungen über das harte Limit hinaus (Anti-Cheat), falls Rankings missbraucht werden.
 - Wartezeit für Regionswechsel (verhindert das Durchwechseln von Regionen, siehe Zugriffsregeln der Rankings).
