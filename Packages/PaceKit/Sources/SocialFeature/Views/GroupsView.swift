@@ -61,7 +61,7 @@ struct GroupsContent: View {
             SocialSectionTitle(SocialText.sectionCount(SocialText.invitations, viewModel.invitations.count))
             ForEach(viewModel.invitations) { invitation in
                 HStack(spacing: PaceSpacing.s) {
-                    GroupAvatar(name: invitation.groupName, kind: invitation.groupKind, image: .groupImage(invitation.groupImagePath), size: 52)
+                    GroupAvatar(name: invitation.groupName, kind: invitation.groupKind, image: MediaReference.groupImage(invitation.groupImagePath), size: 52)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(invitation.groupName)
                             .font(PaceFont.headline)

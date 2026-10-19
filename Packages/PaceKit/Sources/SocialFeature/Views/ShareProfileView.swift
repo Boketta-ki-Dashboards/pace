@@ -119,7 +119,7 @@ struct ShareProfileContent: View {
         case .friend(let profile):
             PaceAvatar(name: profile.displayName, seed: profile.publicID.uuidString, size: 40, image: profile.avatar)
         case .group(_, let name, let imagePath, _):
-            GroupAvatar(name: name, kind: .friends, image: .groupImage(imagePath), size: 40)
+            GroupAvatar(name: name, kind: .friends, image: MediaReference.groupImage(imagePath), size: 40)
         }
     }
 }

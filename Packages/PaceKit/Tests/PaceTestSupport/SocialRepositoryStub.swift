@@ -10,6 +10,10 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
         public var friends: [Friend] = []
         public var requests: [FriendRequest] = []
         public var ranking: [LeaderboardEntry] = []
+        /// Wochenranking der Freunde; ohne Eintrag gilt `ranking`.
+        public var weeklyRanking: [LeaderboardEntry]?
+        /// Zeiträume, nach denen das Freundesranking abgefragt wurde.
+        public var friendRankingPeriods: [LeaderboardPeriod] = []
         public var groups: [GroupSummary] = []
         public var groupRankings: [UUID: GroupRanking] = [:]
         /// Wochenrankings; ohne Eintrag gilt `groupRankings`.
@@ -30,7 +34,7 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
     }
 
     public let state: Locked<State>
-    /// Hält `myGroups` bzw. `groupRanking:daily`/`groupRanking:weekly` an. Die Daten werden schon beim Aufruf
+    /// Hält `myGroups`, `searchProfiles` bzw. `groupRanking:daily`/`groupRanking:weekly` an. Die Daten werden schon beim Aufruf
     /// gelesen – wie bei einer Serverantwort, die unterwegs ist.
     public let gate = CallGate()
 
@@ -103,7 +107,10 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
     }
 
     public func friendRanking(period: LeaderboardPeriod, date: LocalDate) async throws -> [LeaderboardEntry] {
-        try read("friendRanking") { $0.ranking }
+        state.withLock { $0.friendRankingPeriods.append(period) }
+        return try read("friendRanking") { state in
+            period == .weekly ? (state.weeklyRanking ?? state.ranking) : state.ranking
+        }
     }
 
     public func friendProfile(_ publicID: UUID, date: LocalDate) async throws -> FriendProfileDetails {
@@ -191,7 +198,13 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
     }
 
     public func removeMember(_ publicID: UUID, from groupID: UUID) async throws {
-        try write("removeMember") { _ in }
+        try write("removeMember") { state in
+            guard let ranking = state.groupRankings[groupID] else { return }
+            let entries = ranking.entries.filter { $0.profile.publicID != publicID }
+            state.groupRankings[groupID] = GroupRanking(
+                totalParticipants: entries.count, groupToday: ranking.groupToday, dailyGoal: ranking.dailyGoal, entries: entries
+            )
+        }
     }
 
     public func deleteGroup(_ groupID: UUID) async throws {
@@ -235,7 +248,7 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
     }
 
     public func searchProfiles(query: String) async throws -> [ProfileSearchResult] {
-        try read("searchProfiles:\(query)") { state in
+        let results = try read("searchProfiles:\(query)") { state in
             let lowered = query.lowercased()
             let blockedIDs = Set(state.blocked.map(\.publicID))
             return state.searchableProfiles
@@ -247,6 +260,8 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
                 .prefix(20)
                 .map { ProfileSearchResult(profile: $0, relationship: state.relationships[$0.publicID] ?? .none, requestID: nil) }
         }
+        await gate.pass("searchProfiles")
+        return results
     }
 
     public func publicProfile(_ publicID: UUID, date: LocalDate) async throws -> PublicProfile {
@@ -255,12 +270,16 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
             let known = friend?.profile
                 ?? state.searchableProfiles.first { $0.publicID == publicID }
                 ?? state.profiles.values.first { $0.publicID == publicID }
+                ?? state.requests.first { $0.profile.publicID == publicID }?.profile
             guard let profile = known else { return nil }
             let isFriend = friend != nil
+            // Offene Anfragen bestimmen die Beziehung wie auf dem Server.
+            let request = state.requests.first { $0.profile.publicID == publicID }
+            let requestRelationship: SocialRelationship? = request.map { $0.direction == .incoming ? .incomingRequest : .outgoingRequest }
             return PublicProfile(
                 profile: profile,
-                relationship: isFriend ? .friend : (state.relationships[publicID] ?? .none),
-                requestID: nil,
+                relationship: isFriend ? .friend : (requestRelationship ?? state.relationships[publicID] ?? .none),
+                requestID: isFriend ? nil : request?.id,
                 friendsSince: friend?.friendsSince,
                 stepsToday: isFriend ? 4_200 : nil,
                 stepsWeek: isFriend ? 30_100 : nil,

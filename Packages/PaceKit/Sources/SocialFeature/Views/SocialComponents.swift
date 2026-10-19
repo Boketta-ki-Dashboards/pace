@@ -238,14 +238,15 @@ struct SocialPersonCard<Actions: View>: View {
                     }
                 }
             } else {
-                HStack(spacing: PaceSpacing.s) {
+                HStack(spacing: PaceSpacing.xs) {
                     profileButton
-                    Spacer(minLength: PaceSpacing.xxs)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     actions()
                 }
             }
         }
-        .padding(.horizontal, PaceSpacing.s)
+        .padding(.leading, PaceSpacing.s)
+        .padding(.trailing, PaceSpacing.xs)
         .padding(.vertical, PaceSpacing.s)
         .frame(maxWidth: .infinity, alignment: .leading)
         .paceCardBackground(cornerRadius: PaceRadius.card)
@@ -266,12 +267,13 @@ struct SocialPersonCard<Actions: View>: View {
 
     private var identity: some View {
         HStack(spacing: PaceSpacing.s) {
-            PaceAvatar(name: profile.displayName, seed: profile.publicID.uuidString, size: 58, image: profile.avatar)
+            PaceAvatar(name: profile.displayName, seed: profile.publicID.uuidString, size: 56, image: profile.avatar)
             VStack(alignment: .leading, spacing: 2) {
                 Text(profile.displayName)
                     .font(.system(.headline, weight: .semibold))
                     .foregroundStyle(PaceColor.textPrimary)
                     .lineLimit(2)
+                    .minimumScaleFactor(0.9)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(detail ?? "@\(profile.username)")
                     .font(PaceFont.callout)
@@ -325,7 +327,7 @@ struct SocialMoreLabel: View {
         Image(systemName: "ellipsis")
             .font(.system(size: 16, weight: .bold))
             .foregroundStyle(PaceColor.textSecondary)
-            .frame(width: 40, height: 40)
+            .frame(width: 36, height: 38)
             .background(PaceColor.fieldBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(PaceColor.border, lineWidth: 1))
             .frame(width: 44, height: 44)

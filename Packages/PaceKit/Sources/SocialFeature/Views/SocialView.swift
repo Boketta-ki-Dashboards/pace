@@ -355,7 +355,7 @@ private struct ConversationMatchRow: View {
                 if let peer = conversation.peer {
                     PaceAvatar(name: peer.displayName, seed: peer.publicID.uuidString, size: 48, image: peer.avatar)
                 } else {
-                    GroupAvatar(name: conversation.title, kind: .friends, image: .groupImage(conversation.groupImagePath), size: 48)
+                    GroupAvatar(name: conversation.title, kind: .friends, image: MediaReference.groupImage(conversation.groupImagePath), size: 48)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(conversation.title)

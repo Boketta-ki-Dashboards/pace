@@ -1,6 +1,6 @@
 # Social (Freunde und Gruppen)
 
-Serverseite der Social-Funktionen: Freundschaften, Freundesranking, Gruppen mit Einladungen, Gruppenranking und
+App und Serverseite der Social-Funktionen: Freundschaften, Freundesranking, Gruppen mit Einladungen, Gruppenranking und
 Gruppen-Streak. Schema und Funktionen stehen in `supabase/migrations/20261018100000_social.sql`, die Tests in
 `supabase/tests/06_social_friends.test.sql`, `07_social_groups.test.sql` und `08_social_group_streak.test.sql`.
 Allgemeine Backend-Regeln (Auth, RLS, Rechte, lokale Entwicklung) stehen in [BACKEND.md](BACKEND.md).
@@ -16,6 +16,54 @@ Grundsätze:
 - **Existenz bleibt verborgen.** `not_found` bedeutet „gibt es nicht“ *oder* „ist für dich nicht sichtbar“. Fremde
   Anfragen, Einladungen und Gruppen lassen sich nicht ertasten.
 - **Alles wird beim Lesen berechnet** (Rankings, Gruppentage, Streaks) – es gibt keine Hintergrundjobs.
+
+## App (SocialFeature)
+
+Der Social-Tab ist ein eigener `NavigationStack` mit `NavigationPath` (`SocialView`). Alle Seiten zeigen echte Daten
+über `SocialRepository`; ohne Backend oder vor der Server-Einrichtung (`SocialError.unavailable`) erscheinen
+gestaltete, ehrliche Zustände statt Funktionen. Alle Texte stehen in `SocialText` (Deutsch, Englisch, Russisch;
+Pluralformen über `PaceLocalization.plural`). Unterseiten verwenden `PaceSubpageHeader` + `.paceSubpage()`
+(„‹ Social“ → Wortmarke → Titel); die Gruppendetails zeigen wie Referenzbild 4 statt eines Titels den Gruppenkopf.
+
+| Seite | Route | ViewModel | Inhalt |
+|---|---|---|---|
+| Hauptseite (Bild 9) | – | `SocialViewModel` | Wortmarke, Einstellungen, „Freund hinzufügen“/„Gruppe erstellen“, Suche (Freunde und Chats lokal), Top-Freunde (Top 3 aus dem Freundesranking), Freundschaftsanfragen mit Zähler, Gruppen (mit Zähler offener Einladungen), Chats (`ChatListSection`) |
+| Freund hinzufügen (Bild 1) | `.addFriend` | `FriendSearchViewModel` | Präfixsuche ab 3 Zeichen mit Verzögerung (350 ms), nur die neueste Antwort zählt; Hinzufügen / Anfrage gesendet / Bereits befreundet / Annehmen; Menü: Profil teilen, Nachricht schreiben (nur Freunde), Nutzer blockieren (mit Bestätigung) |
+| Freundschaftsanfragen (Bild 2) | `.requests` | `SocialViewModel` | Eingegangen (Annehmen/Ablehnen), Gesendet (Ausstehend/Zurückziehen) |
+| Profil | `.profile` | `UserProfileViewModel` | `publicProfile`: Aktionen je Beziehung, Schritte nur unter Freunden, Nachricht, Teilen, Freund entfernen, Blockieren/Aufheben, Melden |
+| Profil teilen | `.shareProfile` | `ShareProfileViewModel` | Empfänger (Freunde, eigene Gruppen) → `ChatListViewModel.shareProfile`; Link `pace://u/<name>` über `ShareLink` |
+| Melden | `.report` | `ReportViewModel` | Grund aus `ReportReason`, Details (max. 500 Zeichen) → `report` |
+| Gruppe erstellen (Bild 3) | `.createGroup` | `CreateGroupViewModel` | Bild (PhotosPicker, auf 1.024 px verkleinert, JPEG ≤ 5 MB), Name, Beschreibung, Typ, Privatsphäre, Einladungen, Tagesziel (500er-Stufen), Drittel-Regel; danach öffnen sich die Details |
+| Gruppen | `.groups` | `SocialViewModel` | eigene Gruppen, Einladungen annehmen/ablehnen, Beitritt per Code, neue Gruppe |
+| Gruppendetails (Bild 4) | `.group` | `GroupDetailViewModel` | Kopf, Streak-Karte, Fortschritt (Pillen je Mitglied, „x von y benötigten Zielen“, Flamme), Gruppenchat/Mitglieder/Einstellungen, „Heute in der Gruppe“ mit `PaceRankingRow` |
+| Mitglieder | `.groupMembers` | `GroupDetailViewModel` | Rollen, Entfernen (nur Verwaltung), offene Einladungen zurückziehen (Verwaltung), Freunde einladen |
+| Gruppeneinstellungen | `.groupSettings` | `GroupDetailViewModel` | Bild, Name, Beschreibung, Typ, Privatsphäre (`updateGroupDetails`), Tagesziel ab morgen, Einladungscode teilen/erneuern, verlassen, löschen (Verwaltung), melden |
+| Freundesranking | `.friendsRanking` | `FriendsRankingViewModel` | heute / diese Woche |
+| Social-Einstellungen | `.settings` | `SocialSettingsViewModel` | Anfragen, Gruppeneinladungen, Sichtbarkeit in der Suche (öffnet die Profil-Einstellung), blockierte Nutzer |
+
+Wichtige Abläufe:
+
+- **Gruppe erstellen:** `createGroup` mit Privatsphäre und Einladungen; fehlende Einladungen und eine abweichende
+  Privatsphäre holt die App nach, erst danach wird das Bild hochgeladen (`MediaUploadTarget.groupImage(groupID:)`,
+  dann `setGroupImage`). Scheitert ein Folgeschritt, gibt es die Gruppe trotzdem; der Hinweis nennt, was fehlt.
+- **Gruppen-Streak:** Erreichte, benötigte Ziele und „Flamme gesichert“ kommen vom Server
+  (`todayReachedCount`, `todayRequiredCount`, `todayComplete`); die App rechnet die ⅓-Regel nicht neu.
+- **Aktionen** laufen über `SocialViewModel.perform`: Während einer Aktion ist die betroffene ID gesperrt, danach
+  stehen Erfolg oder Fehler im gemeinsamen Hinweis (`notice`), und der Stand wird neu geladen – Anfragenzähler,
+  Listen und Hauptseite sind damit synchron.
+- **Profil-Links:** `showProfile(username:)` setzt `requestedProfile`; der Social-Tab sucht das Profil über
+  `findProfile` und öffnet es oder zeigt einen Hinweis. Gruppen von außen öffnet `showGroup(_:)`.
+- **Chats:** `navigationDestination(for: ChatTarget.self)` öffnet `ChatView(viewModel: chats.chat(for:))`.
+  Gruppenchat aus den Details: `.group(id:name:)`, Privatchat aus Profil und Suche: `.direct(profile)`.
+- **Sichtbarkeit in der Suche:** keine eigene Einstellung im Social-Bereich; `SocialViewModel.openPrivacySettings`
+  (vom App-Rahmen gesetzt) öffnet die Profil-Einstellung.
+
+Tests: `Tests/SocialFeatureTests` (Suche mit Verzögerung und veralteten Antworten, Anfragen, Blockieren/Melden,
+Gruppe erstellen mit Einladungen, Privatsphäre und Bild, Gruppendetails/Mitglieder/Einstellungen, Profile, Teilen,
+Einstellungen, Freundesranking, Sprache). Snapshots: `Tests/PaceSnapshotTests/SocialSnapshotTests.swift`
+(`social`, `add-friend`, `friend-requests`, `create-group`, `group-detail`, `user-profile` in DE/EN/RU sowie
+`group-members`, `group-settings`, `social-groups`, `friends-ranking`, `social-settings`, `share-profile`, `report`,
+`social-unavailable`).
 
 ## Datenmodell
 
@@ -279,10 +327,13 @@ hinterlässt deshalb keine offene Einladung.
 
 ## Nicht umgesetzt
 
-- **Gruppenchat** – bewusst zurückgestellt: kein Chat ohne Moderation, Melden und Blockieren.
-- **Blockieren/Melden** von Personen. Wer aus einer Gruppe entfernt wurde, kann mit dem bekannten Code wieder
-  beitreten, bis der Eigentümer einen neuen Code erzeugt. Abgelehnte Personen können nach 7 Tagen erneut anfragen.
-- **Benachrichtigungen** (Push) zu Anfragen und Einladungen.
+- **Gruppenchat, Blockieren, Melden, Gruppenbild, Privatsphäre:** Die App nutzt dafür die Vertragsmethoden
+  (`ChatRepository`, `block`/`unblock`/`blockedUsers`, `report`, `setGroupImage`, `updateGroupDetails`). Ob der
+  Server sie schon anbietet, entscheidet die jeweilige Migration; bis dahin antworten sie mit `unavailable`, und die
+  App zeigt „Diese Funktion ist auf dem Server noch nicht eingerichtet.“ (siehe BACKEND.md und CHAT.md). Wer aus
+  einer Gruppe entfernt wurde, kann mit dem bekannten Code wieder beitreten, bis der Eigentümer einen neuen Code
+  erzeugt. Abgelehnte Personen können nach 7 Tagen erneut anfragen.
+- **Benachrichtigungen** (Push) zu Anfragen, Einladungen und Nachrichten – die Social-Einstellungen sagen das offen.
 - **Änderung der Gruppenzeitzone** nach dem Erstellen.
 
 ## Grenzen

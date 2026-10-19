@@ -56,7 +56,7 @@ public final class SocialViewModel {
     }
 
     /// Höchstgröße eines Gruppenbilds (wie der Bucket `group-images` auf dem Server).
-    public static var groupImageMaximumBytes: Int {
+    public nonisolated static var groupImageMaximumBytes: Int {
         MediaRules.maximumBytes(for: .groupImage(groupID: UUID()))
     }
 
