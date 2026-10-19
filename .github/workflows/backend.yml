@@ -55,9 +55,11 @@ jobs:
       - name: Region importer tests
         run: python3 -I supabase/scripts/test_import_regions.py
 
-      - name: Start local Supabase (Postgres, Auth, REST)
-        # Nur die Dienste, die Pace nutzt. Migrationen und der Dev-Seed werden dabei lokal angewendet.
-        run: supabase start -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+      - name: Start local Supabase (Postgres, Auth, REST, Storage, Realtime)
+        # Nur die Dienste, die Pace nutzt. Storage und Realtime werden gebraucht, weil die Migrationen Buckets und
+        # Policies auf storage.objects und realtime.messages anlegen. Migrationen und der Dev-Seed werden dabei lokal
+        # angewendet.
+        run: supabase start -x imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
 
       - name: Database tests (pgTAP)
         run: supabase test db
