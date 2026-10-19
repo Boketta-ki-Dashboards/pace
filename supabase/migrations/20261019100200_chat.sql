@@ -667,7 +667,8 @@ set search_path = ''
 as $$
 declare
   v_me uuid := private.require_profile();
-  v_through timestamptz := least(coalesce(p_through, now()), now());
+  -- clock_timestamp(): Nachrichten tragen ihre tatsächliche Einfügezeit, nicht den Transaktionsbeginn.
+  v_through timestamptz := least(coalesce(p_through, clock_timestamp()), clock_timestamp());
 begin
   perform private.require_conversation(p_conversation_id, v_me);
   insert into public.conversation_reads (conversation_id, user_id, last_read_at)
