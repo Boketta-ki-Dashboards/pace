@@ -176,14 +176,18 @@ private struct WeekAxisChart: View {
         .accessibilityLabel(week.accessibilitySummary)
     }
 
-    /// Obere Achsengrenze: nächster runder Wert über dem Maximum (z. B. 12.000).
+    /// Abstand der Achsenwerte: runde Schritte, sodass drei davon das Maximum der Woche abdecken (z. B. 4.000).
+    private var axisStep: Int {
+        let steps = [1_000, 2_000, 3_000, 4_000, 5_000, 6_000, 8_000, 10_000, 15_000, 20_000, 30_000]
+        return steps.first { $0 * 3 >= week.scale } ?? (week.scale + 2) / 3
+    }
+
+    /// Obere Achsengrenze, z. B. 12.000.
     private var axisMaximum: Int {
-        let step = 4_000
-        return max(((week.scale + step - 1) / step) * step, step)
+        axisStep * 3
     }
 
     private var axisValues: [Int] {
-        let step = axisMaximum / 3
-        return [0, step, step * 2, axisMaximum]
+        [0, axisStep, axisStep * 2, axisMaximum]
     }
 }
