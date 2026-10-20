@@ -6,7 +6,14 @@ public final class AccountRepositoryStub: AccountRepository, Sendable {
     public struct State: Sendable {
         public var exportJSON = Data(#"{"profile":{"username":"niklas"}}"#.utf8)
         public var media: [MediaReference] = []
+        /// Fehler für alle Aufrufe.
         public var error: AccountError?
+        /// Fehler nur für einzelne Aufrufe.
+        public var exportError: AccountError?
+        public var ownMediaError: AccountError?
+        public var deleteError: AccountError?
+        public var feedbackError: AccountError?
+        public var exportCalls = 0
         public var deleteCalls = 0
         public var feedback: [(FeedbackKind, String, String)] = []
     }
@@ -21,28 +28,29 @@ public final class AccountRepositoryStub: AccountRepository, Sendable {
 
     public func exportData() async throws -> Data {
         try state.withLock { state in
-            if let error = state.error { throw error }
+            state.exportCalls += 1
+            if let error = state.error ?? state.exportError { throw error }
             return state.exportJSON
         }
     }
 
     public func ownMedia() async throws -> [MediaReference] {
         try state.withLock { state in
-            if let error = state.error { throw error }
+            if let error = state.error ?? state.ownMediaError { throw error }
             return state.media
         }
     }
 
     public func deleteAccount() async throws {
         try state.withLock { state in
-            if let error = state.error { throw error }
+            if let error = state.error ?? state.deleteError { throw error }
             state.deleteCalls += 1
         }
     }
 
     public func submitFeedback(kind: FeedbackKind, message: String, appVersion: String) async throws {
         try state.withLock { state in
-            if let error = state.error { throw error }
+            if let error = state.error ?? state.feedbackError { throw error }
             state.feedback.append((kind, message, appVersion))
         }
     }
