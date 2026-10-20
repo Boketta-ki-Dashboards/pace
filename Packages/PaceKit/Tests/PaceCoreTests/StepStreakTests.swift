@@ -19,6 +19,35 @@ struct StepStreakTests {
         calendar.adding(offset, to: today)
     }
 
+    @Test func streakAcrossTheDaylightSavingChangeCountsEveryDayOnce() {
+        // In Berlin endet die Sommerzeit am 25.10.2026 (25-Stunden-Tag): kein Tag doppelt, keiner verschluckt.
+        let today = Fixtures.day(2026, 10, 27)
+        let first = Fixtures.day(2026, 10, 20)
+        let days = calendar.days(from: first, through: today)
+        #expect(days.count == 8)
+        let history = ActivityHistory(
+            days: days.map { DailyActivitySummary(date: $0, healthSteps: 11_000, competitionSteps: 11_000) },
+            range: first...today,
+            updatedAt: Fixtures.date(2026, 10, 27, 12)
+        )
+
+        let streak = StepStreakCalculator.streak(history: history, goals: StepGoalHistory(), today: today, calendar: calendar)
+
+        #expect(streak.current == 8)
+        #expect(streak.throughYesterday == 7)
+        #expect(streak.reachesHistoryStart)
+    }
+
+    @Test func runningDayKeepsTheStreakThroughYesterday() {
+        let history = history(from: day(-10), [day(-2): 10_000, day(-1): 10_500, day(0): 3_000])
+
+        let streak = StepStreakCalculator.streak(history: history, goals: StepGoalHistory(), today: today, calendar: calendar)
+
+        #expect(streak.throughYesterday == 2)
+        #expect(streak.current == 2)
+        #expect(!streak.isTodayReached)
+    }
+
     @Test func runningDayDoesNotBreakTheStreak() {
         let goals = StepGoalHistory(initialGoal: 10_000)
         let history = history(from: day(-10), [day(-3): 10_000, day(-2): 12_000, day(-1): 10_500, day(0): 4_000])
