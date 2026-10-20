@@ -16,7 +16,8 @@ Reihenfolge im Standardlayout (freigegebenes Home-Design):
 6. Freunde- und Gruppen-Widgets.
 7. Weitere Widgets (persönliche Streak, Aktivität, Kalender …).
 
-Kalender-Symbol → `CalendarRoute` (`CalendarView`, Inhalt aus dem Kalender-Paket). Glocke → Unterseite
+Kalender-Symbol → `CalendarRoute` (`CalendarView`, Inhalt aus dem Kalender-Paket). Schrittkarte, Distanz,
+Kalorien, Woche, Streak und Aktivität öffnen `StatisticsRoute` (`StatisticsView` mit Zurück-Link „Home“). Glocke → Unterseite
 „Mitteilungen“ mit echten Einträgen; ein Badge zeigt deren Anzahl.
 
 ### Mitteilungen
@@ -64,8 +65,11 @@ nicht betroffen (eigene Regeln).
   oben rechts „Größe auswählen“ mit Menü Klein/Mittel/Groß/Max (Haken an der aktuellen, nur unterstützte Größen) und
   Ziehgriff (sechs Punkte). Keine Ziehecken.
 - Umsortieren per Drag & Drop (`onDrag`/`onDrop`, iOS 17): sobald ein Widget über einem anderen schwebt, tauschen sie
-  die Plätze; Haptik bei jeder Änderung. VoiceOver-Alternative: Aktionen „Nach oben/unten verschieben“, Größen und
-  Entfernen am Titel jedes Widgets.
+  die Plätze; Haptik bei jeder Änderung. Wird außerhalb eines Widgets abgelegt (Kopf, Zwischenräume), endet das
+  Ziehen ebenfalls sauber (`endDragging()`); Text aus anderen Apps wird nicht angenommen. VoiceOver-Alternative:
+  Aktionen „Nach oben/unten verschieben“, Größen und Entfernen am Titel jedes Widgets.
+- „Größe auswählen“ trägt das Symbol aus dem Anpassen-Design (`HomeSizeGlyph`: Quadrat mit offener Ecke und
+  versetztem kleinen Quadrat), gezeichnet als Pfad und mit der Schriftgröße skaliert.
 - Dezentes Wackeln (±0,45°), bei reduzierter Bewegung aus. Das aktive Widget (Größenmenü offen, gerade bewegt) hat
   einen mint Rahmen.
 - Inhalte sind nicht antippbar (keine versehentliche Navigation); Antippen eines Widgets öffnet die Galerie zum
