@@ -112,10 +112,10 @@ public struct ActivityFormatter: Sendable {
         Self.capitalizedFirst(dateStyle.weekday(.wide).day().month(.wide).year().format(calendar.startOfDay(day)))
     }
 
-    /// Erster Wochentag im Kalender der App-Sprache (1 = Sonntag, 2 = Montag): Englisch beginnt mit Sonntag,
-    /// Deutsch und Russisch mit Montag.
+    /// Erster Wochentag im Kalender (1 = Sonntag, 2 = Montag): in allen Sprachen Montag – wie die Referenz (Mo–So)
+    /// und wie Wochenstatistik, „Deine Woche“ und Streak, die alle mit Montag beginnen.
     public var firstWeekday: Int {
-        language == .english ? 1 : 2
+        2
     }
 
     /// z. B. `16. Okt.`

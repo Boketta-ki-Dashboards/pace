@@ -61,13 +61,13 @@ struct CalendarMonthTests {
         #expect(october.days.count == 31)
     }
 
-    @Test func englishWeekStartsOnSunday() {
+    @Test func englishWeekAlsoStartsOnMonday() {
         let october = PaceLocalization.$languageOverride.withValue(.english) { month(locale: "en_US") }
 
         #expect(october.title == "October 2026")
-        #expect(october.weekdays.map(\.title) == ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"])
-        #expect(october.cells.prefix(4).allSatisfy { $0 == nil })
-        #expect(october.cells[4]?.date == Fixtures.day(2026, 10, 1))
+        #expect(october.weekdays.map(\.title) == ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
+        #expect(october.cells.prefix(3).allSatisfy { $0 == nil })
+        #expect(october.cells[3]?.date == Fixtures.day(2026, 10, 1))
         #expect(october.cells.count == 35)
     }
 

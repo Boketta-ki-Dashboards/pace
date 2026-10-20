@@ -56,7 +56,7 @@ struct ActivityFormatterLanguageTests {
     @Test func weekStartFollowsTheLanguage() {
         #expect(formatter("de_DE").firstWeekday == 2)
         #expect(formatter("ru_RU").firstWeekday == 2)
-        #expect(formatter("en_US").firstWeekday == 1)
+        #expect(formatter("en_US").firstWeekday == 2)
     }
 
     @Test func russianPluralsForStepsAndDays() {
