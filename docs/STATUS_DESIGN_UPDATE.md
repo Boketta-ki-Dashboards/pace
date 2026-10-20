@@ -1,4 +1,4 @@
-# Design- und Funktions-Update (Referenzbilder 1–9) – Ausgangsstand und Plan
+# Design- und Funktions-Update (Referenzbilder 1–9) – Ausgangsstand, Plan und Endstand
 
 ## Ausgangsstand (Sicherungspunkt)
 
@@ -21,7 +21,7 @@
 | Profil | Name, Region, Ranking-Sichtbarkeit, Tagesziel, Serie/Rekord, App-Icon (Automatisch/Hell/Dunkel) |
 | HealthKit | Schritte, Distanz, aktive Energie, Stockwerke, Training; Wettbewerbsschritte ohne manuelle Einträge |
 
-## Lücken gegenüber dem Master-Prompt (Auszug)
+## Lücken zu Beginn gegenüber dem Master-Prompt (Auszug)
 
 - Eigene Tab-Leiste (aktiver Tab: Symbol **und** Text in einer Fläche), einheitlicher Unterseiten-Kopf
   (Zurück → pace → Titel).
@@ -43,3 +43,64 @@
 Phasen D2–D8 (siehe Commits): gemeinsame UI-Regeln → Social → Gruppen und Chats → Dashboard-Anpassung →
 Kalender und Tagesdetails → Profil und Einstellungen → Verifikation. Jede Phase wird lokal (Linux-Tests, lokales
 Supabase) und in der CI geprüft und einzeln committet.
+
+## Endstand (20.10.2026)
+
+Alle Phasen D2–D8 sind umgesetzt und auf dem Branch `claude/gallant-brahmagupta-hvvp13` gepusht (79 Commits seit
+b9fb7e3, Sicherungspunkte 0b05480/83b17a1). **Im produktiven Supabase-Projekt `bnkrenfvfiaapsbkeejq` wurde nichts
+verändert**; die sechs neuen Migrationen liegen nur im Repository (Rollout: [SUPABASE_ROLLOUT.md](SUPABASE_ROLLOUT.md),
+erst nach ausdrücklicher Freigabe). Ein Test auf einem echten iPhone steht aus ([IPHONE_TEST.md](IPHONE_TEST.md),
+[MANUAL_TESTS.md](MANUAL_TESTS.md)).
+
+### Stand je Bereich
+
+„Design fertig“ heißt: in Snapshots (Simulator, Hell/Dunkel, DE/EN/RU) mit den Referenzbildern verglichen – nicht auf
+einem Gerät gesehen. „Backend getestet“ heißt: gegen einen lokalen Supabase-Stack (Docker) und in der CI geprüft.
+
+| Bereich | Design fertig | Funktion fertig | Backend getestet | Produktiv bereit |
+|---|---|---|---|---|
+| Home | ja (Bild 9) | ja | ja (Rankings-RPCs bestehen produktiv) | ja – iPhone-Test offen |
+| Rankings | ja | ja | ja | regional ja; Freunde/Gruppen erst nach Migration |
+| Social | ja (Bild 9) | ja | ja | nein – Migrationen nicht eingespielt |
+| Freund hinzufügen | ja (Bild 1) | ja | ja | nein – Migrationen |
+| Freundschaftsanfragen | ja (Bild 2) | ja | ja | nein – Migrationen |
+| Gruppen (erstellen) | ja (Bild 3) | ja | ja | nein – Migrationen |
+| Gruppendetails | ja (Bild 4) | ja | ja | nein – Migrationen |
+| Gruppenchat | ja (Bild 5) | ja | ja (Echtzeit per Node-Test) | nein – Migrationen, Realtime-Einstellung |
+| Privatchat | ja (wie Bild 5) | ja | ja (Echtzeit per Node-Test) | nein – Migrationen, Realtime-Einstellung |
+| Widgets | ja (Bilder 6, 7) | ja | lokal gespeichert (kein Backend) | ja – Freunde-/Gruppen-Widgets nach Migration |
+| Kalender | ja (Bild 9) | ja | entfällt (HealthKit auf dem Gerät) | ja – iPhone-Test offen |
+| Tagesdetails | ja (Bild 8) | ja | entfällt (HealthKit auf dem Gerät) | ja – iPhone-Test offen |
+| Profil | ja | ja | ja | Name/Region ja; Profilbild erst nach Migration |
+| Einstellungen | ja | ja | ja | lokal ja; Auffindbarkeit, Blockierliste, Export, Konto löschen nach Migration |
+
+### Tests (Endstand)
+
+| Prüfung | Beginn (b9fb7e3) | Endstand |
+|---|---|---|
+| Swift-Tests unter Linux (PaceCore, ViewModels) | 318 | 609 in 75 Suiten, alle grün |
+| Datenbanktests (pgTAP) | 370 in 8 Dateien | 705 in 13 Dateien, alle grün |
+| Backend- und Integrationstests gegen lokales Supabase | 50 | 102 in 18 Suiten grün, 1 übersprungen (Echtzeit über WebSocket nur auf Apple-Plattformen) |
+| Realtime-Rauchtest (Node, private Kanäle, Abweisung Fremder) | – | 9/9 bestanden |
+| `supabase db lint` / Advisors | sauber | sauber |
+| CI (iOS: Build ohne Warnungen, Tests, Snapshots; Backend) | grün | grün |
+
+Grüne Tests und CI belegen keine vollständige Produktreife: HealthKit-Werte, App-Icon, Mitteilungen, Fotoauswahl,
+Drag & Drop und Echtzeit zwischen zwei Geräten sind nur auf echten iPhones prüfbar.
+
+### Bewusste Abweichungen und offene Punkte
+
+- **Social-Hauptseite:** zusätzliche Zeile „Gruppen“ (Weg zu allen Gruppen), die Bild 9 nicht zeigt.
+- **Chats:** keine Lesebestätigungen („gelesen“) – der Vertrag kennt nur den eigenen Lesestand und Ungelesen-Zähler.
+  Keine Push-Mitteilungen für neue Nachrichten (bräuchte einen APNs-Schlüssel und einen Server-Dienst); neue
+  Nachrichten kommen in Echtzeit, solange Pace geöffnet ist.
+- **Widget-Galerie:** Freunde-Chips im 2 × 2-Raster statt einer Reihe, damit Namen nicht abgeschnitten werden.
+- **„Deine Woche“:** Mittel = Tageskacheln, Max = Diagramm mit Achse und Ziellinie (Größen gab Bild 6 nur teilweise vor).
+- **Kalender:** Kopf mit Wortmarke wie alle Unterseiten (Abschnitt 4), Legende kompakt neben der Monatsnavigation.
+- **Snapshots:** gerendert mit 393 pt Breite, die Referenzen mit etwa 430 pt; Profilbilder und Fotos erscheinen dort
+  als Initialen, weil Bilder asynchron laden.
+- **Konto:** weiterhin anonym und an das iPhone gebunden; „Mit Apple anmelden“ bzw. Kontoübertragung nicht eingebaut
+  (ehrlich als „In Vorbereitung“ gekennzeichnet).
+- **Rechtstexte** (Datenschutzerklärung, Nutzungsbedingungen, Impressum) sind Entwürfe und vom Betreiber zu ergänzen.
+- **Produktiv:** Social, Gruppen, Chats, Profilbilder, Blockieren/Melden, Export und Konto löschen funktionieren erst
+  nach dem Einspielen der Migrationen; bis dahin zeigt die App einen ehrlichen Hinweis.
