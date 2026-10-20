@@ -1,5 +1,6 @@
 import ActivityFeature
 import DesignSystem
+import PaceCore
 import SwiftUI
 
 /// Kalender-Widget: kompakter Wochen- bzw. Monatsausschnitt nach den Kalender-Regeln.

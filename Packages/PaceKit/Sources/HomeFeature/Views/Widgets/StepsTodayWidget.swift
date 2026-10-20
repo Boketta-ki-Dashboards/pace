@@ -1,5 +1,6 @@
 import ActivityFeature
 import DesignSystem
+import PaceCore
 import SwiftUI
 
 /// „Deine Schritte heute“ – der visuelle Mittelpunkt von Home: große Schrittzahl, Tagesziel mit Balken und Ring,

@@ -1,5 +1,6 @@
 import ActivityFeature
 import DesignSystem
+import PaceCore
 import SwiftUI
 
 /// „Deine Woche“: Montag bis Sonntag.
@@ -135,14 +136,15 @@ private struct WeekAxisChart: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: PaceSpacing.xs) {
+            // Gleich große Abstände zwischen den vier Werten, damit jeder Wert auf Höhe seiner Linie steht.
             VStack(alignment: .trailing, spacing: 0) {
-                ForEach(axisValues.reversed(), id: \.self) { value in
-                    Text(value.paceFormatted)
-                        .font(PaceFont.micro)
-                        .monospacedDigit()
-                        .foregroundStyle(PaceColor.textSecondary)
-                        .frame(maxHeight: .infinity, alignment: value == 0 ? .bottom : .top)
-                }
+                axisLabel(axisMaximum)
+                Spacer(minLength: 0)
+                axisLabel(axisStep * 2)
+                Spacer(minLength: 0)
+                axisLabel(axisStep)
+                Spacer(minLength: 0)
+                axisLabel(0)
             }
             .frame(height: chartHeight)
             .padding(.bottom, 24)
@@ -187,7 +189,11 @@ private struct WeekAxisChart: View {
         axisStep * 3
     }
 
-    private var axisValues: [Int] {
-        [0, axisStep, axisStep * 2, axisMaximum]
+    private func axisLabel(_ value: Int) -> some View {
+        Text(value.paceFormatted)
+            .font(PaceFont.micro)
+            .monospacedDigit()
+            .foregroundStyle(PaceColor.textSecondary)
+            .lineLimit(1)
     }
 }

@@ -1,5 +1,6 @@
 import ActivityFeature
 import DesignSystem
+import PaceCore
 import SwiftUI
 
 /// Aktivitäts-Widget: eine Kennzahl (Schritte, Distanz oder aktive Kalorien) der letzten sieben Tage.
