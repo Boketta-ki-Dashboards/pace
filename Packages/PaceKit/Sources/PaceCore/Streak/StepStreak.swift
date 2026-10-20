@@ -37,6 +37,12 @@ public struct StepStreak: Equatable, Sendable {
         self.reachesHistoryStart = reachesHistoryStart
     }
 
+    /// Serie bis einschließlich gestern – ohne den laufenden Tag („3 Tage – aktuelle Serie bis gestern“). Heute kann
+    /// sie mit Tag `throughYesterday + 1` fortgesetzt werden.
+    public var throughYesterday: Int {
+        isTodayReached ? max(current - 1, 0) : current
+    }
+
     public static let empty = StepStreak(
         current: 0, currentStart: nil, isTodayReached: false, longest: 0, longestRange: nil, reachesHistoryStart: false
     )

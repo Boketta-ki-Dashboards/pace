@@ -66,11 +66,19 @@ public final class RegionOnboardingViewModel {
     static func message(for error: Error) -> String {
         switch error as? ProfileError {
         case .invalidRegion:
-            "Diese Gemeinde kann nicht gewählt werden. Bitte suche sie erneut."
+            PaceLocalization.text(
+                de: "Diese Gemeinde kann nicht gewählt werden. Bitte suche sie erneut.",
+                en: "This municipality can't be selected. Please search for it again.",
+                ru: "Этот населённый пункт нельзя выбрать. Найди его ещё раз."
+            )
         case .network:
-            "Keine Verbindung. Prüfe deine Internetverbindung und versuche es erneut."
+            OnboardingTexts.noConnection
         default:
-            "Deine Region konnte nicht gespeichert werden. Bitte versuche es erneut."
+            PaceLocalization.text(
+                de: "Deine Region konnte nicht gespeichert werden. Bitte versuche es erneut.",
+                en: "Your region couldn't be saved. Please try again.",
+                ru: "Не удалось сохранить регион. Попробуй ещё раз."
+            )
         }
     }
 }

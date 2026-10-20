@@ -59,6 +59,23 @@ public struct ActivityFormatter: Sendable {
         "\(Self.wholePercent(fraction).formatted(.number.locale(locale))) %"
     }
 
+    /// Prozent in Ringen und Kurzangaben wie in den Pace-Referenzen: `84%` (Deutsch, Englisch), `84 %` (Russisch).
+    public func compactPercent(_ fraction: Double) -> String {
+        let value = Self.wholePercent(fraction).formatted(.number.locale(locale))
+        return language == .russian ? "\(value)\u{00A0}%" : "\(value)%"
+    }
+
+    /// Puls in Schlägen pro Minute, getrennt in Zahl und Einheit: `62` + `/min` (Deutsch), `bpm` (Englisch),
+    /// `уд/мин` (Russisch).
+    public func beatsPerMinute(_ value: Double) -> (value: String, unit: String) {
+        let number = Int(value.rounded()).formatted(.number.locale(locale))
+        switch language {
+        case .german: return (number, "/min")
+        case .english: return (number, "bpm")
+        case .russian: return (number, "уд/мин")
+        }
+    }
+
     /// Ganze Prozent, abgerundet. Der kleine Zuschlag gleicht Rundungsfehler aus (5.700 / 10.000 · 100 ergibt
     /// 56,999…), damit dort 57 % stehen und nicht 56 %.
     public static func wholePercent(_ fraction: Double) -> Int {
@@ -72,15 +89,33 @@ public struct ActivityFormatter: Sendable {
         return "\(sign)\(abs(value).formatted(.number.locale(locale))) %"
     }
 
-    /// Kurzer Wochentag, z. B. `Mo`.
+    /// Kurzer Wochentag, z. B. `Mo`, `Mon`, `Пн`.
     public func weekdayShort(_ day: LocalDate) -> String {
-        dateStyle.weekday(.abbreviated).format(calendar.startOfDay(day))
-            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        Self.capitalizedFirst(
+            dateStyle.weekday(.abbreviated).format(calendar.startOfDay(day))
+                .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        )
     }
 
-    /// z. B. `Freitag, 16. Oktober`
+    /// Ein Buchstabe für den Wochentag, z. B. `M`, `D`, `M`, `D`, `F`, `S`, `S` bzw. `П`, `В`, `С` …
+    public func weekdayLetter(_ day: LocalDate) -> String {
+        Self.capitalizedFirst(dateStyle.weekday(.narrow).format(calendar.startOfDay(day)))
+    }
+
+    /// z. B. `Freitag, 16. Oktober`, `Friday, October 16`, `Пятница, 16 октября`
     public func dayLong(_ day: LocalDate) -> String {
-        dateStyle.weekday(.wide).day().month(.wide).format(calendar.startOfDay(day))
+        Self.capitalizedFirst(dateStyle.weekday(.wide).day().month(.wide).format(calendar.startOfDay(day)))
+    }
+
+    /// z. B. `Samstag, 17. Oktober 2026`, `Saturday, October 17, 2026`, `Суббота, 17 октября 2026 г.`
+    public func dayLongWithYear(_ day: LocalDate) -> String {
+        Self.capitalizedFirst(dateStyle.weekday(.wide).day().month(.wide).year().format(calendar.startOfDay(day)))
+    }
+
+    /// Erster Wochentag im Kalender (1 = Sonntag, 2 = Montag): in allen Sprachen Montag – wie die Referenz (Mo–So)
+    /// und wie Wochenstatistik, „Deine Woche“ und Streak, die alle mit Montag beginnen.
+    public var firstWeekday: Int {
+        2
     }
 
     /// z. B. `16. Okt.`
@@ -90,7 +125,7 @@ public struct ActivityFormatter: Sendable {
 
     /// Wochentag, z. B. `Montag`
     public func weekdayLong(_ day: LocalDate) -> String {
-        dateStyle.weekday(.wide).format(calendar.startOfDay(day))
+        Self.capitalizedFirst(dateStyle.weekday(.wide).format(calendar.startOfDay(day)))
     }
 
     /// z. B. `Mo., 12. Okt.`
@@ -98,9 +133,14 @@ public struct ActivityFormatter: Sendable {
         dateStyle.weekday(.abbreviated).day().month(.abbreviated).format(calendar.startOfDay(day))
     }
 
-    /// z. B. `Oktober 2026`
+    /// z. B. `Oktober 2026`, `October 2026`, `Октябрь 2026` (Monatsname im Nominativ).
     public func monthYear(_ day: LocalDate) -> String {
-        dateStyle.month(.wide).year().format(calendar.startOfDay(day))
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.calendar = calendar.calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "LLLL yyyy"
+        return Self.capitalizedFirst(formatter.string(from: calendar.startOfDay(day)))
     }
 
     /// Zeitraum, z. B. `12.–18. Okt.` / `Oct 12–18` / `12–18 окт.` oder `28. Sept. – 4. Okt.`
@@ -120,9 +160,15 @@ public struct ActivityFormatter: Sendable {
         dateStyle.hour().minute().format(date)
     }
 
-    /// Sprache des Formats (bestimmt Einheiten und die Schreibweise von Zeiträumen).
-    private var language: AppLanguage {
+    /// Sprache des Formats (bestimmt Einheiten, Wochenbeginn und die Schreibweise von Zeiträumen).
+    public var language: AppLanguage {
         AppLanguage(rawValue: locale.language.languageCode?.identifier ?? "") ?? .german
+    }
+
+    /// Großer Anfangsbuchstabe für Datumsangaben am Zeilenanfang (Russisch schreibt Wochentage und Monate klein).
+    static func capitalizedFirst(_ text: String) -> String {
+        guard let first = text.first else { return text }
+        return first.uppercased() + text.dropFirst()
     }
 
     private var units: (kilometers: String, kilocalories: String, minutes: String) {

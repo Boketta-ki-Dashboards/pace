@@ -34,13 +34,14 @@ public struct RegionHierarchy: Hashable, Sendable, Identifiable {
         return scopes
     }
 
-    /// Zweite Zeile in Suchergebnissen, z. B. `Hessen · Landkreis Darmstadt-Dieburg`.
+    /// Zweite Zeile in Suchergebnissen, z. B. `Hessen · Landkreis Darmstadt-Dieburg` (Namen bleiben amtlich).
     public var subtitle: String {
         if state.municipalityCount <= 1 {
-            return "Stadtstaat"
+            return PaceLocalization.text(de: "Stadtstaat", en: "City-state", ru: "Город-земля")
         }
         if district.municipalityCount <= 1 {
-            return "\(state.name) · kreisfreie Stadt"
+            let kind = PaceLocalization.text(de: "kreisfreie Stadt", en: "independent city", ru: "внерайонный город")
+            return "\(state.name) · \(kind)"
         }
         return "\(state.name) · \(district.displayName)"
     }

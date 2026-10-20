@@ -1,4 +1,5 @@
 import DesignSystem
+import PaceCore
 import SwiftUI
 
 /// Container für die Onboarding-Schritte.
@@ -35,7 +36,11 @@ struct OnboardingStepHeader: View {
         VStack(alignment: .leading, spacing: PaceSpacing.xs) {
             PaceWordmark(height: 30)
                 .padding(.bottom, PaceSpacing.s)
-            Text("Schritt \(step) von \(OnboardingViewModel.stepCount)")
+            Text(PaceLocalization.text(
+                de: "Schritt \(step) von \(OnboardingViewModel.stepCount)",
+                en: "Step \(step) of \(OnboardingViewModel.stepCount)",
+                ru: "Шаг \(step) из \(OnboardingViewModel.stepCount)"
+            ))
                 .font(PaceFont.caption.weight(.semibold))
                 .foregroundStyle(PaceColor.accent)
             Text(title)

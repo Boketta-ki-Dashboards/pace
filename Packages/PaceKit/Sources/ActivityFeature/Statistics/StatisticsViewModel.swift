@@ -155,6 +155,20 @@ public final class StatisticsViewModel {
         anchor = (first...last).contains(today) ? today : min(next, today)
     }
 
+    /// Tagesdetails des angezeigten Tages (Tagesansicht → „Alle Tagesdetails“). Nutzt denselben Verlauf.
+    public func dayDetails(for day: LocalDate) -> DayDetailsViewModel {
+        DayDetailsViewModel(
+            day: day,
+            origin: .statistics,
+            streak: streak,
+            activityData: activityData,
+            live: live,
+            calendar: calendar,
+            formatter: formatter,
+            now: now
+        )
+    }
+
     /// Beim Erscheinen: Verlauf laden, falls nötig.
     public func loadIfNeeded() async {
         await streak.loadIfNeeded()

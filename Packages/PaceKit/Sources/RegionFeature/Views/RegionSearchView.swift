@@ -18,7 +18,7 @@ public struct RegionSearchView: View {
             // Die Auswahl bleibt immer sichtbar, auch während einer neuen Suche – gespeichert wird genau sie.
             if let selection = viewModel.selection {
                 VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
-                    Text("Ausgewählt")
+                    Text(PaceLocalization.text(de: "Ausgewählt", en: "Selected", ru: "Выбрано"))
                         .font(PaceFont.caption.weight(.semibold))
                         .foregroundStyle(PaceColor.textSecondary)
                     RegionResultRow(hierarchy: selection, isSelected: true) {}
@@ -36,7 +36,10 @@ public struct RegionSearchView: View {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(PaceColor.textSecondary)
                 .accessibilityHidden(true)
-            TextField("Gemeinde oder Stadt suchen", text: $query)
+            TextField(
+                PaceLocalization.text(de: "Gemeinde oder Stadt suchen", en: "Search municipality or city", ru: "Найти город или общину"),
+                text: $query
+            )
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
@@ -48,7 +51,7 @@ public struct RegionSearchView: View {
                         .foregroundStyle(PaceColor.textSecondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Suche löschen")
+                .accessibilityLabel(PaceLocalization.text(de: "Suche löschen", en: "Clear search", ru: "Очистить поиск"))
             }
         }
         .padding(PaceSpacing.s)
@@ -60,7 +63,11 @@ public struct RegionSearchView: View {
         switch viewModel.state {
         case .idle:
             if viewModel.selection == nil {
-                hint("Gib mindestens zwei Buchstaben ein, z. B. „Pfungstadt“.")
+                hint(PaceLocalization.text(
+                    de: "Gib mindestens zwei Buchstaben ein, z. B. „Pfungstadt“.",
+                    en: "Enter at least two letters, e.g. “Pfungstadt”.",
+                    ru: "Введи хотя бы две буквы, например «Pfungstadt»."
+                ))
             }
 
         case .searching:
@@ -81,12 +88,16 @@ public struct RegionSearchView: View {
             }
 
         case .noResults(let query):
-            hint("Keine Gemeinde gefunden für „\(query)“. Prüfe die Schreibweise.")
+            hint(PaceLocalization.text(
+                de: "Keine Gemeinde gefunden für „\(query)“. Prüfe die Schreibweise.",
+                en: "No municipality found for “\(query)”. Check the spelling.",
+                ru: "По запросу «\(query)» ничего не найдено. Проверь написание."
+            ))
 
         case .failed(let message):
             VStack(alignment: .leading, spacing: PaceSpacing.xs) {
                 hint(message)
-                Button("Erneut versuchen") {
+                Button(PaceLocalization.text(de: "Erneut versuchen", en: "Try again", ru: "Повторить")) {
                     Task { await viewModel.retry() }
                 }
                 .buttonStyle(.paceSecondary)

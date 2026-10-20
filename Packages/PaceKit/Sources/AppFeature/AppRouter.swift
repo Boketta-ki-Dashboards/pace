@@ -123,7 +123,8 @@ public final class AppRouter {
             store: store,
             leaderboards: services.leaderboards,
             syncing: sync,
-            refreshActivity: { [weak home] in await home?.refreshForRanking() }
+            refreshActivity: { [weak home] in await home?.refreshForRanking() },
+            social: services.social
         )
         let navigation = MainNavigation()
         let social = SocialViewModel(

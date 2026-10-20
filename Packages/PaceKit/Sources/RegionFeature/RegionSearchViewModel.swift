@@ -83,8 +83,16 @@ public final class RegionSearchViewModel: Identifiable {
 
     static func message(for error: Error) -> String {
         if error as? RegionError == .network {
-            return "Keine Verbindung. Prüfe deine Internetverbindung und versuche es erneut."
+            return PaceLocalization.text(
+                de: "Keine Verbindung. Prüfe deine Internetverbindung und versuche es erneut.",
+                en: "No connection. Check your internet connection and try again.",
+                ru: "Нет соединения. Проверь подключение к интернету и попробуй ещё раз."
+            )
         }
-        return "Die Suche ist gerade nicht möglich. Bitte versuche es erneut."
+        return PaceLocalization.text(
+            de: "Die Suche ist gerade nicht möglich. Bitte versuche es erneut.",
+            en: "Search isn't possible right now. Please try again.",
+            ru: "Поиск сейчас недоступен. Попробуй ещё раз."
+        )
     }
 }

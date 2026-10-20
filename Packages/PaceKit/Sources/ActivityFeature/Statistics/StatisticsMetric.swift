@@ -13,9 +13,9 @@ public enum StatisticsPeriod: String, CaseIterable, Identifiable, Hashable, Send
 
     public var title: String {
         switch self {
-        case .day: "Tag"
-        case .week: "Woche"
-        case .month: "Monat"
+        case .day: PaceLocalization.text(de: "Tag", en: "Day", ru: "День")
+        case .week: PaceLocalization.text(de: "Woche", en: "Week", ru: "Неделя")
+        case .month: PaceLocalization.text(de: "Monat", en: "Month", ru: "Месяц")
         }
     }
 }
@@ -31,9 +31,9 @@ public enum StatisticsMetric: String, CaseIterable, Identifiable, Hashable, Send
 
     public var title: String {
         switch self {
-        case .steps: "Schritte"
-        case .distance: "Distanz"
-        case .activeEnergy: "Kalorien"
+        case .steps: PaceLocalization.text(de: "Schritte", en: "Steps", ru: "Шаги")
+        case .distance: PaceLocalization.text(de: "Distanz", en: "Distance", ru: "Дистанция")
+        case .activeEnergy: PaceLocalization.text(de: "Kalorien", en: "Calories", ru: "Калории")
         }
     }
 
@@ -45,12 +45,23 @@ public enum StatisticsMetric: String, CaseIterable, Identifiable, Hashable, Send
         }
     }
 
-    /// Einheit hinter der großen Zahl.
+    /// Einheit hinter der großen Zahl (für Schritte in der Mehrzahl, siehe ``unit(for:)``).
     public var unit: String {
+        unit(for: 5)
+    }
+
+    /// Einheit passend zum Wert, z. B. `1 Schritt`, `2 шага`, `5 шагов`.
+    public func unit(for value: Double) -> String {
         switch self {
-        case .steps: "Schritte"
-        case .distance: "km"
-        case .activeEnergy: "kcal"
+        case .steps:
+            PaceLocalization.plural(
+                Int(value.rounded()),
+                de: ("Schritt", "Schritte"),
+                en: ("step", "steps"),
+                ru: ("шаг", "шага", "шагов")
+            )
+        case .distance: PaceLocalization.text(de: "km", en: "km", ru: "км")
+        case .activeEnergy: PaceLocalization.text(de: "kcal", en: "kcal", ru: "ккал")
         }
     }
 
@@ -83,7 +94,7 @@ public enum StatisticsMetric: String, CaseIterable, Identifiable, Hashable, Send
 
     /// Zahl mit Einheit, z. B. `8.742 Schritte`, `6,4 km`.
     public func formatWithUnit(_ value: Double, formatter: ActivityFormatter) -> String {
-        "\(format(value, formatter: formatter)) \(unit)"
+        "\(format(value, formatter: formatter)) \(unit(for: value))"
     }
 
     /// Wert für die Diagrammachse (Schritte, km, kcal).

@@ -64,27 +64,47 @@ public final class ProfileSetupViewModel {
     public var usernameMessage: String? {
         switch usernameStatus {
         case .empty, .unchecked: nil
-        case .invalid(.tooShort): "Mindestens \(UsernameRules.minLength) Zeichen."
-        case .invalid(.tooLong): "Höchstens \(UsernameRules.maxLength) Zeichen."
-        case .invalid(.invalidCharacters): "Nur Buchstaben ohne Umlaute, Ziffern und _ sind erlaubt."
-        case .invalid(.reserved): "Dieser Name ist reserviert."
-        case .checking: "Wird geprüft …"
-        case .available: "Verfügbar"
-        case .taken: "Dieser Benutzername ist schon vergeben."
+        case .invalid(.tooShort): OnboardingTexts.atLeast(UsernameRules.minLength)
+        case .invalid(.tooLong): OnboardingTexts.atMost(UsernameRules.maxLength)
+        case .invalid(.invalidCharacters):
+            PaceLocalization.text(
+                de: "Nur Buchstaben ohne Umlaute, Ziffern und _ sind erlaubt.",
+                en: "Only letters without umlauts, digits and _ are allowed.",
+                ru: "Разрешены только латинские буквы без умлаутов, цифры и _."
+            )
+        case .invalid(.reserved):
+            PaceLocalization.text(de: "Dieser Name ist reserviert.", en: "This name is reserved.", ru: "Это имя зарезервировано.")
+        case .checking: PaceLocalization.text(de: "Wird geprüft …", en: "Checking …", ru: "Проверяем…")
+        case .available: PaceLocalization.text(de: "Verfügbar", en: "Available", ru: "Свободно")
+        case .taken:
+            PaceLocalization.text(
+                de: "Dieser Benutzername ist schon vergeben.",
+                en: "This username is already taken.",
+                ru: "Это имя пользователя уже занято."
+            )
         }
     }
 
     /// Dauerhafter Hinweis zu den Regeln für Benutzernamen.
     public var usernameRulesHint: String {
-        "\(UsernameRules.minLength)–\(UsernameRules.maxLength) Zeichen: Buchstaben ohne Umlaute, Ziffern und _. "
-            + "Groß- und Kleinschreibung zählen nicht als Unterschied."
+        let range = "\(UsernameRules.minLength)–\(UsernameRules.maxLength)"
+        return PaceLocalization.text(
+            de: "\(range) Zeichen: Buchstaben ohne Umlaute, Ziffern und _. Groß- und Kleinschreibung zählen nicht als Unterschied.",
+            en: "\(range) characters: letters without umlauts, digits and _. Upper and lower case count as the same.",
+            ru: "\(range) символов: латинские буквы без умлаутов, цифры и _. Регистр букв не учитывается."
+        )
     }
 
     /// Hinweis unter dem Anzeigenamen. Ein leeres Feld bekommt keinen Hinweis, nur einen deaktivierten Button.
     public var displayNameMessage: String? {
         switch DisplayNameRules.violation(for: displayName) {
-        case .tooLong: "Höchstens \(DisplayNameRules.maxLength) Zeichen."
-        case .invalidCharacters: "Der Name enthält ungültige Zeichen."
+        case .tooLong: OnboardingTexts.atMost(DisplayNameRules.maxLength)
+        case .invalidCharacters:
+            PaceLocalization.text(
+                de: "Der Name enthält ungültige Zeichen.",
+                en: "The name contains invalid characters.",
+                ru: "Имя содержит недопустимые символы."
+            )
         case .empty, nil: nil
         }
     }
@@ -150,13 +170,58 @@ public final class ProfileSetupViewModel {
     static func message(for error: Error) -> String {
         switch error as? ProfileError {
         case .invalidUsername:
-            "Dieser Benutzername ist nicht erlaubt. Bitte wähle einen anderen."
+            PaceLocalization.text(
+                de: "Dieser Benutzername ist nicht erlaubt. Bitte wähle einen anderen.",
+                en: "This username isn't allowed. Please choose another one.",
+                ru: "Это имя пользователя недопустимо. Выбери другое."
+            )
         case .invalidDisplayName:
-            "Dieser Anzeigename ist nicht erlaubt. Bitte wähle einen anderen."
+            PaceLocalization.text(
+                de: "Dieser Anzeigename ist nicht erlaubt. Bitte wähle einen anderen.",
+                en: "This display name isn't allowed. Please choose another one.",
+                ru: "Это имя недопустимо. Выбери другое."
+            )
         case .network:
-            "Keine Verbindung. Prüfe deine Internetverbindung und versuche es erneut."
+            OnboardingTexts.noConnection
         default:
-            "Dein Profil konnte nicht angelegt werden. Bitte versuche es erneut."
+            PaceLocalization.text(
+                de: "Dein Profil konnte nicht angelegt werden. Bitte versuche es erneut.",
+                en: "Your profile couldn't be created. Please try again.",
+                ru: "Не удалось создать профиль. Попробуй ещё раз."
+            )
         }
+    }
+}
+
+/// Wiederkehrende Texte des Onboardings – in der Sprache der App.
+enum OnboardingTexts {
+    static var noConnection: String {
+        PaceLocalization.text(
+            de: "Keine Verbindung. Prüfe deine Internetverbindung und versuche es erneut.",
+            en: "No connection. Check your internet connection and try again.",
+            ru: "Нет соединения. Проверь подключение к интернету и попробуй ещё раз."
+        )
+    }
+
+    static var next: String { PaceLocalization.text(de: "Weiter", en: "Continue", ru: "Далее") }
+
+    /// „Mindestens 3 Zeichen.“
+    static func atLeast(_ count: Int) -> String {
+        PaceLocalization.plural(
+            count,
+            de: ("Mindestens \(count) Zeichen.", "Mindestens \(count) Zeichen."),
+            en: ("At least \(count) character.", "At least \(count) characters."),
+            ru: ("Не менее \(count) символа.", "Не менее \(count) символов.", "Не менее \(count) символов.")
+        )
+    }
+
+    /// „Höchstens 20 Zeichen.“
+    static func atMost(_ count: Int) -> String {
+        PaceLocalization.plural(
+            count,
+            de: ("Höchstens \(count) Zeichen.", "Höchstens \(count) Zeichen."),
+            en: ("At most \(count) character.", "At most \(count) characters."),
+            ru: ("Не более \(count) символа.", "Не более \(count) символов.", "Не более \(count) символов.")
+        )
     }
 }

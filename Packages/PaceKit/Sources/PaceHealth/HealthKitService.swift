@@ -4,8 +4,9 @@ import PaceCore
 
 /// Einziger Zugangspunkt der App zu HealthKit.
 ///
-/// Liest ausschließlich Bewegungsdaten (Schritte, Distanz, aktive Energie, Stockwerke, Trainingsminuten) und schreibt
-/// nichts in Health. Siehe docs/HEALTH_DATA.md.
+/// Liest Bewegungsdaten (Schritte, Distanz, aktive Energie, Stockwerke, Trainingsminuten) und schreibt nichts in Health.
+/// Ruhepuls und Ø Puls beim Gehen liest Pace nur nach einer eigenen, ausdrücklich angestoßenen Freigabe in den
+/// Tagesdetails; sie bleiben auf dem Gerät. Siehe docs/HEALTH_DATA.md.
 ///
 /// `@unchecked Sendable`: Der einzige Zustand ist die unveränderliche Referenz auf `HKHealthStore`, der laut Apple
 /// threadsicher ist und app-weit als einzelne Instanz verwendet werden soll.
@@ -16,9 +17,14 @@ public final class HealthKitService: @unchecked Sendable {
         healthStore = HKHealthStore()
     }
 
-    /// Alle Typen, für die Pace Lesezugriff anfragt.
+    /// Alle Typen, für die Pace beim ersten Start Lesezugriff anfragt (nur Bewegungsdaten).
     static var readTypes: Set<HKObjectType> {
         Set(HealthMetricMapping.quantityTypes)
+    }
+
+    /// Optionale Herzwerte – eigene Abfrage, nur auf Wunsch (nie beim App-Start, kein Hintergrund-Observer).
+    static var heartRateReadTypes: Set<HKObjectType> {
+        [HKQuantityType(.restingHeartRate), HKQuantityType(.walkingHeartRateAverage)]
     }
 }
 
@@ -176,6 +182,70 @@ extension HealthKitService: ActivityDataProviding {
         healthStore.execute(query)
 
         return stream
+    }
+}
+
+// MARK: - Optionale Herzwerte
+
+extension HealthKitService {
+    public func heartRateAccess() async -> HeartRateAccess {
+        guard isHealthDataAvailable else { return .unavailable }
+        do {
+            let status: HKAuthorizationRequestStatus = try await withCheckedThrowingContinuation { continuation in
+                healthStore.getRequestStatusForAuthorization(toShare: [], read: Self.heartRateReadTypes) { requestStatus, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: requestStatus)
+                    }
+                }
+            }
+            // Ob zugestimmt wurde, verrät HealthKit bei Lesezugriffen nicht – nur, ob schon gefragt wurde.
+            switch status {
+            case .unnecessary:
+                return .requested
+            case .shouldRequest, .unknown:
+                return .notRequested
+            @unknown default:
+                return .notRequested
+            }
+        } catch {
+            return .unavailable
+        }
+    }
+
+    public func requestHeartRateAccess() async throws {
+        guard isHealthDataAvailable else { throw HealthDataError.healthDataUnavailable }
+
+        do {
+            try await healthStore.requestAuthorization(toShare: [], read: Self.heartRateReadTypes)
+        } catch {
+            throw HealthKitErrorMapping.map(error, fallback: HealthDataError.authorizationRequestFailed)
+        }
+    }
+
+    public func dailyHeartRate(on day: LocalDate, calendar: ActivityCalendar) async throws -> DailyHeartRate {
+        let interval = calendar.interval(for: day)
+        let resting = try await averageBeatsPerMinute(of: .restingHeartRate, in: interval)
+        let walking = try await averageBeatsPerMinute(of: .walkingHeartRateAverage, in: interval)
+        return DailyHeartRate(restingBeatsPerMinute: resting, walkingAverageBeatsPerMinute: walking)
+    }
+
+    /// Durchschnitt der Samples im Intervall in Schlägen pro Minute; `nil` ohne Samples (oder ohne Zustimmung).
+    private func averageBeatsPerMinute(of identifier: HKQuantityTypeIdentifier, in interval: DateInterval) async throws -> Double? {
+        let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: [])
+        let descriptor = HKStatisticsQueryDescriptor(
+            predicate: .quantitySample(type: HKQuantityType(identifier), predicate: predicate),
+            options: .discreteAverage
+        )
+        do {
+            let statistics = try await descriptor.result(for: healthStore)
+            return statistics?.averageQuantity()?.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
+        } catch let error as HKError where error.code == .errorNoData {
+            return nil
+        } catch {
+            throw HealthKitErrorMapping.map(error, fallback: HealthDataError.queryFailed)
+        }
     }
 }
 
