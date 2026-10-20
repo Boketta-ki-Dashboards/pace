@@ -343,7 +343,7 @@ private struct HomeGalleryCategoryTile: View {
                         .fixedSize(horizontal: false, vertical: true)
                     if let subtitle = note ?? category.gallerySubtitle {
                         Text(subtitle)
-                            .font(.system(size: 10.5))
+                            .font(.caption2)
                             .foregroundStyle(isSelected ? PaceColor.onSelection.opacity(0.8) : PaceColor.textSecondary)
                             .lineLimit(2)
                             .minimumScaleFactor(0.8)

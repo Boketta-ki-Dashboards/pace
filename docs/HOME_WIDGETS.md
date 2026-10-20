@@ -65,7 +65,7 @@ nicht betroffen (eigene Regeln).
   oben rechts „Größe auswählen“ mit Menü Klein/Mittel/Groß/Max (Haken an der aktuellen, nur unterstützte Größen) und
   Ziehgriff (sechs Punkte). Keine Ziehecken.
 - Umsortieren per Drag & Drop (`onDrag`/`onDrop`, iOS 17): sobald ein Widget über einem anderen schwebt, tauschen sie
-  die Plätze; Haptik bei jeder Änderung. Wird außerhalb eines Widgets abgelegt (Kopf, Zwischenräume), endet das
+  die Plätze; Haptik bei jeder Änderung. Wird außerhalb eines Widgets abgelegt (Kopf, Zwischenräume, freie Fläche darunter), endet das
   Ziehen ebenfalls sauber (`endDragging()`); Text aus anderen Apps wird nicht angenommen. VoiceOver-Alternative:
   Aktionen „Nach oben/unten verschieben“, Größen und Entfernen am Titel jedes Widgets.
 - „Größe auswählen“ trägt das Symbol aus dem Anpassen-Design (`HomeSizeGlyph`: Quadrat mit offener Ecke und

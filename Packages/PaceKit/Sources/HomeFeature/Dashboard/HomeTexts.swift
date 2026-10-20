@@ -110,7 +110,7 @@ public enum HomeTexts {
 
     /// z. B. „„Deine Woche“ entfernt“.
     public static func removed(_ title: String) -> String {
-        PaceLocalization.text(de: "„\(title)“ entfernt", en: "“\(title)” removed", ru: "«\(title)» удалён")
+        PaceLocalization.text(de: "„\(title)“ entfernt", en: "“\(title)” removed", ru: "Виджет «\(title)» удалён")
     }
 
     /// Begrüßung, z. B. `Hi Niklas`.

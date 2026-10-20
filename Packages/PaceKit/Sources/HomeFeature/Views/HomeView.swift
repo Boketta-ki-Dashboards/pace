@@ -32,6 +32,8 @@ public struct HomeView: View {
                 .padding(.bottom, PaceSpacing.l)
             }
             .refreshable { [viewModel] in await viewModel.refresh() }
+            // Ablage auf freier Fläche unter den Widgets beendet das Ziehen ebenfalls.
+            .onDrop(of: [UTType.text], delegate: HomeDragEndDropDelegate(viewModel: viewModel))
             .paceScreenBackground()
             .paceRootPage()
             .overlay(alignment: .bottom) {
