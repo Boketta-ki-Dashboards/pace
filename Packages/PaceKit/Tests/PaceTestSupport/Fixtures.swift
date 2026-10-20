@@ -31,9 +31,12 @@ public struct UnexpectedStateError: Error {
 }
 
 /// Wartet, bis `condition` erfüllt ist, und gibt dabei den Main Actor frei.
+///
+/// Die Grenze ist großzügig: Ist die Bedingung erfüllt, endet das Warten sofort; auf einem stark ausgelasteten
+/// Simulator in der CI (viele Testsuites und Snapshot-Bilder parallel) dauern einzelne Schritte aber mehrere Sekunden.
 @MainActor
 public func waitUntil(
-    timeout: Duration = .seconds(2),
+    timeout: Duration = .seconds(10),
     _ condition: () -> Bool
 ) async throws {
     let deadline = ContinuousClock.now + timeout
