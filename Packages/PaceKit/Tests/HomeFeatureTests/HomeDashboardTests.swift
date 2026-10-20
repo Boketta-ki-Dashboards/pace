@@ -17,11 +17,11 @@ struct HomeSettingsTests {
     @Test func defaultLayoutHasAllModulesInMediumSize() {
         let settings = HomeSettings(store: InMemoryHomePreferencesStore())
 
-        #expect(kinds(settings) == [.regionRanks, .stepsToday, .week, .streak, .neighborhood, .friends, .groups])
+        #expect(kinds(settings) == [.regionRanks, .stepsToday, .week, .neighborhood, .friends, .groups, .streak])
         #expect(settings.modules.allSatisfy { $0.size == .medium })
         #expect(settings.modules.first { $0.kind == .neighborhood }?.regionLevel == .municipality)
         #expect(settings.modules.first { $0.kind == .week }?.regionLevel == nil)
-        #expect(settings.addableKinds == [.neighborhood])
+        #expect(settings.addableKinds == [.regionRanks, .neighborhood, .friends, .groups, .activity, .calendar])
     }
 
     @Test func versionOneLayoutIsMigrated() throws {
@@ -101,10 +101,10 @@ struct HomeSettingsTests {
         #expect(kinds(settings).prefix(2) == [.stepsToday, .regionRanks])
 
         settings.moveModules(fromOffsets: [6], toOffset: 2)
-        #expect(kinds(settings) == [.stepsToday, .regionRanks, .groups, .week, .streak, .neighborhood, .friends])
+        #expect(kinds(settings) == [.stepsToday, .regionRanks, .streak, .week, .neighborhood, .friends, .groups])
 
         settings.resetLayout()
-        #expect(kinds(settings) == [.regionRanks, .stepsToday, .week, .streak, .neighborhood, .friends, .groups])
+        #expect(kinds(settings) == [.regionRanks, .stepsToday, .week, .neighborhood, .friends, .groups, .streak])
     }
 
     @Test func storedPreferencesAreRepaired() throws {
