@@ -128,7 +128,7 @@ public final class AppRouter {
         let navigation = MainNavigation()
         let social = SocialViewModel(
             repository: services.social,
-            chats: ChatListViewModel(repository: services.chat, media: services.media),
+            chats: ChatListViewModel(repository: services.chat, media: services.media, social: services.social),
             media: services.media,
             ownUsername: { [store] in store.profile.username }
         )

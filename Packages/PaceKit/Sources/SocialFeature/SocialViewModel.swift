@@ -171,9 +171,8 @@ public final class SocialViewModel {
     public var matchingConversations: [ConversationSummary] {
         let query = normalizedFilter
         guard !query.isEmpty else { return [] }
-        return chats.conversations.filter { conversation in
-            Self.matches(conversation.title, query) || conversation.peer.map { Self.matches($0.username, query) } == true
-        }
+        // Gleiche Suche wie in der Chatliste (Name, @Benutzername, Anzeigename des Gegenübers, ohne Akzente).
+        return chats.conversations(matching: filterText)
     }
 
     static func normalizedQuery(_ text: String) -> String {

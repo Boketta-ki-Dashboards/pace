@@ -358,9 +358,10 @@ struct GroupAvatar: View {
         } else {
             Image(systemName: kind.systemImage)
                 .font(.system(size: size * 0.38, weight: .semibold))
-                .foregroundStyle(PaceColor.accentStrong)
+                // Im Dunkelmodus wären selectionFill und accentStrong fast gleich hell – daher accentSoft/accent.
+                .foregroundStyle(PaceColor.accent)
                 .frame(width: size, height: size)
-                .background(PaceColor.selectionFill, in: Circle())
+                .background(PaceColor.accentSoft, in: Circle())
                 .accessibilityHidden(true)
         }
     }

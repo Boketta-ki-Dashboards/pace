@@ -63,6 +63,7 @@ public struct SocialView: View {
             .navigationDestination(for: ChatTarget.self) { target in
                 ChatView(
                     viewModel: viewModel.chats.chat(for: target),
+                    onOpenRoute: { path.append($0) },
                     onOpenProfile: { path.append(SocialRoute.profile($0)) }
                 )
             }

@@ -125,6 +125,9 @@ public final class ShareProfileViewModel {
             return true
         } catch let error as SocialError where error == .unavailable {
             errorMessage = SocialText.shareChatsUnavailable
+        } catch let error as ProfileShareError {
+            // Teilweise gesendet: nennt, an welche Chats es nicht ging.
+            errorMessage = error.message
         } catch {
             errorMessage = SocialText.actionMessage(for: error)
         }
