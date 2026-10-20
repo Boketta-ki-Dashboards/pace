@@ -328,26 +328,26 @@ private struct HomeGalleryCategoryTile: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: PaceSpacing.s) {
+            HStack(spacing: PaceSpacing.xs) {
                 Image(systemName: category.systemImage)
                     .font(.title3)
                     .foregroundStyle(isSelected ? PaceColor.onSelection : PaceColor.textPrimary)
-                    .frame(width: 28)
+                    .frame(width: 26)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
+                    // Einzelne lange Wörter („Wochenübersicht“) werden verkleinert statt mitten im Wort getrennt.
                     Text(category.galleryTitle)
                         .font(.system(.subheadline, weight: .medium))
                         .foregroundStyle(isSelected ? PaceColor.onSelection : PaceColor.textPrimary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.85)
+                        .lineLimit(category.galleryTitle.contains(" ") ? 2 : 1)
+                        .minimumScaleFactor(0.7)
                         .fixedSize(horizontal: false, vertical: true)
                     if let subtitle = note ?? category.gallerySubtitle {
                         Text(subtitle)
                             .font(.caption2)
                             .foregroundStyle(isSelected ? PaceColor.onSelection.opacity(0.8) : PaceColor.textSecondary)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.8)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                 }
                 Spacer(minLength: 0)
@@ -356,7 +356,7 @@ private struct HomeGalleryCategoryTile: View {
                     .foregroundStyle(isSelected ? PaceColor.onSelection : PaceColor.textSecondary)
                     .accessibilityHidden(true)
             }
-            .padding(.horizontal, PaceSpacing.s)
+            .padding(.horizontal, 10)
             .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
             .background(isSelected ? PaceColor.selectionFill : PaceColor.surface, in: RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous))
             .overlay(

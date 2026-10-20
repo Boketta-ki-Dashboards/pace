@@ -135,12 +135,13 @@ struct RegionRankCard: View {
                             .foregroundStyle(PaceColor.textSecondary)
                     }
                 }
+            // Ebenen sind einzelne Wörter („Bundesland“, „Landkreis“): verkleinern statt mitten im Wort trennen.
             Text(card.title)
                 .font(PaceFont.caption)
                 .foregroundStyle(PaceColor.textSecondary)
                 .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
+                .lineLimit(card.title.contains(" ") ? 2 : 1)
+                .minimumScaleFactor(0.65)
             Text(isLoading ? "…" : card.rankText)
                 .font(.system(.headline, weight: .bold))
                 .monospacedDigit()

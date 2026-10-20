@@ -264,10 +264,10 @@ struct HomeEditHeader: View {
     var body: some View {
         HStack(alignment: .center, spacing: PaceSpacing.xs) {
             Text(title)
-                .font(PaceFont.cardTitle)
+                .font(.system(.headline, weight: .semibold))
                 .foregroundStyle(PaceColor.textPrimary)
                 .lineLimit(2)
-                .minimumScaleFactor(0.85)
+                .minimumScaleFactor(0.8)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.leading, module.kind.isRemovable ? 20 : 0)
                 .accessibilityAddTraits(.isHeader)
@@ -296,7 +296,7 @@ struct HomeEditHeader: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
-                .font(.footnote.weight(.medium))
+                .font(.caption.weight(.medium))
                 .foregroundStyle(PaceColor.textSecondary)
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())

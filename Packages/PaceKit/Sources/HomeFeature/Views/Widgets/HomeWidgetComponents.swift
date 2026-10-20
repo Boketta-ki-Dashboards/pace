@@ -28,11 +28,14 @@ struct HomeWidgetTitleRow<Trailing: View>: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: PaceSpacing.xs) {
+            // 17 pt wie in den Referenzen (Bild 6 und 9), damit z. B. „Deine Schritte heute“ neben „Tagesziel ändern“
+            // in eine Zeile passt; längere Titel (Russisch) dürfen zweizeilig werden.
             Text(title)
-                .font(PaceFont.cardTitle)
+                .font(.system(.headline, weight: .semibold))
                 .foregroundStyle(PaceColor.textPrimary)
                 .multilineTextAlignment(.leading)
                 .lineLimit(2)
+                .minimumScaleFactor(0.85)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: PaceSpacing.xs)
