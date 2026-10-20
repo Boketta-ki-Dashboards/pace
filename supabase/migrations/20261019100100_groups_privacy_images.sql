@@ -8,8 +8,9 @@
 -- * groups.image_path: Gruppenbild im privaten Bucket „group-images“, immer im Ordner der Gruppen-ID. Ein Trigger
 --   prüft Ordner, Format und dass die Datei bereits hochgeladen ist.
 -- * social_create_group mit p_privacy und p_invitee_public_ids legt Gruppe, Eigentümer und Einladungen in einer
---   Transaktion an (nur Freunde, Limits wie bei social_invite_to_group). Die alte Fassung (5 Parameter) bleibt für
---   ältere App-Versionen erhalten und erstellt weiterhin Gruppen mit Code.
+--   Transaktion an (nur Freunde, höchstens 30 Einladungen – so viele wie das Einladungs-Rate-Limit je 24 h; reicht
+--   das Restkontingent nicht, limit_reached vor dem Anlegen). Die alte Fassung (5 Parameter) bleibt für ältere
+--   App-Versionen erhalten und erstellt weiterhin Gruppen mit Code.
 -- * social_update_group_details und social_set_group_image (nur owner).
 -- * Ausgaben enthalten image_path, privacy und Profilbilder (avatar_path) der Personen.
 -- =============================================================================================================
@@ -244,6 +245,43 @@ begin
 end;
 $$;
 
+-- Zählt p_count Aktionen auf einmal – wie private.consume_rate_limit (gleiche Tabelle, gleicher Advisory-Lock, also
+-- auch gegen parallele Einzelaufrufe derselben Aktion). Reicht das Restkontingent im Fenster nicht für alle, wird
+-- nichts gezählt und limit_reached geworfen: Die Anfrage als Ganzes ist zu groß, nicht bloß zu schnell.
+create function private.consume_rate_limit_batch(
+  p_user_id uuid,
+  p_action text,
+  p_count integer,
+  p_limit integer,
+  p_window interval
+)
+returns void
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if coalesce(p_count, 0) <= 0 then
+    return;
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended('pace.rate_limit:' || p_user_id::text || ':' || p_action, 0));
+
+  delete from private.rate_limit_events e
+   where e.user_id = p_user_id
+     and e.action = p_action
+     and e.created_at <= now() - p_window;
+
+  if (select count(*) from private.rate_limit_events e where e.user_id = p_user_id and e.action = p_action)
+     + p_count > p_limit then
+    raise exception 'limit_reached';
+  end if;
+
+  insert into private.rate_limit_events (user_id, action)
+  select p_user_id, p_action from generate_series(1, p_count);
+end;
+$$;
+revoke all on function private.consume_rate_limit_batch(uuid, text, integer, integer, interval)
+  from public, anon, authenticated;
+
 create function public.social_create_group(
   p_name text,
   p_description text,
@@ -279,23 +317,27 @@ begin
   if cardinality(v_invitee_ids) <> cardinality(v_requested) then
     raise exception 'not_found';
   end if;
-  -- Höchstens 49 Einladungen: zusammen mit dem Eigentümer passt dann jede eingeladene Person in die Gruppe.
-  if cardinality(v_invitee_ids) > 49 then
+  -- Höchstens 30 Einladungen – so viele erlaubt das Einladungs-Rate-Limit (30 je 24 h, wie
+  -- social_invite_to_group) an einem Tag. Mehr könnten nie alle verschickt werden.
+  if cardinality(v_invitee_ids) > 30 then
     raise exception 'limit_reached';
   end if;
 
   -- Alle Beteiligten in einem Aufruf sperren (feste Reihenfolge, kein Deadlock mit parallelen Freundschafts-RPCs).
   perform private.lock_users(array[v_me] || v_invitee_ids);
+  -- Einladen kann man nur eigene Freunde (Blockierungen beenden Freundschaften).
+  if exists (select 1 from unnest(v_invitee_ids) as i(id) where not private.are_friends(v_me, i.id)) then
+    raise exception 'not_found';
+  end if;
+  -- Alle Einladungen vorab zählen: Reicht das Restkontingent des Tages nicht, entsteht keine Gruppe
+  -- (limit_reached statt rate_limited mitten in der Schleife).
+  perform private.consume_rate_limit_batch(v_me, 'group_invite', cardinality(v_invitee_ids), 30, interval '24 hours');
+
   v_group_id := private.create_group(
     v_me, p_name, p_description, p_kind, p_daily_goal, p_time_zone, coalesce(p_privacy, 'invite_only')
   );
 
   foreach v_invitee_id in array v_invitee_ids loop
-    -- Einladen kann man nur eigene Freunde (Blockierungen beenden Freundschaften).
-    if not private.are_friends(v_me, v_invitee_id) then
-      raise exception 'not_found';
-    end if;
-    perform private.consume_rate_limit(v_me, 'group_invite', 30, interval '24 hours');
     insert into public.group_invitations (group_id, inviter_id, invitee_id) values (v_group_id, v_me, v_invitee_id);
   end loop;
 
@@ -306,7 +348,7 @@ $$;
 revoke all on function public.social_create_group(text, text, text, integer, text, text, uuid[]) from public, anon;
 grant execute on function public.social_create_group(text, text, text, integer, text, text, uuid[]) to authenticated;
 comment on function public.social_create_group(text, text, text, integer, text, text, uuid[]) is
-  'Pace: Gruppe mit Privatsphäre erstellen und Freunde einladen (eine Transaktion, max. 49 Einladungen) und summary liefern.';
+  'Pace: Gruppe mit Privatsphäre erstellen und Freunde einladen (eine Transaktion, max. 30 Einladungen und nur im Rahmen des Einladungs-Rate-Limits von 30 je 24 h, sonst limit_reached) und summary liefern.';
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- Gruppe bearbeiten und Gruppenbild

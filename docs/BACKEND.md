@@ -262,7 +262,7 @@ geschrieben wird ausschließlich über die RPCs (`security definer`, `set search
 | `social_find_profile(p_username)` | exakter Benutzername; respektiert Blockierungen (beide Richtungen). Exakt ist ein Profil auch bei `is_discoverable = false` auffindbar (Vertrag `UserProfile.isDiscoverable`) |
 | `social_public_profile(p_public_id, p_date)` | Felder von `PublicProfile`; Schritte heute/Woche und „Freunde seit“ **nur unter Freunden**; `is_blocked_by_me`. Wer mich blockiert hat: `not_found` |
 | `social_block_user`, `social_unblock_user`, `social_blocked_users` | Blockieren/Aufheben/Liste (Profilfelder + `blocked_at`) |
-| `social_create_group(…, p_privacy, p_invitee_public_ids)` | Gruppe samt Einladungen in **einer** Transaktion; nur Freunde einladbar (sonst `not_found`), höchstens 49 Eingeladene. Die alte Signatur ohne die beiden Parameter bleibt erhalten (`privacy = 'code'`) |
+| `social_create_group(…, p_privacy, p_invitee_public_ids)` | Gruppe samt Einladungen in **einer** Transaktion; nur Freunde einladbar (sonst `not_found`), höchstens 30 Eingeladene (wie in der App); das Einladungs-Kontingent wird vorab für alle Einladungen gemeinsam geprüft. Die alte Signatur ohne die beiden Parameter bleibt erhalten (`privacy = 'code'`) |
 | `social_update_group_details(p_group_id, p_name, p_description, p_kind, p_privacy)` | Name, Beschreibung, Art, Privatsphäre (nur owner) |
 | `social_set_group_image(p_group_id, p_path)` | Gruppenbild setzen oder mit `null` entfernen (nur owner; Pfad im Ordner der Gruppe, Datei muss existieren) |
 | `social_join_group(p_invite_code)` | ersetzt: nur `privacy = 'code'`; bei `invite_only` dieselbe Antwort wie bei falschem Code (`invalid_invite_code`) |
@@ -316,6 +316,14 @@ Gleitende Fenster je Nutzer und Aktion (`private.consume_rate_limit`, Advisory-L
   Gruppen-Streak zählen weiter alle Mitglieder – sonst könnte eine Blockierung die Gruppenwertung verfälschen.
 - Aufheben stellt nichts wieder her (keine Freundschaft, keine Anfragen).
 
+### Öffentliches Profil und Auffindbarkeit
+
+- `social_public_profile` ist begrenzt (120 Abrufe je 10 Minuten). Nicht auffindbare Profile (`is_discoverable =
+  false`) liefert es ohne Freundschaft nur mit Kontext: gemeinsame oder frühere Gruppe, Gruppeneinladung,
+  Privatchat, ein im Chat geteiltes Profil oder ein exakter Benutzernamen-Fund in den letzten 24 Stunden – sonst wie
+  „nicht gefunden“. So lassen sich Profile nicht über `public_id`s (z. B. aus Speicherpfaden) durchzählen.
+- `chat_send` teilt nur Profile, die die sendende Person selbst sehen darf.
+
 ### Storage
 
 Private Buckets (keine öffentlichen URLs); Upload, Download und Löschen laufen über die authentifizierte Storage-API
@@ -323,9 +331,9 @@ mit dem Access Token. Dateinamen sind zufällig (`<Ordner>/<UUID>.<Endung>`), Ü
 
 | Bucket | Grenze | Lesen | Schreiben | Löschen |
 |---|---|---|---|---|
-| `avatars` | 5 MB | alle Angemeldeten mit Profil, außer die Besitzerin hat sie blockiert | nur Ordner der eigenen `public_id` | nur eigener Ordner |
+| `avatars` | 5 MB | Fremde nur das **aktuelle** Profilbild (`profiles.avatar_path`), nicht wenn die Besitzerin sie blockiert hat; die Besitzerin ihren ganzen Ordner | nur Ordner der eigenen `public_id` | nur eigener Ordner, außer Dateien unter offener Meldung |
 | `group-images` | 5 MB | Mitglieder und Personen mit offener Einladung | owner der Gruppe (Ordner = `group_id`) | owner oder wer die Datei hochgeladen hat |
-| `chat-media` | 10 MB | wer die Unterhaltung lesen darf | wer in ihr senden darf (Ordner = `conversation_id`) | wer die Datei hochgeladen hat |
+| `chat-media` | 10 MB | wer die Unterhaltung lesen darf | wer in ihr senden darf (Ordner = `conversation_id`) | wer die Datei hochgeladen hat, außer Dateien unter offener Meldung |
 
 Erlaubte Formate (`allowed_mime_types`, wie `MediaRules`): `image/jpeg`, `image/png`, `image/gif`, `image/heic`,
 `image/webp`. Die Policies rufen `security definer`-Funktionen im Schema `pace_access` auf (nicht über die Data API
@@ -362,7 +370,11 @@ Upload (`SupabaseMediaRepository`), der Server erzwingt dieselben Grenzen.
 ### Moderation
 
 Meldungen landen in `public.reports` mit Status `open` und einem Schnappschuss des Ziels (`target_snapshot`), damit
-eine spätere Löschung die Prüfung nicht verhindert. Clients können Meldungen weder lesen noch ändern. Ablauf bis zu
+eine spätere Löschung die Prüfung nicht verhindert. **Beweissicherung:** Dateien, auf die eine offene Meldung
+(`open`/`reviewing`) zeigt (gemeldetes Profilbild, Chat-Bild, Gruppenbild), lassen sich über die Storage-Policies
+nicht löschen; `chat_delete_message` gibt sie nicht zur Löschung frei, und `account_own_media` lässt sie bei der
+Kontolöschung aus. Sie bleiben bis zur Moderationsentscheidung erhalten (Rechtsgrundlage etwa Art. 17 Abs. 3 lit. e
+DSGVO – **vom Betreiber zu prüfen**, ebenso die Aufbewahrungsfrist). Clients können Meldungen weder lesen noch ändern. Ablauf bis zu
 einem Moderationswerkzeug:
 
 1. Offene Meldungen sichtet eine berechtigte Person im Supabase-Dashboard (SQL Editor bzw. Table Editor mit
@@ -379,7 +391,7 @@ Die Sichtung ist bewusst nicht in der App: Es gibt keine Admin-Rolle im Client.
 
 ### Tests
 
-- **pgTAP** (`supabase/tests/09_…`–`13_…`, zusammen mit 01–08: 643 Prüfungen): Spalten und Rechte, Präfixsuche
+- **pgTAP** (`supabase/tests/09_…`–`13_…`, zusammen mit 01–08: 705 Prüfungen): Spalten und Rechte, Präfixsuche
   (Escaping, Mindestlänge, Limit, Auffindbarkeit, Blockierungen, Rate Limit), öffentliches Profil, Blockier-Wirkung,
   Gruppen-Privatsphäre und Einladungen beim Erstellen, Gruppenbild-Pfade, Chats (fremde Chats, Nicht-Mitglied,
   Austritt, Blockierung, Idempotenz, Pagination, Lesestand, Löschen, Rate Limit), Storage-Policies je Bucket,

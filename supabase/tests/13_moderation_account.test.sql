@@ -1,6 +1,6 @@
 -- Pace: Meldungen, Rückmeldungen, Datenexport, eigene Dateien und Konto löschen.
 begin;
-select plan(51);
+select plan(63);
 
 -- =============================================================================================================
 -- Struktur
@@ -179,10 +179,24 @@ select ok((select data::text not like '%jan.jpg%' from t_export), 'Export: keine
 
 select is(
   (select array_agg(e->>'bucket' || ':' || (e->>'path') order by e->>'bucket', e->>'path') from jsonb_array_elements(public.account_own_media()) e),
+  array['avatars:bd000000-0000-4000-8000-000000000001/ina.jpg', 'chat-media:dd000000-0000-4000-8000-000000000001/bild.jpg'],
+  'eigene Dateien ohne das Bild der gemeldeten Gruppe (bleibt bis zur Moderation)'
+);
+reset role;
+update public.reports set status = 'dismissed' where target_type = 'group';
+set local role authenticated;
+select is(
+  (select array_agg(e->>'bucket' || ':' || (e->>'path') order by e->>'bucket', e->>'path') from jsonb_array_elements(public.account_own_media()) e),
   array['avatars:bd000000-0000-4000-8000-000000000001/ina.jpg', 'chat-media:dd000000-0000-4000-8000-000000000001/bild.jpg',
         'group-images:cd000000-0000-4000-8000-000000000001/von-lou.jpg'],
-  'eigene Dateien inkl. Bilder eigener Gruppen'
+  'eigene Dateien inkl. Bilder eigener Gruppen (nach der Moderation)'
 );
+reset role;
+select is(
+  (select r.evidence_bucket || ':' || r.evidence_path from public.reports r where r.target_type = 'group'),
+  'group-images:cd000000-0000-4000-8000-000000000001/von-lou.jpg', 'Meldung merkt sich die gemeldete Datei'
+);
+set local role authenticated;
 select is(
   (select count(*)::int from generate_series(1, 4) n cross join lateral (select public.account_export() where n > 0) e), 4,
   'bis zu 5 Exporte je Stunde'
@@ -220,6 +234,89 @@ select ok(
   and not exists (select 1 from public.daily_activity where user_id = 'ad000000-0000-4000-8000-000000000001')
   and not exists (select 1 from public.friendships where user_a = 'ad000000-0000-4000-8000-000000000001' or user_b = 'ad000000-0000-4000-8000-000000000001'),
   'Meldungen, Rückmeldungen, Tageswerte und Freundschaften gelöscht'
+);
+
+-- =============================================================================================================
+-- Konto löschen (jan): Gruppenbilder aus eigenen Uploads und gemeldete Dateien
+-- =============================================================================================================
+
+-- kim besitzt drei Gruppen mit jan als Mitglied. Bild „von-jan“ (Gruppe 3) hat jan hochgeladen, als er owner war;
+-- „von-kim“ (Gruppe 4) stammt von kim; „beweis“ (Gruppe 5) stammt von jan und ist von kim gemeldet.
+reset role;
+insert into public.groups (id, name, kind, invite_code, created_by)
+values ('cd000000-0000-4000-8000-000000000003', 'Gruppe Drei', 'friends', 'GRUPPEDR', 'ad000000-0000-4000-8000-000000000003'),
+       ('cd000000-0000-4000-8000-000000000004', 'Gruppe Vier', 'friends', 'GRUPPEVR', 'ad000000-0000-4000-8000-000000000003'),
+       ('cd000000-0000-4000-8000-000000000005', 'Gruppe Fünf', 'friends', 'GRUPPEFN', 'ad000000-0000-4000-8000-000000000003');
+insert into public.group_goal_history (group_id, effective_from, daily_goal)
+select g, current_date - 5, 8000
+  from unnest(array['cd000000-0000-4000-8000-000000000003', 'cd000000-0000-4000-8000-000000000004',
+                    'cd000000-0000-4000-8000-000000000005']::uuid[]) g;
+insert into public.group_members (group_id, user_id, role)
+select g, u, case when u = 'ad000000-0000-4000-8000-000000000003'::uuid then 'owner' else 'member' end
+  from unnest(array['cd000000-0000-4000-8000-000000000003', 'cd000000-0000-4000-8000-000000000004',
+                    'cd000000-0000-4000-8000-000000000005']::uuid[]) g,
+       unnest(array['ad000000-0000-4000-8000-000000000003', 'ad000000-0000-4000-8000-000000000002']::uuid[]) u;
+insert into storage.objects (bucket_id, name, owner_id, metadata)
+values ('group-images', 'cd000000-0000-4000-8000-000000000003/von-jan.jpg', 'ad000000-0000-4000-8000-000000000002', '{"mimetype":"image/jpeg"}'),
+       ('group-images', 'cd000000-0000-4000-8000-000000000004/von-kim.jpg', 'ad000000-0000-4000-8000-000000000003', '{"mimetype":"image/jpeg"}'),
+       ('group-images', 'cd000000-0000-4000-8000-000000000005/beweis.jpg', 'ad000000-0000-4000-8000-000000000002', '{"mimetype":"image/jpeg"}');
+-- Löschen wie die Storage-API (die direkte Löschsperre von Supabase ist dafür aufgehoben); Policies greifen.
+create function pg_temp.delete_objects(p_bucket text, p_names text[]) returns integer language plpgsql as $$
+declare
+  v_count integer;
+begin
+  perform set_config('storage.allow_delete_query', 'true', true);
+  delete from storage.objects o where o.bucket_id = p_bucket and o.name = any (p_names);
+  get diagnostics v_count = row_count;
+  perform set_config('storage.allow_delete_query', 'false', true);
+  return v_count;
+end;
+$$;
+update public.groups g
+   set image_path = g.id || '/' || case g.name when 'Gruppe Drei' then 'von-jan.jpg' when 'Gruppe Vier' then 'von-kim.jpg' else 'beweis.jpg' end
+ where g.id in ('cd000000-0000-4000-8000-000000000003', 'cd000000-0000-4000-8000-000000000004', 'cd000000-0000-4000-8000-000000000005');
+set local role authenticated;
+select pg_temp.as_user(3);
+select lives_ok($$select public.social_report('group', 'cd000000-0000-4000-8000-000000000005', 'inappropriate')$$, 'kim meldet Gruppe 5 mit Bild');
+
+-- Wie die App: eigene Dateien ermitteln und über die Storage-API löschen (Policies greifen), dann Konto löschen.
+select pg_temp.as_user(2);
+create temporary table t_media (bucket text, path text) on commit drop;
+grant select, insert on t_media to authenticated;
+insert into t_media select e->>'bucket', e->>'path' from jsonb_array_elements(public.account_own_media()) e;
+select is(
+  (select array_agg(bucket || ':' || path order by bucket, path) from t_media),
+  array['avatars:bd000000-0000-4000-8000-000000000002/jan.jpg', 'group-images:cd000000-0000-4000-8000-000000000003/von-jan.jpg'],
+  'jan: eigene Dateien ohne die gemeldete'
+);
+select is(
+  pg_temp.delete_objects('group-images', array['cd000000-0000-4000-8000-000000000005/beweis.jpg']), 0,
+  'gemeldete Datei: Storage löscht nichts (kein Fehler, App überspringt)'
+);
+select is(
+  (select sum(pg_temp.delete_objects(m.bucket, array[m.path]))::int from t_media m), 2, 'eigene Dateien gelöscht'
+);
+select lives_ok($$select public.account_delete()$$, 'jan löscht sein Konto');
+reset role;
+select is(
+  (select image_path from public.groups where id = 'cd000000-0000-4000-8000-000000000003'), null,
+  'Verweis auf das gelöschte Bild aus eigenem Upload entfernt (fremde Gruppe)'
+);
+select is(
+  (select image_path from public.groups where id = 'cd000000-0000-4000-8000-000000000004'),
+  'cd000000-0000-4000-8000-000000000004/von-kim.jpg', 'Bilder anderer bleiben unverändert'
+);
+select is(
+  (select image_path from public.groups where id = 'cd000000-0000-4000-8000-000000000005'), null,
+  'gemeldetes Bild aus eigenem Upload: nicht mehr in der Gruppe gezeigt'
+);
+select ok(
+  exists (select 1 from storage.objects where bucket_id = 'group-images' and name = 'cd000000-0000-4000-8000-000000000005/beweis.jpg'),
+  'gemeldetes Bild bleibt bis zur Moderation erhalten'
+);
+select is(
+  (select r.target_snapshot->>'image_path' from public.reports r where r.target_id = 'cd000000-0000-4000-8000-000000000005'),
+  'cd000000-0000-4000-8000-000000000005/beweis.jpg', 'Meldung mit Schnappschuss bleibt bestehen'
 );
 
 -- Ohne Profil (abgebrochenes Onboarding) und ohne Anmeldung.

@@ -4,11 +4,16 @@
 -- * reports: Meldungen zu Personen, Nachrichten und Gruppen. Nur Ziele, die die meldende Person sehen darf; je
 --   Ziel höchstens eine offene Meldung pro Person; max. 10 je 24 h. Clients haben keinen Lesezugriff – bearbeitet
 --   wird außerhalb der App (Moderationsprozess in docs/BACKEND.md). target_snapshot hält fest, was gemeldet wurde,
---   damit eine spätere Löschung durch die gemeldete Person die Prüfung nicht verhindert.
+--   damit eine spätere Löschung durch die gemeldete Person die Prüfung nicht verhindert. Das gilt auch für Bilder:
+--   Solange eine Meldung offen ist (open/reviewing), lässt sich die gemeldete Datei (Profilbild, Chat-Bild bzw.
+--   Gruppenbild aus dem Schnappschuss) über die Storage-API nicht löschen; chat_delete_message gibt sie dann nicht
+--   zur Löschung frei, account_own_media lässt sie aus. Nach der Moderation räumt das Team sie auf (BACKEND.md).
 -- * feedback: Rückmeldungen aus „Hilfe“ (Problem/Idee), ohne E-Mail-Adresse, max. 10 je 24 h.
 -- * account_export(): alle personenbezogenen Serverdaten des Aufrufers als jsonb (DSGVO Art. 15/20).
--- * account_own_media(): eigene Dateien in Storage, damit die App sie vor dem Löschen des Kontos entfernt.
--- * account_delete(): löscht eigene Nachrichten und dann auth.users des Aufrufers. Die Fremdschlüssel löschen
+-- * account_own_media(): eigene Dateien in Storage, damit die App sie vor dem Löschen des Kontos entfernt (ohne
+--   Dateien unter offener Meldung – die bleiben bis zur Moderation erhalten).
+-- * account_delete(): löscht eigene Nachrichten, entfernt Verweise auf Gruppenbilder, die es nicht mehr gibt bzw.
+--   die von mir stammen, und löscht dann auth.users des Aufrufers. Die Fremdschlüssel löschen
 --   Profil, Tageswerte, Freundschaften, Anfragen, Blockierungen, Mitgliedschaften (Eigentümerwechsel bzw. Löschen
 --   leerer Gruppen über den vorhandenen Trigger), Einladungen, Lesestände, eigene Meldungen und Rückmeldungen.
 --   Dateien in Storage löscht die App vorher über die Storage-API (direktes Löschen in storage.objects ist in
@@ -31,6 +36,18 @@ create table public.reports (
   status          text not null default 'open',
   created_at      timestamptz not null default now(),
   reviewed_at     timestamptz,
+  -- Gemeldete Datei aus dem Schnappschuss (Profilbild der Person, Bild der Nachricht, Gruppenbild). Solange die
+  -- Meldung offen ist, sperren die Storage-Delete-Policies sie (pace_access.is_report_evidence).
+  evidence_bucket text generated always as (
+    case target_type when 'user' then 'avatars' when 'message' then 'chat-media' when 'group' then 'group-images' end
+  ) stored,
+  evidence_path   text generated always as (
+    case target_type
+      when 'user' then target_snapshot ->> 'avatar_path'
+      when 'message' then target_snapshot ->> 'media_path'
+      when 'group' then target_snapshot ->> 'image_path'
+    end
+  ) stored,
 
   constraint reports_target_type_valid check (target_type in ('user', 'message', 'group')),
   constraint reports_reason_valid check (reason in ('spam', 'harassment', 'inappropriate', 'impersonation', 'other')),
@@ -47,6 +64,9 @@ comment on table public.reports is
 -- Höchstens eine offene Meldung je Person und Ziel; Zugriffspfad für die Bearbeitung.
 create unique index reports_open_key on public.reports (reporter_id, target_type, target_id) where status = 'open';
 create index reports_status_idx on public.reports (status, created_at);
+-- Prüfung der Storage-Delete-Policies: Ist eine Datei Beweis einer offenen Meldung?
+create index reports_evidence_idx on public.reports (evidence_bucket, evidence_path)
+  where status in ('open', 'reviewing') and evidence_path is not null;
 
 alter table public.reports enable row level security;
 revoke all on table public.reports from anon, authenticated;
@@ -135,6 +155,90 @@ revoke all on function public.social_report(text, uuid, text, text) from public,
 grant execute on function public.social_report(text, uuid, text, text) to authenticated;
 comment on function public.social_report(text, uuid, text, text) is
   'Pace: Person (public_id), Nachricht oder Gruppe melden. Nur sichtbare Ziele; eine offene Meldung je Ziel; max. 10 je 24 h.';
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Gemeldete Dateien bleiben bis zur Moderation erhalten
+-- ---------------------------------------------------------------------------------------------------------------
+
+-- Ist die Datei Beweis einer offenen Meldung (Status open oder reviewing)? security definer: Clients lesen
+-- public.reports nicht.
+create function pace_access.is_report_evidence(p_bucket text, p_name text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.reports r
+     where r.status in ('open', 'reviewing')
+       and r.evidence_bucket = p_bucket
+       and r.evidence_path = p_name
+  );
+$$;
+revoke all on function pace_access.is_report_evidence(text, text) from public, anon;
+grant execute on function pace_access.is_report_evidence(text, text) to authenticated;
+
+-- Die Delete-Policies aus 20261019100300_storage_realtime_access.sql: zusätzlich nichts löschen, was gemeldet ist.
+-- Die Storage-API meldet dann keinen Fehler, löscht aber nichts (die Datei fehlt in der Antwort).
+alter policy pace_avatars_delete on storage.objects
+  using (
+    bucket_id = 'avatars'
+    and pace_access.can_write_avatar(name)
+    and not pace_access.is_report_evidence(bucket_id, name)
+  );
+
+alter policy pace_group_images_delete on storage.objects
+  using (
+    bucket_id = 'group-images'
+    and (owner_id = (select auth.uid())::text or pace_access.can_write_group_image(name))
+    and not pace_access.is_report_evidence(bucket_id, name)
+  );
+
+alter policy pace_chat_media_delete on storage.objects
+  using (
+    bucket_id = 'chat-media'
+    and owner_id = (select auth.uid())::text
+    and not pace_access.is_report_evidence(bucket_id, name)
+  );
+
+-- Ersetzt die Fassung aus 20261019100200_chat.sql: Ist das Bild der Nachricht gemeldet (offene Meldung), liefert
+-- die Funktion media_path = null – die App versucht dann nicht, die Datei zu löschen. Der Inhalt der Nachricht
+-- verschwindet trotzdem (die Meldung hat ihren Schnappschuss).
+create or replace function public.chat_delete_message(p_message_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_me uuid := private.require_profile();
+  v_media_path text;
+begin
+  -- Eigene Nachrichten lassen sich immer löschen, auch nach Austritt oder Ende der Freundschaft.
+  select m.media_path into v_media_path
+    from public.chat_messages m
+   where m.id = p_message_id and m.sender_id = v_me and m.deleted_at is null
+     for update;
+  if not found then
+    raise exception 'not_found';
+  end if;
+
+  update public.chat_messages m
+     set deleted_at = now(), body = null, media_path = null, shared_profile_id = null
+   where m.id = p_message_id;
+
+  -- Die App löscht die Datei danach über die Storage-API (nur die hochladende Person darf das) – außer sie ist
+  -- Beweis einer offenen Meldung.
+  if v_media_path is not null and pace_access.is_report_evidence('chat-media', v_media_path) then
+    v_media_path := null;
+  end if;
+  return jsonb_build_object('media_path', v_media_path);
+end;
+$$;
+
+comment on function public.chat_delete_message(uuid) is
+  'Pace: eigene Nachricht löschen (Inhalt wird entfernt). Liefert {media_path} der zugehörigen Datei zum Löschen im Storage (null, wenn keine oder gemeldet).';
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- Rückmeldungen
@@ -342,6 +446,8 @@ declare
   v_me uuid := private.require_profile();
 begin
   -- Selbst hochgeladene Dateien, dazu Bilder von Gruppen, deren owner ich bin (auch von anderen hochgeladen).
+  -- Ohne Dateien unter offener Meldung: Die Storage-Policies lassen sie ohnehin nicht löschen, sie bleiben bis zur
+  -- Moderation erhalten (Aufbewahrung siehe docs/BACKEND.md, „Konto und Datenschutz“).
   return (
     select coalesce(jsonb_agg(jsonb_build_object('bucket', x.bucket_id, 'path', x.name) order by x.bucket_id, x.name),
                     '[]'::jsonb)
@@ -357,6 +463,7 @@ begin
            and pace_access.object_folder(o.name) = m.group_id
          where o.bucket_id = 'group-images'
       ) x
+     where not pace_access.is_report_evidence(x.bucket_id, x.name)
   );
 end;
 $$;
@@ -364,7 +471,7 @@ $$;
 revoke all on function public.account_own_media() from public, anon;
 grant execute on function public.account_own_media() to authenticated;
 comment on function public.account_own_media() is
-  'Pace: eigene Dateien in Storage ({bucket, path}) und Bilder eigener Gruppen – zum Löschen vor account_delete.';
+  'Pace: eigene Dateien in Storage ({bucket, path}) und Bilder eigener Gruppen – zum Löschen vor account_delete. Ohne Dateien unter offener Meldung.';
 
 create function public.account_delete()
 returns void
@@ -382,8 +489,11 @@ begin
 
   -- Eigene Nachrichten werden gelöscht, nicht nur vom Konto getrennt.
   delete from public.chat_messages m where m.sender_id = v_me;
-  -- Gruppenbilder, die die App vorher über account_own_media gelöscht hat (Bilder eigener Gruppen und eigene
-  -- Uploads), nicht weiter referenzieren – die Gruppe zeigt dann wieder das Symbol ihrer Art.
+  -- Gruppenbilder nicht weiter referenzieren – die Gruppe zeigt dann wieder das Symbol ihrer Art:
+  --  * Bilder eigener Gruppen (die App hat sie über account_own_media gelöscht),
+  --  * Verweise auf Dateien, die es nicht mehr gibt (eigene Uploads in fremden Gruppen hat die App vorher gelöscht;
+  --    welche Gruppe betroffen war, lässt sich danach nur noch so erkennen),
+  --  * eigene Uploads, die als Beweis einer offenen Meldung erhalten bleiben (nicht mehr in der Gruppe zeigen).
   update public.groups g
      set image_path = null
    where g.image_path is not null
@@ -391,6 +501,10 @@ begin
        exists (
          select 1 from public.group_members m
           where m.group_id = g.id and m.user_id = v_me and m.role = 'owner'
+       )
+       or not exists (
+         select 1 from storage.objects o
+          where o.bucket_id = 'group-images' and o.name = g.image_path
        )
        or exists (
          select 1 from storage.objects o

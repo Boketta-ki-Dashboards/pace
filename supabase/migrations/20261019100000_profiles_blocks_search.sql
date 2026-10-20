@@ -11,6 +11,10 @@
 -- * Blockieren (user_blocks): beendet Freundschaft, offene Anfragen und Einladungen zwischen beiden. Danach keine
 --   neuen Anfragen, Einladungen oder Direktnachrichten in beide Richtungen; beide finden sich nicht mehr.
 --   Gemeinsame Gruppen bleiben bestehen (Regel in docs/BACKEND.md, „Blockieren“).
+-- * Öffentliches Profil (social_public_profile, max. 120 je 10 Minuten): Nicht auffindbare Profile ohne Beziehung
+--   zeigt der Server nur mit Kontext (gemeinsame Gruppe, Gruppeneinladung, eigene Blockierung, kurz zuvor exakt per
+--   Benutzernamen gefunden; Privatchat und im Chat geteilte Profile ergänzt 20261019100200_chat.sql) – sonst wie
+--   „nicht gefunden“. So lassen sich public_ids (z. B. Ordnernamen im Bucket avatars) nicht zu Profilen auflösen.
 -- * Ausgaben mit Personen enthalten zusätzlich avatar_path (öffentliches Feld wie Anzeigename).
 -- * is_username_available bekommt ein Rate Limit, das auch ohne Profil (Onboarding) greift.
 -- =============================================================================================================
@@ -261,6 +265,81 @@ end;
 $$;
 revoke all on function private.relationship(uuid, uuid) from public, anon, authenticated;
 
+-- ---------------------------------------------------------------------------------------------------------------
+-- Sichtbarkeit von Profilen
+-- ---------------------------------------------------------------------------------------------------------------
+
+-- Wer ein nicht auffindbares Profil exakt per Benutzernamen gefunden hat (social_find_profile, exakter Treffer der
+-- Präfixsuche), darf es danach 24 Stunden lang öffnen – z. B. über einen geteilten Link pace://u/<name>.
+create table private.profile_lookups (
+  viewer_id    uuid not null references public.profiles (id) on delete cascade,
+  target_id    uuid not null references public.profiles (id) on delete cascade,
+  looked_up_at timestamptz not null default now(),
+
+  primary key (viewer_id, target_id)
+);
+
+comment on table private.profile_lookups is
+  'Pace: exakte Benutzernamen-Treffer auf nicht auffindbare Profile (Kontext für social_public_profile, 24 h gültig).';
+
+-- Löschen von Profilen (Fremdschlüssel).
+create index profile_lookups_target_idx on private.profile_lookups (target_id);
+revoke all on table private.profile_lookups from public, anon, authenticated;
+
+create function private.remember_profile_lookup(p_viewer uuid, p_target uuid)
+returns void
+language sql
+set search_path = ''
+as $$
+  delete from private.profile_lookups l
+   where l.viewer_id = p_viewer and l.looked_up_at <= now() - interval '24 hours';
+  insert into private.profile_lookups (viewer_id, target_id)
+  values (p_viewer, p_target)
+  on conflict (viewer_id, target_id) do update set looked_up_at = excluded.looked_up_at;
+$$;
+revoke all on function private.remember_profile_lookup(uuid, uuid) from public, anon, authenticated;
+
+-- Darf p_viewer das Profil von p_target sehen (öffentliches Profil, im Chat geteiltes Profil)? Nie, wenn p_target
+-- p_viewer blockiert hat. Sonst: sich selbst und auffindbare Profile immer; nicht auffindbare nur mit Kontext –
+-- Freundschaft, offene Freundschaftsanfrage oder Gruppeneinladung (eine Richtung genügt), gemeinsame Gruppe (auch
+-- frühere Mitglieder einer Gruppe, in der ich bin: ihre Nachrichten stehen im Gruppenchat), von mir blockiert (steht
+-- in meiner Liste) oder in den letzten 24 Stunden exakt per Benutzernamen gefunden.
+-- 20261019100200_chat.sql ersetzt die Funktion und ergänzt Privatchat und im Chat geteilte Profile.
+create function private.can_view_profile(p_viewer uuid, p_target uuid)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select case
+    when p_viewer = p_target then true
+    when private.has_blocked(p_target, p_viewer) then false
+    else exists (select 1 from public.profiles t where t.id = p_target and t.is_discoverable)
+      or private.has_blocked(p_viewer, p_target)
+      or private.are_friends(p_viewer, p_target)
+      or exists (select 1 from private.open_friend_request(p_viewer, p_target))
+      or exists (
+        select 1 from public.group_invitations i
+         where i.status = 'pending'
+           and ((i.inviter_id = p_viewer and i.invitee_id = p_target)
+             or (i.inviter_id = p_target and i.invitee_id = p_viewer))
+      )
+      or exists (
+        select 1
+          from public.group_members m
+          join public.group_membership_periods mp on mp.group_id = m.group_id and mp.user_id = p_target
+         where m.user_id = p_viewer
+      )
+      or exists (
+        select 1 from private.profile_lookups l
+         where l.viewer_id = p_viewer
+           and l.target_id = p_target
+           and l.looked_up_at > now() - interval '24 hours'
+      )
+  end;
+$$;
+revoke all on function private.can_view_profile(uuid, uuid) from public, anon, authenticated;
+
 create function public.social_block_user(p_public_id uuid)
 returns void
 language plpgsql
@@ -399,6 +478,10 @@ begin
   if not found or private.is_blocked(v_me, v_target.id) then
     return null;
   end if;
+  -- Wer den genauen Namen kennt, darf ein nicht auffindbares Profil danach auch öffnen (social_public_profile).
+  if not v_target.is_discoverable and v_target.id <> v_me then
+    perform private.remember_profile_lookup(v_me, v_target.id);
+  end if;
 
   select * into v_relationship from private.relationship(v_me, v_target.id);
   return private.profile_json(v_target) || jsonb_build_object(
@@ -409,7 +492,7 @@ end;
 $$;
 
 comment on function public.social_find_profile(text) is
-  'Pace: Profil per exaktem Benutzernamen (ohne Groß-/Kleinschreibung) mit Beziehung; null ohne Treffer oder bei Blockierung. Max. 30 Suchen je 10 Minuten.';
+  'Pace: Profil per exaktem Benutzernamen (ohne Groß-/Kleinschreibung) mit Beziehung; null ohne Treffer oder bei Blockierung. Ein Treffer gibt 24 h Zugriff auf das öffentliche Profil. Max. 30 Suchen je 10 Minuten.';
 
 create function public.social_search_profiles(p_query text)
 returns jsonb
@@ -432,6 +515,14 @@ begin
   if v_query !~ '^[a-z0-9_]{3,20}$' then
     return '[]'::jsonb;
   end if;
+
+  -- Exakter Treffer auf ein nicht auffindbares Profil: wie bei social_find_profile darf es danach geöffnet werden.
+  perform private.remember_profile_lookup(v_me, p.id)
+     from public.profiles p
+    where lower(p.username) = v_query
+      and not p.is_discoverable
+      and p.id <> v_me
+      and not private.is_blocked(v_me, p.id);
 
   return (
     select coalesce(
@@ -476,10 +567,11 @@ comment on function public.social_search_profiles(text) is
 -- Öffentliches Profil
 -- ---------------------------------------------------------------------------------------------------------------
 
+-- volatile wegen des Rate Limits (zählt in private.rate_limit_events).
 create function public.social_public_profile(p_public_id uuid, p_date date)
 returns jsonb
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $$
@@ -493,10 +585,14 @@ declare
   v_steps_today bigint;
   v_steps_week bigint;
 begin
+  -- Gegen massenhaftes Auflösen von public_ids. Es zählen die Abrufe, die ein Profil liefern; not_found verrät
+  -- nichts (nicht vorhanden und nicht sichtbar sind gleich).
+  perform private.consume_rate_limit(v_me, 'public_profile', 120, interval '10 minutes');
   perform private.assert_social_date(p_date);
   select * into v_target from public.profiles p where p.public_id = p_public_id;
-  -- Wer mich blockiert hat, ist für mich nicht sichtbar.
-  if not found or private.has_blocked(v_target.id, v_me) then
+  -- Wer mich blockiert hat, ist für mich nicht sichtbar; nicht auffindbare Profile ohne Beziehung nur mit Kontext
+  -- (private.can_view_profile).
+  if not found or not private.can_view_profile(v_me, v_target.id) then
     raise exception 'not_found';
   end if;
 
@@ -533,7 +629,7 @@ $$;
 revoke all on function public.social_public_profile(uuid, date) from public, anon;
 grant execute on function public.social_public_profile(uuid, date) to authenticated;
 comment on function public.social_public_profile(uuid, date) is
-  'Pace: Profil einer Person mit Beziehung; Schritte (Stichtag, ISO-Woche) nur unter Freunden. not_found, wenn die Person mich blockiert hat.';
+  'Pace: Profil einer Person mit Beziehung; Schritte (Stichtag, ISO-Woche) nur unter Freunden. not_found, wenn die Person mich blockiert hat oder nicht auffindbar ist und kein Kontext besteht. Max. 120 je 10 Minuten.';
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- Ersetzte Freundschafts-RPCs: Blockierung und avatar_path

@@ -10,8 +10,9 @@
 --   Mitglieder; nach Austritt oder Entfernen besteht kein Zugriff mehr. Nachrichten von Personen, die ich blockiert
 --   habe, liefert der Server mir nicht aus (der Gruppenchat bleibt für beide nutzbar).
 -- * Nachrichten: text (1–2000 Zeichen), image/gif (Datei im Bucket chat-media unter <conversation_id>/, vom
---   Absender hochgeladen) oder profile (geteiltes Profil über dessen public_id). client_id macht Wiederholungen
---   idempotent. Gelöschte Nachrichten verlieren ihren Inhalt und werden nicht mehr ausgeliefert.
+--   Absender hochgeladen) oder profile (geteiltes Profil über dessen public_id; nur Profile, die die sendende
+--   Person sehen darf – private.can_view_profile). client_id macht Wiederholungen idempotent. Gelöschte
+--   Nachrichten verlieren ihren Inhalt und werden nicht mehr ausgeliefert.
 -- * Echtzeit: Nach jeder neuen oder gelöschten Nachricht ein privater Broadcast an chat:<conversation_id> und
 --   user:<public_id> jedes Teilnehmers – ohne Inhalt, nur „es gibt Neues“. Wer das Topic empfangen darf, prüft eine
 --   Policy auf realtime.messages (20261019100300_storage_realtime_access.sql).
@@ -203,6 +204,58 @@ as $$
   ), false);
 $$;
 revoke all on function private.can_send_conversation(uuid, uuid) from public, anon, authenticated;
+
+-- Ersetzt die Fassung aus 20261019100000_profiles_blocks_search.sql (gleiche Regeln) und ergänzt die Chats als
+-- Kontext für nicht auffindbare Profile: ein Privatchat zwischen beiden (auch nach Ende der Freundschaft) oder ein
+-- im Chat geteiltes Profil in einer Unterhaltung, die p_viewer lesen darf (nicht von Personen, die p_viewer
+-- blockiert hat – deren Nachrichten bekommt p_viewer gar nicht zu sehen). Teilen lässt sich nur, was die sendende
+-- Person selbst sehen darf (chat_send) – darüber wird also kein Profil sichtbar, das sonst verborgen wäre.
+create or replace function private.can_view_profile(p_viewer uuid, p_target uuid)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select case
+    when p_viewer = p_target then true
+    when private.has_blocked(p_target, p_viewer) then false
+    else exists (select 1 from public.profiles t where t.id = p_target and t.is_discoverable)
+      or private.has_blocked(p_viewer, p_target)
+      or private.are_friends(p_viewer, p_target)
+      or exists (select 1 from private.open_friend_request(p_viewer, p_target))
+      or exists (
+        select 1 from public.group_invitations i
+         where i.status = 'pending'
+           and ((i.inviter_id = p_viewer and i.invitee_id = p_target)
+             or (i.inviter_id = p_target and i.invitee_id = p_viewer))
+      )
+      or exists (
+        select 1
+          from public.group_members m
+          join public.group_membership_periods mp on mp.group_id = m.group_id and mp.user_id = p_target
+         where m.user_id = p_viewer
+      )
+      or exists (
+        select 1 from private.profile_lookups l
+         where l.viewer_id = p_viewer
+           and l.target_id = p_target
+           and l.looked_up_at > now() - interval '24 hours'
+      )
+      or exists (
+        select 1 from public.conversations c
+         where c.kind = 'direct'
+           and c.user_a = least(p_viewer, p_target)
+           and c.user_b = greatest(p_viewer, p_target)
+      )
+      or exists (
+        select 1 from public.chat_messages m
+         where m.shared_profile_id = p_target
+           and m.deleted_at is null
+           and not private.has_blocked(p_viewer, m.sender_id)
+           and private.can_read_conversation(m.conversation_id, p_viewer)
+      )
+  end;
+$$;
 
 -- Liefert die Unterhaltung oder wirft not_found, wenn p_user_id sie nicht lesen darf (Existenz bleibt verborgen).
 create function private.require_conversation(p_conversation_id uuid, p_user_id uuid)
@@ -624,7 +677,11 @@ begin
         raise exception 'invalid_input';
       end if;
       select p.id into v_shared_id from public.profiles p where p.public_id = p_shared_profile_id;
-      if v_shared_id is null or private.is_blocked(v_me, v_shared_id) then
+      -- Nur Profile, die ich selbst sehen darf (wie social_public_profile) – sonst ließen sich beliebige public_ids
+      -- über die Antwort (shared_profile) zu Namen auflösen.
+      if v_shared_id is null
+         or private.is_blocked(v_me, v_shared_id)
+         or not private.can_view_profile(v_me, v_shared_id) then
         raise exception 'not_found';
       end if;
     else

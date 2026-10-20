@@ -1,6 +1,6 @@
 -- Pace: Storage-Buckets und -Policies (Profilbilder, Gruppenbilder, Chat-Medien) und Realtime-Zugriff.
 begin;
-select plan(39);
+select plan(55);
 
 -- =============================================================================================================
 -- Struktur
@@ -117,19 +117,55 @@ select lives_ok($$select pg_temp.upload('avatars', 'bc000000-0000-4000-8000-0000
 select throws_ok($$select pg_temp.upload('avatars', 'bc000000-0000-4000-8000-000000000002/fremd.jpg')$$, '42501', null, 'avatars: fremder Ordner verboten');
 select throws_ok($$select pg_temp.upload('avatars', 'bc000000-0000-4000-8000-000000000001/../x.jpg')$$, '42501', null, 'avatars: ungültiger Pfad verboten');
 select throws_ok($$select pg_temp.upload('avatars', 'ich.jpg')$$, '42501', null, 'avatars: ohne Ordner verboten');
+select lives_ok($$select pg_temp.upload('avatars', 'bc000000-0000-4000-8000-000000000001/alt.jpg')$$, 'avatars: zweite Datei');
 select ok(pg_temp.visible('avatars', 'bc000000-0000-4000-8000-000000000001/ich.jpg'), 'avatars: eigenes Bild lesbar');
 select pg_temp.as_user(2);
-select ok(pg_temp.visible('avatars', 'bc000000-0000-4000-8000-000000000001/ich.jpg'), 'avatars: andere Angemeldete lesen');
+select ok(
+  not pg_temp.visible('avatars', 'bc000000-0000-4000-8000-000000000001/ich.jpg'),
+  'avatars: nicht gesetztes Bild nur für die Besitzerin'
+);
+select pg_temp.as_user(1);
+select lives_ok(
+  $$update public.profiles set avatar_path = 'bc000000-0000-4000-8000-000000000001/ich.jpg' where id = auth.uid()$$,
+  'avatars: Bild als Profilbild setzen'
+);
+select pg_temp.as_user(2);
+select ok(pg_temp.visible('avatars', 'bc000000-0000-4000-8000-000000000001/ich.jpg'), 'avatars: aktuelles Profilbild lesen andere Angemeldete');
+select is(
+  (select array_agg(o.name::text) from storage.objects o where o.bucket_id = 'avatars'),
+  array['bc000000-0000-4000-8000-000000000001/ich.jpg'],
+  'avatars: Listing zeigt Fremden nur aktuelle Profilbilder (keine alten Dateien)'
+);
 select pg_temp.as_user(3);
 select ok(not pg_temp.visible('avatars', 'bc000000-0000-4000-8000-000000000001/ich.jpg'), 'avatars: Blockierte lesen nicht');
 select is(
   pg_temp.delete_all('avatars'),
   0, 'avatars: fremde Bilder nicht löschbar'
 );
+-- Ohne Profil (z. B. Onboarding nicht abgeschlossen) kein Lesen.
+reset role;
+insert into auth.users (id, aud, role, is_anonymous)
+values ('ac000000-0000-4000-8000-000000000009', 'authenticated', 'authenticated', true);
+set local role authenticated;
+select pg_temp.as_user(9);
+select ok(not pg_temp.visible('avatars', 'bc000000-0000-4000-8000-000000000001/ich.jpg'), 'avatars: ohne Profil kein Lesen');
+
+-- Gemeldetes Profilbild (felix meldet ella) bleibt bis zur Moderation erhalten.
+select pg_temp.as_user(2);
+select lives_ok($$select public.social_report('user', 'bc000000-0000-4000-8000-000000000001', 'inappropriate')$$, 'Profil mit Bild melden');
 select pg_temp.as_user(1);
 select is(
   pg_temp.delete_all('avatars'),
-  1, 'avatars: eigenes Bild löschbar'
+  1, 'avatars: eigene Dateien löschbar – außer dem gemeldeten Profilbild'
+);
+select ok(pg_temp.visible('avatars', 'bc000000-0000-4000-8000-000000000001/ich.jpg'), 'avatars: gemeldetes Bild bleibt erhalten');
+reset role;
+update public.reports set status = 'resolved' where target_type = 'user';
+set local role authenticated;
+select pg_temp.as_user(1);
+select is(
+  pg_temp.delete_all('avatars'),
+  1, 'avatars: nach der Moderation wieder löschbar'
 );
 
 -- =============================================================================================================
@@ -150,6 +186,24 @@ select is(
   0, 'group-images: Mitglied löscht nicht'
 );
 
+-- Gemeldetes Gruppenbild (felix meldet die Gruppe) bleibt bis zur Moderation erhalten – auch für den owner.
+reset role;
+update public.groups set image_path = 'cc000000-0000-4000-8000-000000000001/titel.jpg' where id = 'cc000000-0000-4000-8000-000000000001';
+set local role authenticated;
+select lives_ok($$select public.social_report('group', 'cc000000-0000-4000-8000-000000000001', 'inappropriate')$$, 'Gruppe mit Bild melden');
+select pg_temp.as_user(1);
+select is(pg_temp.delete_all('group-images'), 0, 'group-images: gemeldetes Bild auch für den owner nicht löschbar');
+reset role;
+update public.reports set status = 'reviewing' where target_type = 'group';
+set local role authenticated;
+select pg_temp.as_user(1);
+select is(pg_temp.delete_all('group-images'), 0, 'group-images: auch während der Prüfung (reviewing) gesperrt');
+reset role;
+update public.reports set status = 'dismissed' where target_type = 'group';
+set local role authenticated;
+select pg_temp.as_user(1);
+select is(pg_temp.delete_all('group-images'), 1, 'group-images: nach der Moderation löscht der owner');
+
 -- =============================================================================================================
 -- chat-media
 -- =============================================================================================================
@@ -166,10 +220,35 @@ select is(
   pg_temp.delete_all('chat-media'),
   0, 'chat-media: nur wer hochgeladen hat, löscht'
 );
+
+-- Gemeldetes Chat-Bild: felix schickt das Bild, ella meldet die Nachricht, felix löscht sie.
+select pg_temp.as_user(2);
+create temporary table t_message (id uuid) on commit drop;
+grant select, insert on t_message to authenticated;
+insert into t_message
+select (public.chat_send('dc000000-0000-4000-8000-000000000001', gen_random_uuid(), 'image', null,
+                         'dc000000-0000-4000-8000-000000000001/foto.jpg')->>'id')::uuid;
+select pg_temp.as_user(1);
+select lives_ok(
+  format('select public.social_report(%L, %L, %L)', 'message', (select id from t_message), 'inappropriate'),
+  'Nachricht mit Bild melden'
+);
+select pg_temp.as_user(2);
+select is(
+  public.chat_delete_message((select id from t_message)),
+  '{"media_path": null}'::jsonb,
+  'chat_delete_message: gemeldetes Bild wird nicht zur Löschung freigegeben'
+);
+select is(pg_temp.delete_all('chat-media'), 0, 'chat-media: gemeldetes Bild auch für die Absenderin nicht löschbar');
+select pg_temp.as_user(1);
+select ok(pg_temp.visible('chat-media', 'dc000000-0000-4000-8000-000000000001/foto.jpg'), 'chat-media: gemeldete Datei bleibt erhalten');
+reset role;
+update public.reports set status = 'resolved' where target_type = 'message';
+set local role authenticated;
 select pg_temp.as_user(2);
 select is(
   pg_temp.delete_all('chat-media'),
-  1, 'chat-media: eigene Datei löschbar'
+  1, 'chat-media: eigene Datei löschbar (nach der Moderation)'
 );
 
 -- Nach Ende der Freundschaft: lesen ja, hochladen nein.
