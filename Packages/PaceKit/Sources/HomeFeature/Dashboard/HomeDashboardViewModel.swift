@@ -359,6 +359,27 @@ public final class HomeDashboardViewModel {
         lastRemoved = nil
     }
 
+    /// Wartet und blendet „Rückgängig“ dann aus – solange inzwischen nichts anderes entfernt wurde.
+    public func expireUndo(for removed: RemovedHomeModule, after delay: Duration) async {
+        try? await Task.sleep(for: delay)
+        guard !Task.isCancelled else { return }
+        dismissUndo(for: removed)
+    }
+
+    /// Titel eines Widgets, wie er auf Home steht (beim Umfeld mit dem Gebiet, z. B. „Pfungstadt · Dein Umfeld“).
+    public func title(for module: HomeModule) -> String {
+        switch module.kind {
+        case .neighborhood:
+            let level = standings.effectiveLevel(for: module.regionLevel ?? .municipality)
+            guard let region = standings.scopes.first(where: { $0.level == level }) else { return module.title }
+            return "\(region.name) · \(module.title)"
+        case .groups where module.configuration.groupID != nil:
+            return PaceLocalization.text(de: "Gruppen-Streak", en: "Group streak", ru: "Серия группы")
+        default:
+            return module.title
+        }
+    }
+
     /// Drag & Drop: Das gezogene Widget nimmt den Platz des Ziel-Widgets ein.
     public func moveDragged(to targetID: HomeModule.ID) {
         guard let draggingModuleID, draggingModuleID != targetID else { return }

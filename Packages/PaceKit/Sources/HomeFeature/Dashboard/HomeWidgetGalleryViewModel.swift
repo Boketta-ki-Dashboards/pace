@@ -245,6 +245,18 @@ public final class HomeWidgetGalleryViewModel {
         )
     }
 
+    /// Das Widget in einer anderen Größe – für die Mini-Vorschauen unter „Größe auswählen“.
+    public func previewModule(size: HomeModuleSize) -> HomeModule {
+        let module = draft
+        return HomeModule(
+            id: module.id,
+            kind: module.kind,
+            size: size,
+            regionLevel: module.regionLevel,
+            configuration: module.configuration
+        )
+    }
+
     /// Ein vorhandenes Widget, das genau dasselbe zeigt.
     public var duplicate: HomeModule? {
         settings.duplicate(of: draft)

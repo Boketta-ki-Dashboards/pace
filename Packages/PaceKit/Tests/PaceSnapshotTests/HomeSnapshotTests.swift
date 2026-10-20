@@ -8,64 +8,140 @@ import PaceTestSupport
 import SwiftUI
 import Testing
 
-/// Home-Dashboard und Module in ihren Größen.
+/// Home (Referenzbild 9), Anpassen-Modus (Bild 6), Widget-Galerie (Bild 7), alle Widgets in allen Größen und der
+/// Zustand „Ranking ausgeschaltet“ – jeweils mit Kopfzeile.
 @MainActor
 @Suite(.snapshotsEnabled)
 struct HomeSnapshotTests {
-    @Test func homeDashboard() async throws {
-        let (dashboard, _) = try await SnapshotFixtures.makeDashboard()
-        await dashboard.loadStreakIfNeeded()
-        let content = VStack(alignment: .leading, spacing: PaceSpacing.s) {
-            HomeHeaderView(greeting: dashboard.greeting, onCustomize: {}, onNotifications: {})
-            RegionRankCardsView(standings: dashboard.standings) { _ in }
-            StepsTodayCardView(
-                state: dashboard.activity.state,
-                summary: dashboard.stepsToday,
-                onEditGoal: {},
-                onRetry: {}
-            )
-            WeekOverviewCardView(week: dashboard.week)
-            StreakCardView(summary: dashboard.streakSummary, state: dashboard.streak.history.state)
-            NeighborhoodCardView(standings: dashboard.standings) { _ in }
-            FriendsPreviewCardView(social: dashboard.social) {}
-            GroupsPreviewCardView(social: dashboard.social) {}
-        }
-        .padding(.horizontal, PaceSpacing.m)
-        .padding(.vertical, PaceSpacing.m)
-        try Snapshot.render(content, name: "home")
+    private let languages: [AppLanguage] = [.german, .english, .russian]
+
+    private func page(_ content: some View) -> some View {
+        content
+            .padding(.horizontal, PaceSpacing.m)
+            .padding(.vertical, PaceSpacing.m)
     }
 
-    /// Kleine und große Varianten der Module.
-    @Test func homeModuleSizes() async throws {
+    @Test func home() async throws {
         let (dashboard, _) = try await SnapshotFixtures.makeDashboard()
         await dashboard.loadStreakIfNeeded()
-        let small = VStack(alignment: .leading, spacing: PaceSpacing.s) {
-            RegionRankCardsView(standings: dashboard.standings, size: .small) { _ in }
-            WeekOverviewCardView(week: dashboard.week, size: .small)
-            StreakCardView(summary: dashboard.streakSummary, state: dashboard.streak.history.state, size: .small)
-            NeighborhoodCardView(standings: dashboard.standings, size: .small) { _ in }
-            FriendsPreviewCardView(social: dashboard.social, size: .small) {}
-            GroupsPreviewCardView(social: dashboard.social, size: .small) {}
-        }
-        .padding(PaceSpacing.m)
-        try Snapshot.render(small, name: "home-small")
+        try Snapshot.render(page(HomeDashboardContent(viewModel: dashboard)), name: "home", languages: languages)
+    }
 
-        let large = VStack(alignment: .leading, spacing: PaceSpacing.s) {
-            RegionRankCardsView(standings: dashboard.standings, size: .large) { _ in }
-            StepsTodayCardView(
-                state: dashboard.activity.state,
-                summary: dashboard.stepsToday,
-                size: .large,
-                onEditGoal: {},
-                onRetry: {}
-            )
-            WeekOverviewCardView(week: dashboard.week, size: .large)
-            StreakCardView(summary: dashboard.streakSummary, state: dashboard.streak.history.state, size: .large)
-            NeighborhoodCardView(standings: dashboard.standings, level: .district, size: .large) { _ in }
-            FriendsPreviewCardView(social: dashboard.social, size: .large) {}
-            GroupsPreviewCardView(social: dashboard.social, size: .large) {}
+    /// Wie Bild 6: Anpassen-Modus mit offenem Größenmenü an „Deine Woche“.
+    @Test func homeEdit() async throws {
+        let (dashboard, _) = try await SnapshotFixtures.makeDashboard()
+        await dashboard.loadStreakIfNeeded()
+        dashboard.beginEditing()
+        if let week = dashboard.modules.first(where: { $0.kind == .week }) {
+            dashboard.toggleSizeMenu(for: week.id)
         }
-        .padding(PaceSpacing.m)
-        try Snapshot.render(large, name: "home-large")
+        try Snapshot.render(page(HomeDashboardContent(viewModel: dashboard)), name: "home-edit", languages: languages)
+
+        dashboard.sizeMenuModuleID = nil
+        dashboard.activeModuleID = nil
+        try Snapshot.render(page(HomeDashboardContent(viewModel: dashboard)), name: "home-edit-plain")
+    }
+
+    /// Wie Bild 7: Freunde-Widget mit zwei ausgewählten Freunden, eigenem Namen und mittlerer Größe.
+    @Test func widgetGallery() async throws {
+        let (dashboard, _) = try await SnapshotFixtures.makeDashboard()
+        let gallery = dashboard.gallery(for: HomeWidgetGalleryRoute())
+        gallery.select(.friends)
+        gallery.toggleFriend(SnapshotFixtures.mia)
+        gallery.toggleFriend(SnapshotFixtures.jonas)
+        gallery.name = "Meine Laufrunde"
+        gallery.size = .medium
+        try Snapshot.render(page(HomeWidgetGalleryContent(gallery: gallery, dashboard: dashboard)), name: "widget-gallery", languages: languages)
+
+        // Weitere Kategorien mit ihrer Auswahl.
+        gallery.select(.regionRanks)
+        gallery.size = .large
+        try Snapshot.render(page(HomeWidgetGalleryContent(gallery: gallery, dashboard: dashboard)), name: "widget-gallery-regions")
+        gallery.select(.groups)
+        gallery.groupID = SnapshotFixtures.classID
+        try Snapshot.render(page(HomeWidgetGalleryContent(gallery: gallery, dashboard: dashboard)), name: "widget-gallery-groups")
+
+        let edit = dashboard.gallery(for: HomeWidgetGalleryRoute(editingID: dashboard.modules.first { $0.kind == .stepsToday }?.id))
+        try Snapshot.render(page(HomeWidgetGalleryContent(gallery: edit, dashboard: dashboard)), name: "widget-gallery-edit-steps")
+
+        try Snapshot.render(page(HomeFriendPickerContent(gallery: gallery)), name: "widget-gallery-friends")
+    }
+
+    /// Alle Widgets in jeder Größe mit echten Beispieldaten.
+    @Test func widgetsInAllSizes() async throws {
+        let (dashboard, _) = try await SnapshotFixtures.makeDashboard()
+        await dashboard.loadStreakIfNeeded()
+        dashboard.standings.neighborhoodRadii = [.municipality: 6, .district: 1, .state: 1, .country: 1]
+        await dashboard.standings.load()
+
+        for size in HomeModuleSize.allCases {
+            let modules = SnapshotFixtures.allWidgets(size: size)
+            let content = VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                ForEach(modules) { module in
+                    HomeModuleView(module: module, viewModel: dashboard, mode: .normal)
+                }
+            }
+            try Snapshot.render(page(content), name: "home-widgets-\(size.rawValue)")
+        }
+    }
+
+    /// „Ranking ausgeschaltet“: Ranking-Widgets bleiben an ihrem Platz, unscharf mit neutralen Platzhaltern.
+    @Test func rankingOff() async throws {
+        let (dashboard, store) = try await SnapshotFixtures.makeDashboard()
+        try await store.setRegionalLeaderboardEnabled(false)
+        await dashboard.standings.load()
+        await dashboard.loadStreakIfNeeded()
+        try Snapshot.render(page(HomeDashboardContent(viewModel: dashboard)), name: "home-ranking-off", languages: languages)
+
+        dashboard.beginEditing()
+        try Snapshot.render(page(HomeDashboardContent(viewModel: dashboard)), name: "home-ranking-off-edit")
+    }
+
+    /// Mitteilungen aus echten Anfragen und Einladungen.
+    @Test func notifications() async throws {
+        let (dashboard, store) = try await SnapshotFixtures.makeDashboard()
+        try Snapshot.render(page(HomeNotificationsContent(viewModel: dashboard)), name: "home-notifications", languages: languages)
+
+        let empty = SocialViewModel(repository: SocialRepositoryStub(), calendar: Fixtures.activityCalendar)
+        await empty.load()
+        let emptyDashboard = HomeDashboardViewModel(
+            activity: dashboard.activity,
+            standings: dashboard.standings,
+            settings: dashboard.settings,
+            streak: dashboard.streak,
+            social: empty,
+            activityData: HealthServiceStub(),
+            store: store
+        )
+        try Snapshot.render(page(HomeNotificationsContent(viewModel: emptyDashboard)), name: "home-notifications-empty")
+    }
+}
+
+extension SnapshotFixtures {
+    static let mia = UUID(uuidString: "40000000-0000-4000-8000-000000000001")!
+    static let jonas = UUID(uuidString: "40000000-0000-4000-8000-000000000002")!
+    static let classID = UUID(uuidString: "50000000-0000-4000-8000-000000000001")!
+
+    /// Jede Widget-Art in einer Größe (die Schrittkarte gibt es nicht klein).
+    static func allWidgets(size: HomeModuleSize) -> [HomeModule] {
+        var modules: [HomeModule] = [
+            HomeModule(id: "ranks", kind: .regionRanks, size: size),
+            HomeModule(id: "steps", kind: .stepsToday, size: size),
+            HomeModule(id: "week", kind: .week, size: size),
+            HomeModule(id: "streak", kind: .streak, size: size),
+            HomeModule(id: "near", kind: .neighborhood, size: size, regionLevel: .municipality),
+            HomeModule(
+                id: "run",
+                kind: .friends,
+                size: size,
+                configuration: HomeWidgetConfiguration(friendIDs: [mia, jonas], customName: "Meine Laufrunde")
+            ),
+            HomeModule(id: "class", kind: .groups, size: size, configuration: HomeWidgetConfiguration(groupID: classID)),
+            HomeModule(id: "groups", kind: .groups, size: size),
+            HomeModule(id: "distance", kind: .activity, size: size, configuration: HomeWidgetConfiguration(metric: .distance)),
+            HomeModule(id: "calendar", kind: .calendar, size: size),
+        ]
+        modules.removeAll { !$0.kind.supportedSizes.contains(size) }
+        return modules
     }
 }

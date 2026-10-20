@@ -3,42 +3,53 @@ import DesignSystem
 import PaceCore
 import SwiftUI
 
-/// Home-Dashboard: Wortmarke und Begrüßung, danach die vom Nutzer gewählten Module in seiner Reihenfolge und Größe.
+/// Home-Dashboard: Wortmarke und Begrüßung, danach die Widgets des Nutzers in seiner Reihenfolge und Größe.
 ///
-/// Die Aktualisierungs-Auslöser für Bewegungsdaten hängen an der ganzen Main App (`activityUpdates(_:)`), damit sie
-/// auch laufen, während ein anderer Tab offen ist.
+/// „Anpassen“ schaltet Home direkt in den Anpassen-Modus (kein eigenes Sheet); neue Widgets kommen über die
+/// Widget-Galerie hinzu. Die Aktualisierungs-Auslöser für Bewegungsdaten hängen an der ganzen Main App
+/// (`activityUpdates(_:)`), damit sie auch laufen, während ein anderer Tab offen ist.
 public struct HomeView: View {
     @Bindable private var viewModel: HomeDashboardViewModel
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var path = NavigationPath()
 
     public init(viewModel: HomeDashboardViewModel) {
         self.viewModel = viewModel
     }
 
     public var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
-                VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                    HomeHeaderView(
-                        greeting: viewModel.greeting,
-                        onCustomize: { viewModel.present(.customize) },
-                        onNotifications: { viewModel.present(.notifications) }
-                    )
-                    .padding(.bottom, PaceSpacing.xxs)
-
-                    ForEach(viewModel.modules) { module in
-                        moduleView(module)
-                    }
-                }
+                HomeDashboardContent(
+                    viewModel: viewModel,
+                    onAddWidget: { path.append(HomeWidgetGalleryRoute()) },
+                    onEditModule: { id in path.append(HomeWidgetGalleryRoute(editingID: id)) }
+                )
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.l)
             }
             .refreshable { [viewModel] in await viewModel.refresh() }
             .paceScreenBackground()
-            .toolbar(.hidden, for: .navigationBar)
+            .paceRootPage()
+            .overlay(alignment: .bottom) {
+                undoBanner
+            }
             .navigationDestination(for: StatisticsRoute.self) { route in
                 StatisticsView(viewModel: viewModel.statistics(for: route))
+            }
+            .navigationDestination(for: CalendarRoute.self) { route in
+                HomeCalendarScreen(viewModel: viewModel.calendar(for: route))
+            }
+            .navigationDestination(for: HomeWidgetGalleryRoute.self) { route in
+                HomeWidgetGalleryScreen(dashboard: viewModel, route: route)
+            }
+            .navigationDestination(for: HomeNotificationsRoute.self) { _ in
+                HomeNotificationsScreen(viewModel: viewModel) { notification in
+                    path = NavigationPath()
+                    viewModel.open(notification)
+                }
             }
         }
         .task(id: viewModel.standingsReloadKey) { [viewModel] in
@@ -50,6 +61,9 @@ public struct HomeView: View {
         .task(id: viewModel.showsSocial) { [viewModel] in
             await viewModel.loadSocialIfNeeded()
         }
+        .task { [viewModel] in
+            await viewModel.loadNotificationsIfNeeded()
+        }
         .onChange(of: viewModel.streak.record) {
             viewModel.streak.saveRecordIfNeeded()
         }
@@ -59,51 +73,99 @@ public struct HomeView: View {
         .onChange(of: scenePhase) { _, newPhase in
             // Zurück in der App: Schritte lesen, dann Platzierungen auffrischen, falls älter als eine Minute.
             guard newPhase == .active else { return }
-            Task { await viewModel.returnedToForeground() }
+            Task {
+                await viewModel.returnedToForeground()
+                await viewModel.loadNotificationsIfNeeded()
+            }
         }
         .sheet(item: $viewModel.presentedSheet) { sheet in
             switch sheet {
-            case .customize:
-                HomeCustomizeSheet(settings: viewModel.settings, availableLevels: viewModel.standings.availableLevels)
             case .stepGoal:
                 StepGoalSheet(goals: viewModel.goals)
-            case .notifications:
-                NotificationsSheet()
             }
+        }
+        .confirmationDialog(
+            HomeTexts.enableRankingVisibility,
+            isPresented: $viewModel.isConfirmingRankingVisibility,
+            titleVisibility: .visible
+        ) {
+            Button(HomeTexts.enableRankingVisibility) {
+                Task { await viewModel.enableRankingVisibility() }
+            }
+            Button(HomeTexts.cancel, role: .cancel) {}
+        } message: {
+            Text(HomeTexts.enableRankingVisibilityMessage)
         }
     }
 
+    /// „„Deine Woche“ entfernt · Rückgängig“ – einige Sekunden nach dem Entfernen eines Widgets.
     @ViewBuilder
-    private func moduleView(_ module: HomeModule) -> some View {
-        switch module.kind {
-        case .regionRanks:
-            RegionRankCardsView(standings: viewModel.standings, size: module.size) { scope in
-                viewModel.openRankings(scope)
+    private var undoBanner: some View {
+        if let removed = viewModel.lastRemoved {
+            HStack(spacing: PaceSpacing.s) {
+                Text(HomeTexts.removed(removed.module.title))
+                    .font(PaceFont.callout)
+                    .foregroundStyle(PaceColor.textPrimary)
+                    .lineLimit(2)
+                Spacer(minLength: PaceSpacing.xs)
+                Button(HomeTexts.undo) {
+                    withAnimation(reduceMotion ? nil : .snappy) {
+                        viewModel.undoRemove()
+                    }
+                }
+                .font(.system(.callout, weight: .semibold))
+                .buttonStyle(.paceSoft)
             }
-        case .stepsToday:
-            StepsTodayCardView(
-                state: viewModel.activity.state,
-                summary: viewModel.stepsToday,
-                size: module.size,
-                onEditGoal: { viewModel.present(.stepGoal) },
-                onRetry: { Task { await viewModel.activity.retry() } }
-            )
-        case .week:
-            WeekOverviewCardView(week: viewModel.week, size: module.size, unavailableText: viewModel.weekUnavailableText)
-        case .streak:
-            StreakCardView(summary: viewModel.streakSummary, state: viewModel.streak.history.state, size: module.size)
-        case .neighborhood:
-            NeighborhoodCardView(
-                standings: viewModel.standings,
-                level: module.regionLevel ?? .municipality,
-                size: module.size
-            ) { scope in
-                viewModel.openRankings(scope)
+            .padding(.leading, PaceSpacing.m)
+            .padding(.trailing, PaceSpacing.xs)
+            .padding(.vertical, PaceSpacing.xs)
+            .background(PaceColor.surface, in: RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous).strokeBorder(PaceColor.border, lineWidth: 1))
+            .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+            .padding(.horizontal, PaceSpacing.m)
+            .padding(.bottom, PaceSpacing.s)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .task(id: removed.module.id) { [viewModel] in
+                await viewModel.expireUndo(for: removed, after: .seconds(6))
             }
-        case .friends:
-            FriendsPreviewCardView(social: viewModel.social, size: module.size) { viewModel.openSocial() }
-        case .groups:
-            GroupsPreviewCardView(social: viewModel.social, size: module.size) { viewModel.openSocial() }
         }
+    }
+}
+
+/// Inhalt von Home ohne Navigation und Scrollen (auch für Snapshot-Tests): Kopf und Widgets.
+struct HomeDashboardContent: View {
+    let viewModel: HomeDashboardViewModel
+    var onAddWidget: () -> Void = {}
+    var onEditModule: (HomeModule.ID) -> Void = { _ in }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PaceSpacing.s) {
+            HomeHeaderView(viewModel: viewModel, onAddWidget: onAddWidget)
+                .padding(.bottom, PaceSpacing.xxs)
+
+            ForEach(viewModel.modules) { module in
+                HomeEditableModule(module: module, viewModel: viewModel, onEdit: onEditModule)
+                    .zIndex(viewModel.sizeMenuModuleID == module.id ? 1 : 0)
+            }
+        }
+        .animation(reduceMotion ? nil : .snappy, value: viewModel.modules.map(\.id))
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.isEditing)
+        .sensoryFeedback(.selection, trigger: viewModel.modules.map(\.id))
+        .sensoryFeedback(.impact(weight: .light), trigger: viewModel.draggingModuleID) { _, newValue in newValue != nil }
+    }
+}
+
+/// Kalender mit stabilem ViewModel (entsteht einmal pro Aufruf der Seite).
+private struct HomeCalendarScreen: View {
+    @State private var viewModel: CalendarViewModel
+
+    init(viewModel: @autoclosure () -> CalendarViewModel) {
+        _viewModel = State(initialValue: viewModel())
+    }
+
+    var body: some View {
+        CalendarView(viewModel: viewModel)
     }
 }
