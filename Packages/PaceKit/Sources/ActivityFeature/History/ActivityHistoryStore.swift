@@ -104,7 +104,7 @@ public final class ActivityHistoryStore {
         } catch is CancellationError {
             if loaded == nil { state = .idle }
         } catch {
-            state = .failed(message: "Der Verlauf konnte nicht geladen werden. Bitte versuche es erneut.")
+            state = .failed(message: ActivityTexts.historyFailedMessage)
         }
     }
 

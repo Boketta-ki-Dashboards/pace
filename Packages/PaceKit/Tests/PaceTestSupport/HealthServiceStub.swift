@@ -17,6 +17,14 @@ public final class HealthServiceStub: HealthAuthorizationProviding, ActivityData
         public var hourlyTotals: [ActivityMetric: [LocalDate: [Int: Double]]] = [:]
         /// Kennzahlen, für die irgendwann Samples existieren (unabhängig vom Zeitraum).
         public var metricsWithAnySamples: Set<ActivityMetric> = []
+        /// Zugriff auf die optionalen Herzwerte. Standard wie eine Quelle ohne Herzwerte.
+        public var heartRateAccess: HeartRateAccess = .unavailable
+        /// Ergebnis der Freigabe-Abfrage; bei Erfolg wechselt `heartRateAccess` zu `.requested`.
+        public var requestHeartRateAccessResult: Result<Void, HealthDataError> = .success(())
+        /// Herzwerte je Tag. Fehlende Tage haben keine Werte.
+        public var heartRates: [LocalDate: DailyHeartRate] = [:]
+        /// Fehler beim Lesen der Herzwerte.
+        public var heartRateError: HealthDataError?
 
         public init() {}
 
@@ -38,6 +46,8 @@ public final class HealthServiceStub: HealthAuthorizationProviding, ActivityData
         public var dailyTotalsRequests: [(metric: ActivityMetric, days: ClosedRange<LocalDate>)] = []
         public var hourlyTotalsRequests: [(metric: ActivityMetric, day: LocalDate)] = []
         public var hasAnySamplesQueries: [ActivityMetric] = []
+        public var heartRateAccessRequests = 0
+        public var dailyHeartRateRequests: [LocalDate] = []
     }
 
     private let lock = NSLock()
@@ -132,6 +142,31 @@ public final class HealthServiceStub: HealthAuthorizationProviding, ActivityData
         }
         withLock { changeContinuations[id] = continuation }
         return stream
+    }
+
+    public func heartRateAccess() async -> HeartRateAccess {
+        withLock { configuration.heartRateAccess }
+    }
+
+    public func requestHeartRateAccess() async throws {
+        try withLock {
+            calls.heartRateAccessRequests += 1
+            let result = configuration.requestHeartRateAccessResult
+            if case .success = result, configuration.heartRateAccess == .notRequested {
+                configuration.heartRateAccess = .requested
+            }
+            return result
+        }.get()
+    }
+
+    public func dailyHeartRate(on day: LocalDate, calendar: ActivityCalendar) async throws -> DailyHeartRate {
+        try withLock {
+            calls.dailyHeartRateRequests.append(day)
+            if let error = configuration.heartRateError {
+                throw error
+            }
+            return configuration.heartRates[day] ?? .empty
+        }
     }
 
     private func withLock<T>(_ body: () throws -> T) rethrows -> T {

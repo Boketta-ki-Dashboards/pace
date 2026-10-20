@@ -101,17 +101,45 @@ public enum RankingHint {
         return max(above.competitionSteps - currentUser.competitionSteps + 1, 1)
     }
 
-    /// z. B. `Noch 280 Schritte bis Platz #11`, `Du führst in Pfungstadt.` oder `Du bist der Erste in Pfungstadt.`
-    /// Auf Platz 1 gibt es keinen Aufstiegshinweis.
+    /// Ob der Platz darüber gleich viele Schritte hat (Gleichstand – vorn steht, wer den Wert zuerst erreicht hat).
+    public static func isTied(currentUser: LeaderboardEntry, above: LeaderboardEntry?) -> Bool {
+        guard currentUser.rank > 1, let above, above.rank == currentUser.rank - 1 else { return false }
+        return above.competitionSteps <= currentUser.competitionSteps
+    }
+
+    /// z. B. `Noch 280 Schritte bis Platz #11`, `Gleichstand mit Platz #11 – noch 1 Schritt zum Überholen`,
+    /// `Du führst in Pfungstadt.` oder `Du bist der Erste in Pfungstadt.` – in der Sprache der App.
+    /// `locative` ist die Ortsangabe passend zur Sprache (``Region/locative``).
     public static func text(currentUser: LeaderboardEntry, above: LeaderboardEntry?, isAlone: Bool, locative: String) -> String? {
         if isAlone {
-            return "Du bist der Erste \(locative)."
+            return PaceLocalization.text(
+                de: "Du bist der Erste \(locative).",
+                en: "You're the first one \(locative).",
+                ru: "Ты первый \(locative)."
+            )
         }
         if currentUser.rank == 1 {
-            return "Du führst \(locative)."
+            return PaceLocalization.text(
+                de: "Du führst \(locative).",
+                en: "You're in the lead \(locative).",
+                ru: "Ты лидируешь \(locative)."
+            )
         }
         guard let steps = stepsToNextPlace(currentUser: currentUser, above: above) else { return nil }
-        let formatted = steps.paceFormatted
-        return "Noch \(formatted) \(steps == 1 ? "Schritt" : "Schritte") bis Platz #\(currentUser.rank - 1)"
+        let place = "#\((currentUser.rank - 1).paceFormatted)"
+        let stepsText = PaceLocalization.steps(steps)
+        let englishSteps = "\(steps.paceFormatted) more \(steps == 1 ? "step" : "steps")"
+        if isTied(currentUser: currentUser, above: above) {
+            return PaceLocalization.text(
+                de: "Gleichstand mit Platz \(place) – noch \(stepsText) zum Überholen",
+                en: "Tied with rank \(place) – \(englishSteps) to overtake",
+                ru: "Столько же шагов, как у места \(place), – ещё \(stepsText), чтобы обогнать"
+            )
+        }
+        return PaceLocalization.text(
+            de: "Noch \(stepsText) bis Platz \(place)",
+            en: "\(englishSteps) to rank \(place)",
+            ru: "Ещё \(stepsText) до места \(place)"
+        )
     }
 }

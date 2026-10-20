@@ -70,14 +70,22 @@ public struct StatisticsReport: Equatable, Sendable {
     }
 
     public struct Best: Equatable, Sendable, Identifiable {
+        public enum Kind: String, Sendable {
+            case day, week, month, streak
+        }
+
+        public let kind: Kind
         public let title: String
         public let value: String
         public let detail: String?
 
-        public var id: String { title }
+        public var id: Kind { kind }
     }
 
-    public static let unavailable = "nicht verfügbar"
+    /// „nicht verfügbar“ in der Sprache der App.
+    public static var unavailable: String {
+        PaceLocalization.text(de: "nicht verfügbar", en: "not available", ru: "нет данных")
+    }
 
     public let period: StatisticsPeriod
     public let metric: StatisticsMetric
@@ -188,9 +196,9 @@ public struct StatisticsReport: Equatable, Sendable {
         if isAvailable, let average {
             tiles.append(Tile(
                 kind: .average,
-                title: "Ø pro Tag",
+                title: PaceLocalization.text(de: "Ø pro Tag", en: "Avg. per day", ru: "В среднем за день"),
                 value: metric.formatWithUnit(average, formatter: formatter),
-                detail: values.count == 1 ? "1 Tag" : "\(values.count) Tage",
+                detail: ActivityTexts.days(values.count),
                 isAvailable: true
             ))
         }
@@ -201,18 +209,20 @@ public struct StatisticsReport: Equatable, Sendable {
             let counted = past.count + (todayReached == true ? 1 : 0)
             tiles.append(Tile(
                 kind: .goalDays,
-                title: "Zieltage",
-                value: "\(reached) von \(counted)",
-                detail: todayReached == false ? "heute läuft noch" : nil,
+                title: PaceLocalization.text(de: "Zieltage", en: "Goal days", ru: "Дни с целью"),
+                value: PaceLocalization.text(de: "\(reached) von \(counted)", en: "\(reached) of \(counted)", ru: "\(reached) из \(counted)"),
+                detail: todayReached == false
+                    ? PaceLocalization.text(de: "heute läuft noch", en: "today is still open", ru: "сегодня ещё не закончен")
+                    : nil,
                 isAvailable: true
             ))
         }
         if isAvailable, let best = values.filter({ $0.value > 0 }).max(by: { ($0.value, $0.day.date) < ($1.value, $1.day.date) }) {
             tiles.append(Tile(
                 kind: .bestDay,
-                title: "Bester Tag",
+                title: Texts.bestDay,
                 value: metric.formatWithUnit(best.value, formatter: formatter),
-                detail: best.day.date == input.today ? "Heute" : formatter.dayWithWeekdayShort(best.day.date),
+                detail: best.day.date == input.today ? Texts.today : formatter.dayWithWeekdayShort(best.day.date),
                 isAvailable: true
             ))
         }
@@ -221,9 +231,11 @@ public struct StatisticsReport: Equatable, Sendable {
         if isAvailable, let previous {
             tiles.append(Tile(
                 kind: .previous,
-                title: input.period == .week ? "Vorwoche" : "Vormonat",
+                title: input.period == .week
+                    ? PaceLocalization.text(de: "Vorwoche", en: "Previous week", ru: "Прошлая неделя")
+                    : PaceLocalization.text(de: "Vormonat", en: "Previous month", ru: "Прошлый месяц"),
                 value: metric.formatWithUnit(previous.total, formatter: formatter),
-                detail: "Ø \(metric.formatWithUnit(previous.average, formatter: formatter)) pro Tag",
+                detail: Texts.averagePerDay(metric.formatWithUnit(previous.average, formatter: formatter)),
                 isAvailable: true
             ))
         }
@@ -236,7 +248,17 @@ public struct StatisticsReport: Equatable, Sendable {
         if isAvailable, let completedAverage, let previous, previous.average > 0 {
             comparison = makeComparison(
                 change: completedAverage / previous.average - 1,
-                suffix: input.period == .week ? "ggü. Vorwoche (Ø pro Tag)" : "ggü. Vormonat (Ø pro Tag)",
+                suffix: input.period == .week
+                    ? PaceLocalization.text(
+                        de: "ggü. Vorwoche (Ø pro Tag)",
+                        en: "vs. previous week (avg. per day)",
+                        ru: "к прошлой неделе (в среднем за день)"
+                    )
+                    : PaceLocalization.text(
+                        de: "ggü. Vormonat (Ø pro Tag)",
+                        en: "vs. previous month (avg. per day)",
+                        ru: "к прошлому месяцу (в среднем за день)"
+                    ),
                 formatter: formatter
             )
         }
@@ -260,11 +282,11 @@ public struct StatisticsReport: Equatable, Sendable {
             title: title,
             subtitle: subtitle,
             valueText: isAvailable ? metric.format(total, formatter: formatter) : nil,
-            unitText: metric.unit,
+            unitText: metric.unit(for: total),
             // Schritte wie auf Home ohne Einheit („Ø 7.473 pro Tag“), Distanz und Kalorien mit („Ø 6,5 km pro Tag“).
             secondaryText: isAvailable ? average.map { value in
                 let text = metric == .steps ? metric.format(value, formatter: formatter) : metric.formatWithUnit(value, formatter: formatter)
-                return "Ø \(text) pro Tag"
+                return Texts.averagePerDay(text)
             } : nil,
             progress: nil,
             goalReached: nil,
@@ -301,12 +323,18 @@ public struct StatisticsReport: Equatable, Sendable {
         switch input.period {
         case .week:
             let range = formatter.dayRange(first, last)
-            if (first...last).contains(input.today) { return ("Diese Woche", range) }
-            if (first...last).contains(calendar.adding(-7, to: input.today)) { return ("Letzte Woche", range) }
+            if (first...last).contains(input.today) {
+                return (PaceLocalization.text(de: "Diese Woche", en: "This week", ru: "Эта неделя"), range)
+            }
+            if (first...last).contains(calendar.adding(-7, to: input.today)) {
+                return (PaceLocalization.text(de: "Letzte Woche", en: "Last week", ru: "Прошлая неделя"), range)
+            }
             return (range, nil)
         default:
             let month = formatter.monthYear(first)
-            return (first...last).contains(input.today) ? ("Dieser Monat", month) : (month, nil)
+            return (first...last).contains(input.today)
+                ? (PaceLocalization.text(de: "Dieser Monat", en: "This month", ru: "Этот месяц"), month)
+                : (month, nil)
         }
     }
 
@@ -325,7 +353,8 @@ public struct StatisticsReport: Equatable, Sendable {
         let dayValues = days.compactMap { day in metric.value(of: day).map { (day.date, $0) } }
         if let best = dayValues.filter({ $0.1 > 0 }).max(by: { ($0.1, $0.0) < ($1.1, $1.0) }) {
             result.append(Best(
-                title: "Bester Tag",
+                kind: .day,
+                title: Texts.bestDay,
                 value: metric.formatWithUnit(best.1, formatter: formatter),
                 detail: formatter.dayWithWeekdayShort(best.0)
             ))
@@ -342,22 +371,25 @@ public struct StatisticsReport: Equatable, Sendable {
         }
         if let best = weeks.filter({ $0.value > 0 }).max(by: { ($0.value, $0.key) < ($1.value, $1.key) }) {
             result.append(Best(
-                title: "Beste Woche",
+                kind: .week,
+                title: PaceLocalization.text(de: "Beste Woche", en: "Best week", ru: "Лучшая неделя"),
                 value: metric.formatWithUnit(best.value, formatter: formatter),
                 detail: formatter.dayRange(best.key, calendar.adding(6, to: best.key))
             ))
         }
         if let best = months.filter({ $0.value > 0 }).max(by: { ($0.value, $0.key) < ($1.value, $1.key) }) {
             result.append(Best(
-                title: "Bester Monat",
+                kind: .month,
+                title: PaceLocalization.text(de: "Bester Monat", en: "Best month", ru: "Лучший месяц"),
                 value: metric.formatWithUnit(best.value, formatter: formatter),
                 detail: formatter.monthYear(best.key)
             ))
         }
         if metric == .steps, let record = input.record, record.days > 0 {
             result.append(Best(
-                title: "Längste Serie",
-                value: record.days == 1 ? "1 Tag" : "\(record.days) Tage",
+                kind: .streak,
+                title: PaceLocalization.text(de: "Längste Serie", en: "Longest streak", ru: "Самая длинная серия"),
+                value: ActivityTexts.days(record.days),
                 detail: formatter.dayRange(record.start, record.end)
             ))
         }
@@ -384,8 +416,14 @@ public struct StatisticsReport: Equatable, Sendable {
             let reached = StepStreakCalculator.isReached(summary, goals: input.goals)
             goalReached = reached
             if metric == .steps {
-                progress = Double(summary.competitionSteps) / Double(goal)
-                secondary = "von \(formatter.steps(goal)) Schritten · \(formatter.percent(progress ?? 0))"
+                let fraction = Double(summary.competitionSteps) / Double(goal)
+                progress = fraction
+                let goalText = formatter.steps(goal)
+                secondary = PaceLocalization.text(
+                    de: "von \(goalText) Schritten",
+                    en: "of \(goalText) steps",
+                    ru: "из \(goalText) шагов"
+                ) + " · \(formatter.percent(fraction))"
             }
         }
 
@@ -397,24 +435,29 @@ public struct StatisticsReport: Equatable, Sendable {
         func metricTile(_ kind: Tile.Kind, _ title: String, _ text: String?) {
             tiles.append(Tile(kind: kind, title: title, value: text ?? unavailable, detail: nil, isAvailable: text != nil))
         }
-        metricTile(.steps, "Schritte", summary.map { formatter.steps($0.competitionSteps) })
-        metricTile(.distance, "Distanz", summary?.walkingRunningDistanceMeters.map(formatter.distance(meters:)))
-        metricTile(.activeEnergy, "Aktive Kalorien", summary?.activeEnergyKilocalories.map(formatter.energy(kilocalories:)))
-        metricTile(.flights, "Stockwerke", summary?.flightsClimbed.map(formatter.flights))
-        metricTile(.exercise, "Trainingsminuten", summary?.exerciseMinutes.map(formatter.exerciseMinutes))
+        metricTile(.steps, StatisticsMetric.steps.title, summary.map { formatter.steps($0.competitionSteps) })
+        metricTile(.distance, Texts.distance, summary?.walkingRunningDistanceMeters.map(formatter.distance(meters:)))
+        metricTile(.activeEnergy, Texts.activeCalories, summary?.activeEnergyKilocalories.map(formatter.energy(kilocalories:)))
+        metricTile(.flights, Texts.floors, summary?.flightsClimbed.map(formatter.flights))
+        metricTile(.exercise, Texts.exerciseMinutes, summary?.exerciseMinutes.map(formatter.exerciseMinutes))
         if let summary {
             let reached = StepStreakCalculator.isReached(summary, goals: input.goals)
             let remaining = max(goal - summary.competitionSteps, 0)
+            let remainingText = formatter.steps(remaining)
             tiles.append(Tile(
                 kind: .goal,
-                title: "Tagesziel",
-                value: reached ? "Erreicht" : isToday ? "Noch \(formatter.steps(remaining))" : "Nicht erreicht",
-                detail: "Ziel: \(formatter.steps(goal)) Schritte",
+                title: PaceLocalization.text(de: "Tagesziel", en: "Daily goal", ru: "Цель на день"),
+                value: reached
+                    ? PaceLocalization.text(de: "Erreicht", en: "Reached", ru: "Достигнута")
+                    : isToday
+                        ? PaceLocalization.text(de: "Noch \(remainingText)", en: "\(remainingText) to go", ru: "Ещё \(remainingText)")
+                        : PaceLocalization.text(de: "Nicht erreicht", en: "Not reached", ru: "Не достигнута"),
+                detail: PaceLocalization.text(de: "Ziel: ", en: "Goal: ", ru: "Цель: ") + ActivityTexts.steps(goal, formatter: formatter),
                 isAvailable: true
             ))
             tiles.append(Tile(
                 kind: .progress,
-                title: "Fortschritt",
+                title: PaceLocalization.text(de: "Fortschritt", en: "Progress", ru: "Прогресс"),
                 value: formatter.percent(Double(summary.competitionSteps) / Double(goal)),
                 detail: nil,
                 isAvailable: true
@@ -423,19 +466,19 @@ public struct StatisticsReport: Equatable, Sendable {
 
         var notes: [String] = []
         if summary == nil {
-            notes.append("Für diesen Tag liegen keine Daten vor.")
+            notes.append(Texts.noDataForDay)
         } else if !isAvailable {
             notes.append(unavailableNote(metric))
         }
         if let summary, summary.hasNonCompetitionSteps {
-            notes.append("In Apple Health: \(formatter.steps(summary.healthSteps)) Schritte. \(ActivityTexts.manualStepsNote)")
+            notes.append(Texts.healthStepsNote(summary.healthSteps, formatter: formatter))
         }
 
         let title: String
         if isToday {
-            title = "Heute"
+            title = Texts.today
         } else if day == calendar.adding(-1, to: input.today) {
-            title = "Gestern"
+            title = Texts.yesterday
         } else {
             title = formatter.weekdayLong(day)
         }
@@ -446,7 +489,7 @@ public struct StatisticsReport: Equatable, Sendable {
             title: title,
             subtitle: formatter.dayLong(day),
             valueText: value.map { metric.format($0, formatter: formatter) },
-            unitText: metric.unit,
+            unitText: metric.unit(for: value ?? 5),
             secondaryText: secondary,
             progress: progress,
             goalReached: goalReached,
@@ -472,7 +515,7 @@ public struct StatisticsReport: Equatable, Sendable {
             return Bar(
                 id: "h\(hour)",
                 label: "\(hour)",
-                accessibilityLabel: "\(hour) Uhr",
+                accessibilityLabel: Texts.hour(hour),
                 day: nil,
                 value: isFuture ? nil : input.metric.chartValue(hourly.values[hour] ?? 0),
                 reachedGoal: false,
@@ -493,10 +536,14 @@ public struct StatisticsReport: Equatable, Sendable {
             else { return nil }
             let fullHours = (0..<input.currentHour).reduce(0) { $0 + (yesterday[$1] ?? 0) }
             previous = fullHours + (yesterday[input.currentHour] ?? 0) * min(max(input.fractionOfCurrentHour, 0), 1)
-            suffix = "ggü. gestern zur gleichen Zeit"
+            suffix = PaceLocalization.text(
+                de: "ggü. gestern zur gleichen Zeit",
+                en: "vs. yesterday at the same time",
+                ru: "к вчерашнему дню в это же время"
+            )
         } else {
             previous = input.history.summary(for: previousDay).flatMap(input.metric.value(of:))
-            suffix = "ggü. Vortag"
+            suffix = PaceLocalization.text(de: "ggü. Vortag", en: "vs. previous day", ru: "к предыдущему дню")
         }
         guard let previous, previous > 0 else { return nil }
         return makeComparison(change: value / previous - 1, suffix: suffix, formatter: input.formatter)
@@ -521,6 +568,45 @@ public struct StatisticsReport: Equatable, Sendable {
     }
 
     private static func unavailableNote(_ metric: StatisticsMetric) -> String {
-        "Für „\(metric.title)“ sind keine Daten lesbar. Prüfe in der Health-App, ob Pace darauf zugreifen darf."
+        let title = metric.title
+        return PaceLocalization.text(
+            de: "Für „\(title)“ sind keine Daten lesbar. Prüfe in der Health-App, ob Pace darauf zugreifen darf.",
+            en: "No “\(title)” data is readable. Check in the Health app whether Pace has access.",
+            ru: "Данные «\(title)» недоступны. Проверь в приложении «Здоровье», есть ли у Pace доступ."
+        )
+    }
+}
+
+/// Wiederkehrende Texte der Statistik und der Tagesdetails.
+enum Texts {
+    static var today: String { PaceLocalization.text(de: "Heute", en: "Today", ru: "Сегодня") }
+    static var yesterday: String { PaceLocalization.text(de: "Gestern", en: "Yesterday", ru: "Вчера") }
+    static var bestDay: String { PaceLocalization.text(de: "Bester Tag", en: "Best day", ru: "Лучший день") }
+    static var distance: String { PaceLocalization.text(de: "Distanz", en: "Distance", ru: "Дистанция") }
+    static var activeCalories: String { PaceLocalization.text(de: "Aktive Kalorien", en: "Active calories", ru: "Активные калории") }
+    static var floors: String { PaceLocalization.text(de: "Stockwerke", en: "Floors", ru: "Этажи") }
+    static var exerciseMinutes: String { PaceLocalization.text(de: "Trainingsminuten", en: "Exercise minutes", ru: "Минуты тренировки") }
+    static var noDataForDay: String {
+        PaceLocalization.text(de: "Für diesen Tag liegen keine Daten vor.", en: "There is no data for this day.", ru: "Для этого дня нет данных.")
+    }
+
+    /// „Ø 7.473 pro Tag“
+    static func averagePerDay(_ value: String) -> String {
+        PaceLocalization.text(de: "Ø \(value) pro Tag", en: "Avg. \(value) per day", ru: "В среднем \(value) в день")
+    }
+
+    /// „8 Uhr“ / „8:00“
+    static func hour(_ hour: Int) -> String {
+        PaceLocalization.text(de: "\(hour) Uhr", en: "\(hour):00", ru: "\(hour):00")
+    }
+
+    /// „In Apple Health: 9.120 Schritte. Manuell eingetragene Schritte zählen nicht für Rankings.“
+    static func healthStepsNote(_ steps: Int, formatter: ActivityFormatter) -> String {
+        let stepsText = ActivityTexts.steps(steps, formatter: formatter)
+        return PaceLocalization.text(
+            de: "In Apple Health: \(stepsText).",
+            en: "In Apple Health: \(stepsText).",
+            ru: "В Apple Health: \(stepsText)."
+        ) + " " + ActivityTexts.manualStepsNote
     }
 }
