@@ -79,6 +79,25 @@ public final class RegionalStandingsViewModel {
         store.hierarchy?.leaderboardScopes ?? []
     }
 
+    /// Region des Nutzers (Gemeinde bis Land); `nil`, solange sie nicht geladen ist.
+    public var hierarchy: RegionHierarchy? {
+        store.hierarchy
+    }
+
+    /// Die regionalen Karten (immer alle gewünschten Ebenen, auch bei kreisfreien Städten und Stadtstaaten). Ohne
+    /// Teilnahme ohne Plätze – es werden dafür keine Rankings geladen.
+    public func regionCards(levels: [RegionLevel] = RegionLevel.allCases) -> [HomeRegionCard] {
+        HomeRegionCards.cards(hierarchy: store.hierarchy, standings: isParticipating ? standings : nil, levels: levels)
+    }
+
+    /// Ob die Platzierungen gerade (erstmals) geladen werden.
+    public var isLoading: Bool {
+        switch state {
+        case .idle, .loading: true
+        case .loaded, .failed: false
+        }
+    }
+
     /// Ebenen, die es für die Region des Nutzers als eigenes Ranking gibt (z. B. hat eine kreisfreie Stadt keinen
     /// eigenen Kreis). Solange die Region nicht geladen ist, alle Ebenen.
     public var availableLevels: [RegionLevel] {
@@ -152,7 +171,11 @@ public final class RegionalStandingsViewModel {
         }
         // Ohne Gemeinde im Profil gibt es keine Ebenen. Kein erneuter Versuch – er liefe sofort wieder hierher.
         guard let hierarchy = store.hierarchy else {
-            state = .failed(message: "Wähle im Profil deine Gemeinde, um Platzierungen zu sehen.")
+            state = .failed(message: PaceLocalization.text(
+                de: "Wähle im Profil deine Gemeinde, um Platzierungen zu sehen.",
+                en: "Choose your municipality in your profile to see your rankings.",
+                ru: "Выбери свою общину в профиле, чтобы видеть свои места."
+            ))
             return
         }
         let scopes = hierarchy.leaderboardScopes
@@ -223,7 +246,11 @@ public final class RegionalStandingsViewModel {
         do {
             try await store.setRegionalLeaderboardEnabled(true)
         } catch {
-            participationError = "Das hat nicht geklappt. Prüfe deine Verbindung und versuche es erneut."
+            participationError = PaceLocalization.text(
+                de: "Das hat nicht geklappt. Prüfe deine Verbindung und versuche es erneut.",
+                en: "That didn't work. Check your connection and try again.",
+                ru: "Не получилось. Проверь подключение и попробуй ещё раз."
+            )
             return
         }
         await load()
@@ -231,9 +258,17 @@ public final class RegionalStandingsViewModel {
 
     static func message(for error: Error) -> String {
         if error as? LeaderboardError == .network || error as? RegionError == .network {
-            return "Platzierungen gerade nicht verfügbar. Prüfe deine Verbindung."
+            return PaceLocalization.text(
+                de: "Platzierungen gerade nicht verfügbar. Prüfe deine Verbindung.",
+                en: "Rankings are unavailable right now. Check your connection.",
+                ru: "Места сейчас недоступны. Проверь подключение."
+            )
         }
-        return "Platzierungen konnten nicht geladen werden."
+        return PaceLocalization.text(
+            de: "Platzierungen konnten nicht geladen werden.",
+            en: "Your rankings couldn't be loaded.",
+            ru: "Не удалось загрузить места."
+        )
     }
 }
 
@@ -248,23 +283,7 @@ public struct RegionalStandings: Equatable, Sendable {
 
         /// z. B. `Stadt`, `Gemeinde`, `Landkreis`, `Bundesland`, `Land`.
         public var levelTitle: String {
-            switch region.level {
-            case .municipality:
-                switch region.kind {
-                case .stadt, .grosseKreisstadt, .kreisfreieStadt: "Stadt"
-                case .markt: "Markt"
-                default: "Gemeinde"
-                }
-            case .district:
-                switch region.kind {
-                case .kreis: "Kreis"
-                case .regionalverband: "Regionalverband"
-                case .kreisfreieStadt, .stadtkreis: "Stadt"
-                default: "Landkreis"
-                }
-            case .state: "Bundesland"
-            case .country: "Land"
-            }
+            HomeRegionCard.title(for: region.level, region: region)
         }
 
         /// z. B. `#12`, ohne Platzierung `–`.
@@ -290,7 +309,7 @@ public struct RegionalStandings: Equatable, Sendable {
 
         /// z. B. `Noch 280 Schritte bis Platz #11`. Auf Platz 1 gibt es keinen Aufstiegshinweis.
         public var footerText: String {
-            RankingHint.text(currentUser: currentUser, above: nextAbove, isAlone: isAlone, locative: region.locative) ?? ""
+            HomeRankingTexts.neighborhoodFooter(self) ?? ""
         }
     }
 

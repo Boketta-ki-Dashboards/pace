@@ -1,0 +1,312 @@
+import ActivityFeature
+import DesignSystem
+import PaceCore
+import SwiftUI
+
+/// Ein Widget auf Home – mit Kopf, Inhalt in seiner Größe und Kartenhintergrund.
+///
+/// Im Anpassen-Modus ersetzt ein eigener Kopf („Größe auswählen“, Ziehgriff) die normalen Aktionen; der Inhalt ist
+/// dann nicht antippbar, Antippen öffnet stattdessen die Galerie zum Bearbeiten. In der Galerie-Vorschau sieht das
+/// Widget aus wie auf Home, reagiert aber nicht.
+struct HomeModuleView: View {
+    let module: HomeModule
+    let viewModel: HomeDashboardViewModel
+    let mode: HomeWidgetMode
+    /// Anpassen-Modus: Antippen des Inhalts (Bearbeiten in der Galerie).
+    var onEdit: () -> Void = {}
+
+    var body: some View {
+        if isBare {
+            content
+                .allowsHitTesting(mode.isInteractive)
+        } else {
+            VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                if mode == .editing {
+                    HomeEditHeader(title: title, module: module, viewModel: viewModel)
+                } else if showsHeader {
+                    header
+                }
+                if mode == .editing {
+                    content
+                        .allowsHitTesting(false)
+                        .overlay {
+                            Button(action: onEdit) {
+                                Color.clear.contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(HomeTexts.editWidget + ": " + title)
+                        }
+                } else {
+                    content
+                        .allowsHitTesting(mode.isInteractive)
+                }
+            }
+            .padding(PaceSpacing.m)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .paceCardBackground()
+        }
+    }
+
+    private var title: String {
+        viewModel.title(for: module)
+    }
+
+    /// Ohne Ranking-Sichtbarkeit zeigen Ranking-Widgets einen gesperrten Zustand ohne echte Werte.
+    private var isLocked: Bool {
+        module.kind.showsRegionalRankings && !viewModel.isRankingVisible
+    }
+
+    /// Die vier Karten stehen im normalen Home-Design ohne eigene Karte und ohne Überschrift.
+    private var isBare: Bool {
+        module.kind == .regionRanks && module.size <= .medium && mode != .editing
+    }
+
+    /// Kleine Widgets kommen ohne Kopfzeile aus, wenn ihr Inhalt für sich spricht.
+    private var showsHeader: Bool {
+        switch module.kind {
+        case .regionRanks, .neighborhood, .friends, .groups, .stepsToday:
+            true
+        case .week, .streak, .activity, .calendar:
+            module.size != .small
+        }
+    }
+
+    // MARK: Kopf
+
+    @ViewBuilder
+    private var header: some View {
+        switch module.kind {
+        case .stepsToday:
+            HomeWidgetTitleRow(title) {
+                Button {
+                    viewModel.present(.stepGoal)
+                } label: {
+                    Label(HomeTexts.dailyGoalChange, systemImage: "scope")
+                        .font(PaceFont.callout)
+                        .foregroundStyle(PaceColor.accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                .buttonStyle(.pacePressable)
+                .allowsHitTesting(mode.isInteractive)
+                .fixedSize()
+            }
+        case .week:
+            NavigationLink(value: StatisticsRoute(period: .week, metric: .steps)) {
+                HomeWidgetTitleRow(title) { HomeChevron() }
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pacePressable)
+            .allowsHitTesting(mode.isInteractive)
+            .accessibilityLabel(viewModel.week?.accessibilitySummary ?? title)
+            .accessibilityHint(PaceLocalization.text(
+                de: "Öffnet die Wochenstatistik", en: "Opens the weekly statistics", ru: "Открывает статистику за неделю"
+            ))
+        case .streak:
+            NavigationLink(value: StatisticsRoute(period: .month, metric: .steps)) {
+                HomeWidgetTitleRow(title) { HomeChevron() }
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pacePressable)
+            .allowsHitTesting(mode.isInteractive)
+        case .neighborhood:
+            Button {
+                viewModel.openRankings(neighborhoodRegion)
+            } label: {
+                HomeWidgetTitleRow(title) { HomeChevron() }
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pacePressable)
+            .allowsHitTesting(mode.isInteractive)
+        case .friends, .groups:
+            Button {
+                viewModel.openSocial()
+            } label: {
+                HomeWidgetTitleRow(title) { HomeChevron() }
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pacePressable)
+            .allowsHitTesting(mode.isInteractive)
+        case .calendar:
+            NavigationLink(value: CalendarRoute()) {
+                HomeWidgetTitleRow(title) { HomeChevron() }
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pacePressable)
+            .allowsHitTesting(mode.isInteractive)
+        case .regionRanks, .activity:
+            HomeWidgetTitleRow(title)
+        }
+    }
+
+    private var neighborhoodRegion: Region? {
+        let level = viewModel.standings.effectiveLevel(for: module.regionLevel ?? .municipality)
+        return viewModel.standings.scopes.first { $0.level == level }
+    }
+
+    // MARK: Inhalt
+
+    @ViewBuilder
+    private var content: some View {
+        if isLocked {
+            lockedContent
+        } else {
+            switch module.kind {
+            case .regionRanks:
+                VStack(alignment: .leading, spacing: PaceSpacing.xs) {
+                    RegionRanksWidgetContent(
+                        cards: viewModel.regionCards(for: module),
+                        size: module.size,
+                        isLoading: viewModel.standings.isLoading,
+                        isInteractive: mode.isInteractive,
+                        onSelect: { region in viewModel.openRankings(region) }
+                    )
+                    if case .failed(let message) = viewModel.standings.state {
+                        HomeWidgetHint(systemImage: "arrow.clockwise", text: message)
+                    }
+                }
+            case .stepsToday:
+                StepsTodayWidgetContent(
+                    state: viewModel.activity.state,
+                    summary: viewModel.stepsToday,
+                    size: module.size,
+                    onRetry: { Task { await viewModel.activity.retry() } }
+                )
+            case .week:
+                WeekWidgetContent(week: viewModel.week, size: module.size, unavailableText: viewModel.weekUnavailableText)
+            case .streak:
+                NavigationLink(value: StatisticsRoute(period: .month, metric: .steps)) {
+                    StreakWidgetContent(widget: viewModel.streakWidget, state: viewModel.streak.history.state, size: module.size)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.pacePressable)
+                .accessibilityHint(PaceLocalization.text(
+                    de: "Öffnet die Monatsstatistik", en: "Opens the monthly statistics", ru: "Открывает статистику за месяц"
+                ))
+            case .neighborhood:
+                NeighborhoodWidgetContent(
+                    standings: viewModel.standings,
+                    level: module.regionLevel ?? .municipality,
+                    size: module.size,
+                    rows: module.neighborhoodRows,
+                    onOpenRankings: { region in viewModel.openRankings(region) }
+                )
+            case .friends:
+                FriendsWidgetContent(
+                    widget: viewModel.friendsWidget(for: module),
+                    state: viewModel.social.state,
+                    size: module.size,
+                    onOpenSocial: { viewModel.openSocial() }
+                )
+            case .groups:
+                GroupsWidgetContent(
+                    selection: viewModel.groupSelection(for: module),
+                    state: viewModel.social.state,
+                    size: module.size,
+                    onOpenGroup: { id in viewModel.openGroup(id) },
+                    onOpenSocial: { viewModel.openSocial() }
+                )
+            case .activity:
+                ActivityWidgetContent(
+                    widget: viewModel.activityWidget(for: module),
+                    size: module.size,
+                    unavailableText: viewModel.weekUnavailableText
+                )
+            case .calendar:
+                CalendarWidgetContent(
+                    widget: viewModel.calendarWidget(size: module.size),
+                    size: module.size,
+                    isLoading: viewModel.isHistoryLoading
+                )
+            }
+        }
+    }
+
+    /// „Ranking ausgeschaltet“: die Grundform bleibt erkennbar, darüber liegt eine dezente Unschärfe. Der Platzhalter
+    /// enthält keine echten Werte – es werden dafür auch keine geladen.
+    @ViewBuilder
+    private var lockedContent: some View {
+        VStack(alignment: .leading, spacing: PaceSpacing.xs) {
+            PaceLockedCard(
+                systemImage: "eye.slash",
+                title: HomeTexts.rankingOffTitle,
+                message: HomeTexts.rankingOffMessage,
+                actionTitle: mode.isInteractive && !viewModel.standings.isUpdatingParticipation ? HomeTexts.enableRankingVisibility : nil,
+                action: { viewModel.requestRankingVisibility() }
+            ) {
+                if module.kind == .regionRanks {
+                    RegionRanksPlaceholder(levels: module.regionLevels)
+                } else {
+                    NeighborhoodPlaceholder(rows: min(module.neighborhoodRows, 3))
+                }
+            }
+            if viewModel.standings.isUpdatingParticipation {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+            }
+            if mode.isInteractive, let error = viewModel.standings.participationError {
+                Text(error)
+                    .font(PaceFont.caption)
+                    .foregroundStyle(PaceColor.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+/// Kopf eines Widgets im Anpassen-Modus: Titel, „Größe auswählen“ und Ziehgriff. Für VoiceOver trägt der Titel die
+/// Aktionen (verschieben, Größe, entfernen) als Alternative zum Ziehen.
+struct HomeEditHeader: View {
+    let title: String
+    let module: HomeModule
+    let viewModel: HomeDashboardViewModel
+
+    var body: some View {
+        HStack(alignment: .center, spacing: PaceSpacing.xs) {
+            Text(title)
+                .font(PaceFont.cardTitle)
+                .foregroundStyle(PaceColor.textPrimary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, module.kind.isRemovable ? 20 : 0)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityValue(HomeTexts.size(module.size))
+                .accessibilityActions {
+                    if viewModel.settings.canMoveUp(module.id) {
+                        Button(HomeTexts.moveUp) { viewModel.moveUp(module.id) }
+                    }
+                    if viewModel.settings.canMoveDown(module.id) {
+                        Button(HomeTexts.moveDown) { viewModel.moveDown(module.id) }
+                    }
+                    ForEach(module.kind.supportedSizes) { size in
+                        Button(HomeTexts.size(size)) { viewModel.setSize(size, for: module.id) }
+                    }
+                    if module.kind.isRemovable {
+                        Button(HomeTexts.remove(title)) { viewModel.remove(module.id) }
+                    }
+                }
+            Spacer(minLength: PaceSpacing.xxs)
+            Button {
+                viewModel.toggleSizeMenu(for: module.id)
+            } label: {
+                HStack(spacing: 6) {
+                    HomeSizeGlyph()
+                    Text(HomeTexts.chooseSize)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(PaceColor.textSecondary)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .fixedSize()
+            .accessibilityLabel(HomeTexts.chooseSize)
+            .accessibilityValue(module.size.title)
+            HomeDragHandle()
+                .padding(.leading, 2)
+        }
+    }
+}

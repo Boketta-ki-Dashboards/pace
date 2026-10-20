@@ -26,7 +26,7 @@ public final class HomeViewModel {
     /// Hinweis unter der Schrittzahl, wenn heute Schritte in Apple Health nicht für Rankings zählen.
     public var manualStepsNote: String? {
         guard let overview, overview.today.hasNonCompetitionSteps else { return nil }
-        return ActivityTexts.manualStepsNote
+        return HomeTexts.manualStepsNote
     }
 
     /// Zustand der Detailansicht. Scheitert eine spätere Aktualisierung, bleiben die zuletzt geladenen Werte mit
@@ -40,7 +40,11 @@ public final class HomeViewModel {
         case .failed(let message):
             return lastLoadedOverview.map { .loaded($0, notice: message) } ?? .unavailable(message: message)
         case .noReadAccess:
-            return .unavailable(message: "Pace hat keinen Zugriff auf deine Schritte. Prüfe den Zugriff in der Health-App.")
+            return .unavailable(message: PaceLocalization.text(
+                de: "Pace hat keinen Zugriff auf deine Schritte. Prüfe den Zugriff in der Health-App.",
+                en: "Pace can't access your steps. Check the access in the Health app.",
+                ru: "У Pace нет доступа к твоим шагам. Проверь доступ в приложении «Здоровье»."
+            ))
         }
     }
 
@@ -187,11 +191,23 @@ public final class HomeViewModel {
     static func message(for error: Error) -> String {
         switch error as? HealthDataError {
         case .healthDataUnavailable:
-            "Apple Health ist auf diesem Gerät nicht verfügbar."
+            PaceLocalization.text(
+                de: "Apple Health ist auf diesem Gerät nicht verfügbar.",
+                en: "Apple Health isn't available on this device.",
+                ru: "Apple Health недоступно на этом устройстве."
+            )
         case .protectedDataUnavailable:
-            "Deine Health-Daten sind geschützt, solange dein iPhone gesperrt ist. Entsperre es und versuche es erneut."
+            PaceLocalization.text(
+                de: "Deine Health-Daten sind geschützt, solange dein iPhone gesperrt ist. Entsperre es und versuche es erneut.",
+                en: "Your health data is protected while your iPhone is locked. Unlock it and try again.",
+                ru: "Данные о здоровье защищены, пока iPhone заблокирован. Разблокируй его и попробуй снова."
+            )
         default:
-            "Deine Schritte konnten nicht geladen werden. Bitte versuche es erneut."
+            PaceLocalization.text(
+                de: "Deine Schritte konnten nicht geladen werden. Bitte versuche es erneut.",
+                en: "Your steps couldn't be loaded. Please try again.",
+                ru: "Не удалось загрузить шаги. Попробуй ещё раз."
+            )
         }
     }
 }
