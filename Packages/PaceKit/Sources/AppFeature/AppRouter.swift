@@ -30,9 +30,11 @@ public final class AppRouter {
     @ObservationIgnored private let dependencies: AppDependencies
     @ObservationIgnored private var isConnecting = false
 
-    public init(dependencies: AppDependencies) {
+    /// - Parameter settings: Nur für Tests: Einstellungen, die die Sprache nicht app-weit anwenden. Standard: aus
+    ///   `dependencies.preferences`, angewendet auf die ganze App.
+    public init(dependencies: AppDependencies, settings: AppSettings? = nil) {
         self.dependencies = dependencies
-        settings = AppSettings(store: dependencies.preferences)
+        self.settings = settings ?? AppSettings(store: dependencies.preferences)
         if case .available(let services) = dependencies.backend {
             media = services.media
         } else {
