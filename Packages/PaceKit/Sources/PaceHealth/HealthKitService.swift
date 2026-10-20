@@ -192,11 +192,11 @@ extension HealthKitService {
         guard isHealthDataAvailable else { return .unavailable }
         do {
             let status: HKAuthorizationRequestStatus = try await withCheckedThrowingContinuation { continuation in
-                healthStore.getRequestStatusForAuthorization(toShare: [], read: Self.heartRateReadTypes) { status, error in
+                healthStore.getRequestStatusForAuthorization(toShare: [], read: Self.heartRateReadTypes) { requestStatus, error in
                     if let error {
                         continuation.resume(throwing: error)
                     } else {
-                        continuation.resume(returning: status)
+                        continuation.resume(returning: requestStatus)
                     }
                 }
             }
