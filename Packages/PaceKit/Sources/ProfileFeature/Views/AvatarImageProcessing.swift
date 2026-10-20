@@ -4,6 +4,7 @@ import UIKit
 
 /// Bereitet ein ausgewähltes Foto als Profilbild vor: mittig quadratisch zugeschnitten, auf höchstens 1.024 × 1.024
 /// Pixel verkleinert und als JPEG komprimiert, bis es unter die Grenze des Servers (5 MB) passt.
+@MainActor
 enum AvatarImageProcessing {
     static let maximumDimension: CGFloat = 1_024
 
