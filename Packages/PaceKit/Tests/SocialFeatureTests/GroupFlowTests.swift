@@ -29,6 +29,31 @@ struct CreateGroupViewModelTests {
         }
     }
 
+    @Test func invitationsStopAtTheServerLimit() async {
+        let many = (1...35).map { index in
+            SocialProfile(
+                publicID: UUID(uuidString: String(format: "eeeeeeee-0000-4000-8000-%012d", index))!,
+                username: "freund\(index)",
+                displayName: "Freund \(index)"
+            )
+        }
+        let repository = SocialRepositoryStub { state in
+            state.friends = many.map { Friend(profile: $0, friendsSince: .distantPast) }
+        }
+        let social = await makeSocial(repository)
+        let form = social.createGroupForm()
+
+        many.forEach { form.toggleInvitee($0.publicID) }
+
+        #expect(form.inviteeIDs.count == CreateGroupViewModel.maximumInvitees)
+        #expect(!form.canInviteMore)
+        // Abwählen gibt wieder Platz frei.
+        form.toggleInvitee(many[0].publicID)
+        #expect(form.canInviteMore)
+        form.toggleInvitee(many[34].publicID)
+        #expect(form.isInvited(many[34].publicID))
+    }
+
     @Test func invalidInputIsRejectedBeforeTheServer() async {
         let repository = friends()
         let social = await makeSocial(repository)

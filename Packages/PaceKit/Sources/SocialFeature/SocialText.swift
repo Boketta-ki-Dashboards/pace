@@ -456,6 +456,14 @@ enum SocialText {
         )
     }
 
+    static func inviteLimitReached(_ maximum: Int) -> String {
+        t(
+            "Beim Erstellen kannst du höchstens \(maximum) Freunde einladen. Weitere lädst du später in der Gruppe ein.",
+            "You can invite up to \(maximum) friends when creating a group. Invite more later from the group.",
+            "При создании можно пригласить не больше \(maximum) друзей. Остальных пригласишь позже в группе."
+        )
+    }
+
     static func invitedCount(_ count: Int) -> String {
         PaceLocalization.plural(
             count,

@@ -419,15 +419,23 @@ struct CreateGroupInvitePage: View {
                 Text(SocialText.invitedCount(model.inviteeIDs.count))
                     .font(PaceFont.callout)
                     .foregroundStyle(PaceColor.textSecondary)
+                if !model.canInviteMore {
+                    Text(SocialText.inviteLimitReached(CreateGroupViewModel.maximumInvitees))
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 ForEach(model.friends) { friend in
+                    let isInvited = model.isInvited(friend.profile.publicID)
                     SocialSelectableRow(
                         title: friend.profile.displayName,
                         subtitle: "@\(friend.profile.username)",
-                        isSelected: model.isInvited(friend.profile.publicID),
+                        isSelected: isInvited,
                         action: { model.toggleInvitee(friend.profile.publicID) }
                     ) {
                         PaceAvatar(name: friend.profile.displayName, seed: friend.profile.publicID.uuidString, size: 40, image: friend.profile.avatar)
                     }
+                    .disabled(!isInvited && !model.canInviteMore)
                 }
             }
         }

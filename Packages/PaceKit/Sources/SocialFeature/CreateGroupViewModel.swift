@@ -49,10 +49,18 @@ public final class CreateGroupViewModel {
         inviteeIDs.contains(publicID)
     }
 
+    /// Höchstzahl an Einladungen beim Erstellen – wie auf dem Server (Tageskontingent für Einladungen).
+    public static let maximumInvitees = 30
+
+    /// `false`, sobald die Höchstzahl ausgewählt ist; weitere Freunde lassen sich erst nach dem Abwählen hinzufügen.
+    public var canInviteMore: Bool {
+        inviteeIDs.count < Self.maximumInvitees
+    }
+
     public func toggleInvitee(_ publicID: UUID) {
         if let index = inviteeIDs.firstIndex(of: publicID) {
             inviteeIDs.remove(at: index)
-        } else {
+        } else if canInviteMore {
             inviteeIDs.append(publicID)
         }
     }
