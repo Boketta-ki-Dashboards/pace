@@ -85,6 +85,27 @@ enum ProfileTexts {
 
     static var placeholder: String { "–" }
 
+    static var shareProfile: String {
+        PaceLocalization.text(de: "Profil teilen", en: "Share profile", ru: "Поделиться профилем")
+    }
+
+    static var rankingVisibilityTitle: String {
+        PaceLocalization.text(de: "Sichtbarkeit in Rankings", en: "Visibility in rankings", ru: "Видимость в рейтингах")
+    }
+
+    static var off: String {
+        PaceLocalization.text(de: "Aus", en: "Off", ru: "Выкл.")
+    }
+
+    static var openSocialTab: String {
+        PaceLocalization.text(de: "Im Social-Tab öffnen", en: "Open in Social tab", ru: "Открыть во вкладке «Друзья»")
+    }
+
+    /// „Pace 0.1.0 (1)“.
+    static func versionText(_ version: String) -> String {
+        PaceLocalization.text(de: "Pace \(version)", en: "Pace \(version)", ru: "Pace \(version)")
+    }
+
     /// „3 Zeichen“ / „3 characters“ / „3 символа“.
     static func characters(_ count: Int) -> String {
         "\(count.paceFormatted) " + PaceLocalization.plural(
