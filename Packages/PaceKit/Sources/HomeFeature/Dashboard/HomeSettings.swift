@@ -179,14 +179,22 @@ public final class HomeSettings {
         update { $0.modules = HomePreferences.defaultModules() }
     }
 
-    /// Plätze über und unter dem eigenen, die je Ebene für Umfeld-Widgets geladen werden müssen.
+    /// Plätze über und unter dem eigenen, die je Ebene geladen werden müssen: für Umfeld-Widgets ihre Zeilen, für
+    /// große Platzierungs-Widgets der Platz darüber (Abstand zum nächsten Platz).
     public var neighborhoodRadii: [RegionLevel: Int] {
-        preferences.modules
-            .filter { $0.kind == .neighborhood }
-            .reduce(into: [:]) { radii, module in
+        preferences.modules.reduce(into: [:]) { radii, module in
+            switch module.kind {
+            case .neighborhood:
                 guard let level = module.regionLevel else { return }
                 radii[level] = max(radii[level] ?? 0, module.neighborhoodRadius)
+            case .regionRanks where module.size >= .large:
+                for level in module.regionLevels {
+                    radii[level] = max(radii[level] ?? 0, 1)
+                }
+            default:
+                return
             }
+        }
     }
 
     /// Ob ein Widget Platzierungen anzeigt (sonst werden keine geladen).

@@ -94,8 +94,46 @@ public enum HomeModuleKind: String, Codable, CaseIterable, Sendable, Identifiabl
         case .neighborhood: "chart.bar"
         case .friends: "person.2"
         case .groups: "person.3"
-        case .activity: "figure.walk"
+        case .activity: "shoe"
         case .calendar: "calendar.badge.plus"
+        }
+    }
+
+    /// Kategorien der Widget-Galerie in der Reihenfolge des freigegebenen Designs. Die Schrittkarte ist immer auf
+    /// Home und erscheint nur beim Bearbeiten (unter „Schritte und Aktivität“).
+    public static let galleryKinds: [HomeModuleKind] = [
+        .activity, .week, .streak, .friends, .groups, .regionRanks, .neighborhood, .calendar,
+    ]
+
+    /// Kategorie, unter der das Widget in der Galerie steht.
+    public var galleryCategory: HomeModuleKind {
+        self == .stepsToday ? .activity : self
+    }
+
+    /// Name der Kategorie in der Widget-Galerie.
+    public var galleryTitle: String {
+        switch self {
+        case .activity, .stepsToday:
+            PaceLocalization.text(de: "Schritte und Aktivität", en: "Steps and activity", ru: "Шаги и активность")
+        case .week: PaceLocalization.text(de: "Wochenübersicht", en: "Weekly overview", ru: "Обзор недели")
+        case .streak: PaceLocalization.text(de: "Persönliche Streak", en: "Personal streak", ru: "Личная серия")
+        case .friends: PaceLocalization.text(de: "Freunde", en: "Friends", ru: "Друзья")
+        case .groups: PaceLocalization.text(de: "Gruppen", en: "Groups", ru: "Группы")
+        case .regionRanks: PaceLocalization.text(de: "Regionale Rankings", en: "Regional rankings", ru: "Региональные рейтинги")
+        case .neighborhood: PaceLocalization.text(de: "Ranking-Umfeld", en: "Ranking neighbors", ru: "Соседи по рейтингу")
+        case .calendar: PaceLocalization.text(de: "Kalender", en: "Calendar", ru: "Календарь")
+        }
+    }
+
+    /// Zweite Zeile einer Kategorie in der Galerie (nur, wo das Design eine zeigt).
+    public var gallerySubtitle: String? {
+        switch self {
+        case .groups:
+            PaceLocalization.text(de: "Gruppe auswählen", en: "Choose a group", ru: "Выбери группу")
+        case .regionRanks:
+            RegionLevel.allCases.map(\.widgetTitle).joined(separator: " · ")
+        case .activity, .stepsToday, .week, .streak, .friends, .neighborhood, .calendar:
+            nil
         }
     }
 
@@ -177,10 +215,20 @@ public enum HomeActivityMetric: String, Codable, CaseIterable, Sendable, Identif
         }
     }
 
+    /// Titel des Aktivitäts-Widgets, z. B. „Schritte · 7 Tage“.
+    public var widgetTitle: String {
+        switch self {
+        case .steps: PaceLocalization.text(de: "Schritte · 7 Tage", en: "Steps · 7 days", ru: "Шаги · 7 дней")
+        case .distance: PaceLocalization.text(de: "Distanz · 7 Tage", en: "Distance · 7 days", ru: "Расстояние · 7 дней")
+        case .activeEnergy:
+            PaceLocalization.text(de: "Aktive Kalorien · 7 Tage", en: "Active calories · 7 days", ru: "Активные калории · 7 дней")
+        }
+    }
+
     public var systemImage: String {
         switch self {
         case .steps: "figure.walk"
-        case .distance: "shoeprints.fill"
+        case .distance: "location"
         case .activeEnergy: "flame"
         }
     }
@@ -307,9 +355,10 @@ public struct HomeModule: Hashable, Sendable, Identifiable {
         self.configuration = configuration.sanitized(for: kind)
     }
 
-    /// Titel des Widgets: eigener Name oder Standardtitel.
+    /// Titel des Widgets: eigener Name oder Standardtitel (beim Aktivitäts-Widget mit Kennzahl).
     public var title: String {
-        configuration.customName ?? kind.title
+        if let name = configuration.customName { return name }
+        return kind == .activity ? metric.widgetTitle : kind.title
     }
 
     /// Ebenen eines Widgets „Regionale Rankings“ (Standard: alle vier).
