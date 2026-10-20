@@ -413,6 +413,16 @@ struct LeaderboardViewModelTests {
         #expect(entries.count == 2)
     }
 
+    @Test func friendsWithoutSocialMigrationSayItIsNotSetUp() async {
+        let social = SocialRepositoryStub { $0.error = .unavailable }
+        let (viewModel, _) = makeViewModel(social: social)
+
+        await viewModel.selectFriends()
+
+        #expect(viewModel.friends == .failed(message: SocialError.unavailable.message))
+        #expect(SocialError.unavailable.message.contains("noch nicht eingerichtet"))
+    }
+
     @Test func friendsStayVisibleWhenRefreshFails() async {
         let social = SocialRepositoryStub { $0.ranking = Fixtures.ranking(count: 2, currentUserRank: 1) }
         let (viewModel, env) = makeViewModel(social: social)

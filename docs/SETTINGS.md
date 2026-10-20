@@ -79,6 +79,9 @@ Social-Einstellungen; beide nutzen dieselbe Server-Logik (`SocialRepository`), k
   `AppSettings.streakReminder`. Geplant werden einzelne Mitteilungen für 14 Tage; ist das heutige Ziel erreicht,
   entfällt die heutige. Neu geplant wird beim Start der Main App, beim Erreichen des Ziels (`MainTabView`), bei
   Änderungen von Uhrzeit oder Sprache und an einem neuen Tag. Ohne Erlaubnis bleibt die Erinnerung aus.
+  Grenze: Pace hat keine HealthKit-Hintergrundzustellung (bräuchte eine zusätzliche Capability). Wird das Ziel
+  erreicht, ohne dass Pace danach geöffnet wird, kommt die heutige Erinnerung trotzdem – die Texte in der App sagen
+  das so („… und Pace danach geöffnet …“).
 - Push-Mitteilungen (Anfragen, Einladungen, Chat) brauchen APNs und einen Server-Versand – sie werden nur als
   „folgt“ erklärt, nicht als Schalter angeboten.
 

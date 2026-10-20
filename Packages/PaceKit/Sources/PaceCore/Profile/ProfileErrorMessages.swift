@@ -46,6 +46,12 @@ extension ProfileError {
                 en: "Too many attempts in a short time. Please try again later.",
                 ru: "Слишком много попыток за короткое время. Попробуй позже."
             )
+        case .unavailable:
+            PaceLocalization.text(
+                de: "Diese Funktion ist auf dem Server noch nicht eingerichtet.",
+                en: "This feature is not set up on the server yet.",
+                ru: "Эта функция ещё не настроена на сервере."
+            )
         case .unexpected:
             PaceLocalization.text(
                 de: "Etwas ist schiefgelaufen. Bitte versuche es erneut.",

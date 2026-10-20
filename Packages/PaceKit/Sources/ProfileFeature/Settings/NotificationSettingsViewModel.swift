@@ -225,9 +225,9 @@ public final class NotificationSettingsViewModel {
 
     public var reminderExplanation: String {
         PaceLocalization.text(
-            de: "Eine Mitteilung zur gewählten Uhrzeit, wenn du dein Tagesziel noch nicht erreicht hast. Ist es heute schon geschafft, erinnert dich Pace erst morgen wieder. Öffne Pace mindestens alle zwei Wochen, damit die Erinnerungen weiter geplant werden.",
-            en: "A notification at the chosen time if you haven't reached your daily goal yet. If you already made it today, Pace reminds you again tomorrow. Open Pace at least every two weeks so reminders keep getting scheduled.",
-            ru: "Уведомление в выбранное время, если ты ещё не достиг дневной цели. Если цель уже выполнена сегодня, Pace напомнит только завтра. Открывай Pace хотя бы раз в две недели, чтобы напоминания продолжали планироваться."
+            de: "Eine Mitteilung zur gewählten Uhrzeit als Erinnerung an dein Tagesziel. Hast du es heute schon erreicht und Pace danach geöffnet, entfällt die Erinnerung für heute. Öffne Pace mindestens alle zwei Wochen, damit die Erinnerungen weiter geplant werden.",
+            en: "A notification at the chosen time to remind you of your daily goal. If you've already reached it today and opened Pace since, today's reminder is skipped. Open Pace at least every two weeks so reminders keep getting scheduled.",
+            ru: "Уведомление в выбранное время — напоминание о дневной цели. Если ты уже достиг её сегодня и после этого открывал Pace, сегодняшнее напоминание не придёт. Открывай Pace хотя бы раз в две недели, чтобы напоминания продолжали планироваться."
         )
     }
 

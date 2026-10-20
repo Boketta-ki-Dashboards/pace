@@ -464,6 +464,10 @@ public final class LeaderboardViewModel {
                 ru: "Нет соединения. Проверь подключение к интернету и попробуй ещё раз."
             )
         }
+        if error as? SocialError == .unavailable {
+            // Freunde- und Gruppen-Rankings ohne Social-Migration auf dem Server: kein „erneut versuchen“.
+            return SocialError.unavailable.message
+        }
         if error as? LeaderboardError == .unknownRegion || error as? RegionError == .notFound {
             return PaceLocalization.text(
                 de: "Deine Region ist nicht mehr verfügbar. Bitte wähle sie im Profil neu.",

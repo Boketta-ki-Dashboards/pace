@@ -59,7 +59,7 @@ einem Gerät gesehen. „Backend getestet“ heißt: gegen einen lokalen Supabas
 
 | Bereich | Design fertig | Funktion fertig | Backend getestet | Produktiv bereit |
 |---|---|---|---|---|
-| Home | ja (Bild 9) | ja | ja (Rankings-RPCs bestehen produktiv) | ja – iPhone-Test offen |
+| Home | ja (Bild 9) | ja | ja (Rankings-RPCs bestehen produktiv) | ja – Glocke, Freunde-/Gruppen-Widgets erst nach Migration; iPhone-Test offen |
 | Rankings | ja | ja | ja | regional ja; Freunde/Gruppen erst nach Migration |
 | Social | ja (Bild 9) | ja | ja | nein – Migrationen nicht eingespielt |
 | Freund hinzufügen | ja (Bild 1) | ja | ja | nein – Migrationen |
@@ -72,13 +72,13 @@ einem Gerät gesehen. „Backend getestet“ heißt: gegen einen lokalen Supabas
 | Kalender | ja (Bild 9) | ja | entfällt (HealthKit auf dem Gerät) | ja – iPhone-Test offen |
 | Tagesdetails | ja (Bild 8) | ja | entfällt (HealthKit auf dem Gerät) | ja – iPhone-Test offen |
 | Profil | ja | ja | ja | Name/Region ja; Profilbild erst nach Migration |
-| Einstellungen | ja | ja | ja | lokal ja; Auffindbarkeit, Blockierliste, Export, Konto löschen nach Migration |
+| Einstellungen | ja | ja | ja | lokal ja; Auffindbarkeit, Blockierliste, „Problem melden“/„Feedback senden“, Export, Konto löschen nach Migration |
 
 ### Tests (Endstand)
 
 | Prüfung | Beginn (b9fb7e3) | Endstand |
 |---|---|---|
-| Swift-Tests unter Linux (PaceCore, ViewModels) | 318 | 609 in 75 Suiten, alle grün |
+| Swift-Tests unter Linux (PaceCore, ViewModels) | 318 | 611 in 75 Suiten, alle grün |
 | Datenbanktests (pgTAP) | 370 in 8 Dateien | 705 in 13 Dateien, alle grün |
 | Backend- und Integrationstests gegen lokales Supabase | 50 | 102 in 18 Suiten grün, 1 übersprungen (Echtzeit über WebSocket nur auf Apple-Plattformen) |
 | Realtime-Rauchtest (Node, private Kanäle, Abweisung Fremder) | – | 9/9 bestanden |
@@ -102,5 +102,8 @@ Drag & Drop und Echtzeit zwischen zwei Geräten sind nur auf echten iPhones prü
 - **Konto:** weiterhin anonym und an das iPhone gebunden; „Mit Apple anmelden“ bzw. Kontoübertragung nicht eingebaut
   (ehrlich als „In Vorbereitung“ gekennzeichnet).
 - **Rechtstexte** (Datenschutzerklärung, Nutzungsbedingungen, Impressum) sind Entwürfe und vom Betreiber zu ergänzen.
-- **Produktiv:** Social, Gruppen, Chats, Profilbilder, Blockieren/Melden, Export und Konto löschen funktionieren erst
-  nach dem Einspielen der Migrationen; bis dahin zeigt die App einen ehrlichen Hinweis.
+- **Mitteilungen:** Die Tagesziel-Erinnerung entfällt nur, wenn Pace nach dem Erreichen des Ziels geöffnet wurde
+  (keine HealthKit-Hintergrundzustellung – bräuchte eine zusätzliche Capability; die App-Texte sagen das so).
+- **Produktiv:** Social, Gruppen, Chats, Freunde-/Gruppen-Rankings, Glocke, Profilbilder, Auffindbarkeit,
+  Blockieren/Melden, „Problem melden“/„Feedback senden“, Export und Konto löschen funktionieren erst nach dem
+  Einspielen der Migrationen; bis dahin zeigt die App einen Hinweis („… auf dem Server noch nicht eingerichtet.“).

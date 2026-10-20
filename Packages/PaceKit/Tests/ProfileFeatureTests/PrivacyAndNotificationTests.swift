@@ -39,6 +39,16 @@ struct PrivacyAndNotificationTests {
         #expect(!env.viewModel.privacy.isUpdatingDiscoverable)
     }
 
+    @Test func discoverabilityWithoutServerSupportSaysSoInsteadOfRetry() async {
+        let env = ProfileSettingsEnvironment()
+        env.profiles.state.withLock { $0.error = .unavailable }
+
+        await env.viewModel.privacy.setDiscoverable(false)
+
+        #expect(env.viewModel.privacy.isDiscoverable)
+        #expect(env.viewModel.privacy.discoverableError == "Diese Funktion ist auf dem Server noch nicht eingerichtet.")
+    }
+
     // MARK: Blockierte Personen
 
     @Test func blockedUsersAreLoadedSortedAndCanBeUnblocked() async {

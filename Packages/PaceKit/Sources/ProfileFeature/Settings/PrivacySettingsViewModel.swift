@@ -95,6 +95,7 @@ public final class PrivacySettingsViewModel {
     /// Gewünschter Wert, solange die Anfrage läuft – der Schalter springt so nicht zurück.
     public private(set) var pendingDiscoverable: Bool?
     private var failedDiscoverable: Bool?
+    private var discoverableFailure: ProfileError?
 
     public let blockedUsers: BlockedUsersViewModel
 
@@ -116,6 +117,7 @@ public final class PrivacySettingsViewModel {
         isUpdatingDiscoverable = true
         pendingDiscoverable = discoverable
         failedDiscoverable = nil
+        discoverableFailure = nil
         defer {
             isUpdatingDiscoverable = false
             pendingDiscoverable = nil
@@ -125,12 +127,14 @@ public final class PrivacySettingsViewModel {
             try await store.setDiscoverable(discoverable)
         } catch {
             failedDiscoverable = discoverable
+            discoverableFailure = error as? ProfileError
         }
     }
 
     /// Fehler der letzten Änderung – verschwindet, sobald der Wert dem gewünschten entspricht.
     public var discoverableError: String? {
         guard let failedDiscoverable, failedDiscoverable != isDiscoverable else { return nil }
+        if discoverableFailure == .unavailable { return ProfileError.unavailable.message }
         return PaceLocalization.text(
             de: "Die Einstellung konnte nicht gespeichert werden. Bitte versuche es erneut.",
             en: "The setting couldn't be saved. Please try again.",

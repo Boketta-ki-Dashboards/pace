@@ -10,10 +10,13 @@ deckt genau diese Punkte ab.
 1. Stand holen, Xcode öffnen und auf das iPhone installieren: Schritt für Schritt in
    [IPHONE_TEST.md](IPHONE_TEST.md). Einmal **Product → Clean Build Folder**, damit die App-Icons sicher im Build
    landen. Signing, Personal Team, Bundle Identifier und `Config/Pace.xcconfig` bleiben unverändert.
-2. Backend: Abschnitte A–D funktionieren mit dem heutigen Produktivstand. Abschnitt E (Freunde, Gruppen, Chats,
-   Profilbild, Blockieren/Melden, Export, Konto löschen) braucht die sechs Migrationen aus
+2. Backend: Abschnitte A–D funktionieren mit dem heutigen Produktivstand – außer allem, was Freunde, Gruppen oder
+   Chats braucht (Glocke, Freunde- und Gruppen-Widgets samt Freunde-Auswahl in der Galerie, Rankings „Freunde“ und
+   „Gruppen“, Auffindbarkeit, „Problem melden“/„Feedback senden“). Diese Stellen und Abschnitt E (Freunde, Gruppen,
+   Chats, Profilbild, Blockieren/Melden, Export, Konto löschen) brauchen die sechs Migrationen aus
    [SUPABASE_ROLLOUT.md](SUPABASE_ROLLOUT.md) – sie werden erst nach ausdrücklicher Freigabe eingespielt. Bis dahin
-   zeigt die App dort einen ehrlichen Hinweis („… auf dem Server noch nicht eingerichtet“).
+   zeigt die App dort einen Hinweis, z. B. „Freunde, Gruppen und Chats sind auf dem Server noch nicht eingerichtet.“
+   oder „Diese Funktion ist auf dem Server noch nicht eingerichtet.“
 3. App auf dem iPhone starten (nicht im Simulator – dort gibt es keine echten Schritte).
 
 ## A. Grundgerüst, Darstellung, Sprache
@@ -24,26 +27,31 @@ deckt genau diese Punkte ab.
       Icon ist danach mint auf dunklem Grund. **Hell** und **Automatisch** ebenso.
 - [ ] Profil → Sprache → English bzw. Русский: alle Tabs wechseln sofort (Zahlen 8,432 bzw. 8 432, Datumsangaben,
       russische Pluralformen). Zurück auf Deutsch bzw. „Wie iPhone“.
-- [ ] Unterseiten haben überall denselben Kopf: „‹ Zurück“ → pace → Titel; nichts wird abgeschnitten.
+- [ ] Unterseiten haben überall denselben Kopf: „‹ vorherige Seite“ (z. B. „‹ Profil“, „‹ Social“, „‹ Home“) → pace →
+      Titel; nichts wird abgeschnitten.
 
 ## B. Home, Anpassen-Modus, Widget-Galerie (Bilder 6, 7, 9)
 
 - [ ] Home: vier Regionskarten in **einer** Reihe, „Deine Schritte heute“, „Deine Woche“, Umfeld mit
       „Noch x Schritte bis Platz #n“. Werte stimmen mit der Health-App überein (ohne manuell eingetragene Schritte).
-- [ ] Glocke: Mitteilungen nur aus echten Daten (Anfragen, Einladungen, ungelesene Chats), sonst „Alles gelesen“.
+- [ ] Glocke: Solange die Migrationen fehlen, steht dort „Mitteilungen sind gerade nicht verfügbar.“ Danach nur echte
+      Daten (Anfragen, Einladungen, ungelesene Chats), sonst „Alles gelesen“.
 - [ ] „Anpassen“: Widgets wackeln dezent, X entfernt (mit „Rückgängig“), „Deine Schritte heute“ hat kein X.
-- [ ] „Größe auswählen“: Klein / Mittel / Groß / Max – das Widget ändert sich sofort.
+- [ ] „Größe auswählen“: Klein / Mittel / Groß / Max (bei „Deine Schritte heute“ nur Mittel / Groß / Max) – das
+      Widget ändert sich sofort.
 - [ ] Widget am Griff (sechs Punkte) halten und verschieben; Ablegen außerhalb beendet das Ziehen sauber.
 - [ ] „+ Widget hinzufügen“ → Galerie: Kategorie, Auswahl (z. B. zwei verschiedene Freunde-Widgets), Live-Vorschau,
-      Größe → „Widget hinzufügen“. „Fertig“ beendet den Modus. Nach App-Neustart ist alles gespeichert.
+      Größe → „Widget hinzufügen“ (Freunde-Auswahl erst nach den Migrationen). „Fertig“ beendet den Modus. Nach
+      App-Neustart ist alles gespeichert.
 - [ ] Profil → „In regionalen Rankings erscheinen“ aus: Ranking-Widgets zeigen unscharfe Platzhalter mit
       „Ranking ausgeschaltet“; „Ranking-Sichtbarkeit aktivieren“ schaltet es nach Bestätigung wieder ein.
 
 ## C. Kalender, Tagesdetails, Statistik, Serie (Bilder 8, 9)
 
-- [ ] Home → Kalender-Symbol: Monat mit Mo–So, erreichte Tage grün gefüllt, sonst Ring mit Fortschritt, heute
-      umrandet, Zukunft neutral mit „–“. Pfeile blättern zurück, nicht über den aktuellen Monat hinaus.
-- [ ] Tag antippen → Karte darunter; Karte antippen → **Tagesdetails**: Ring, Schritte, „Tagesziel an diesem Tag“,
+- [ ] Home → Kalender-Symbol: Monat mit Mo–So, erreichte Tage grün gefüllt, sonst Ring mit Fortschritt, heute mit
+      kleinem Punkt (anfangs ausgewählt und daher umrandet), Zukunft neutral mit „–“. Pfeile blättern zurück, nicht
+      über den aktuellen Monat hinaus.
+- [ ] Tag antippen → ausgewählt, Karte darunter; denselben Tag erneut oder die Karte antippen → **Tagesdetails**: Ring, Schritte, „Tagesziel an diesem Tag“,
       Distanz, Aktiv-kcal, Stockwerke, Trainingsminuten, Aktivität im Tagesverlauf, Serie, letzte 7 Tage.
 - [ ] Tagesdetails → „Puls aus Apple Health anzeigen“: iOS fragt einmalig nach Ruhepuls/Geh-Puls; danach erscheinen
       die Werte (nur wenn Apple Health welche hat). Beim normalen App-Start wird nie danach gefragt.
@@ -55,10 +63,13 @@ deckt genau diese Punkte ab.
 
 ## D. Rankings, Profil, Mitteilungen
 
-- [ ] Rankings: Stadt, Landkreis, Bundesland, Deutschland, Freunde, Gruppen; eigene Zeile dezent grün.
-- [ ] Profil → Mitteilungen → „Erinnerung an dein Tagesziel“ zu einer Uhrzeit: iOS fragt nach Erlaubnis; die
-      Erinnerung kommt nur, wenn das Ziel an dem Tag noch offen ist.
-- [ ] Profil → Region ändern, Tagesziel, Hilfe & Feedback, Rechtliches (Entwürfe, vom Betreiber zu ergänzen).
+- [ ] Rankings: Stadt, Landkreis, Bundesland, Deutschland; eigene Zeile dezent grün. „Freunde“ und „Gruppen“ zeigen
+      bis zu den Migrationen „Freunde, Gruppen und Chats sind auf dem Server noch nicht eingerichtet.“
+- [ ] Profil → Mitteilungen → Karte „Erinnerung an dein Tagesziel“ → „Täglich erinnern“ einschalten und „Uhrzeit“
+      wählen: iOS fragt nach Erlaubnis. Die Erinnerung für heute entfällt, wenn das Ziel erreicht ist und Pace danach
+      einmal geöffnet war – ohne erneutes Öffnen kann sie trotzdem kommen.
+- [ ] Profil → Region ändern, Tagesziel, Hilfe & Feedback (Häufige Fragen; „Problem melden“/„Feedback senden“ erst
+      nach den Migrationen), Rechtliches (Entwürfe, vom Betreiber zu ergänzen).
 
 ## E. Erst nach Freigabe und Einspielen der Migrationen (zwei Geräte oder zwei Testkonten)
 
@@ -68,12 +79,17 @@ deckt genau diese Punkte ab.
       erscheint alles ohne Neuladen, der Ungelesen-Zähler im Social-Tab steigt und fällt beim Öffnen.
 - [ ] „Gruppe erstellen“ mit Bild, Typ, Privatsphäre, Einladungen (höchstens 30) und Tagesziel → Gruppendetails mit
       Gruppen-Streak und Ranking → Gruppenchat. Beitritt per Einladung bzw. Code auf dem zweiten Gerät.
-- [ ] „…“-Menü: Profil teilen (an einen Chat oder per iOS-Teilen), Nutzer blockieren (Privatchat danach
-      schreibgeschützt, Gruppennachrichten eingeklappt), Nutzer, Gruppe bzw. Nachricht melden.
+- [ ] „…“-Menü bei einem Treffer unter „Freund hinzufügen“: Profil teilen (an einen Chat oder per iOS-Teilen),
+      Nachricht schreiben (nur Freunde), Nutzer blockieren (Privatchat danach schreibgeschützt, Gruppennachrichten
+      eingeklappt).
+- [ ] Melden: „Nutzer melden“ auf dem Profil der Person bzw. „Person melden“ über das Zahnrad im Privatchat,
+      „Gruppe melden“ in den Gruppeneinstellungen (nicht für die eigene Gruppe), „Nachricht melden“ durch langes
+      Drücken auf eine Nachricht.
 - [ ] Profil → Konto & Profil: Name und Profilbild ändern; Profil-Link `pace://u/…` öffnet auf dem zweiten Gerät das
       Profil.
-- [ ] Profil → Privatsphäre: Auffindbarkeit aus → das Profil fehlt in der Suche nach Namensanfängen; mit dem
-      exakten Benutzernamen bleibt es auffindbar.
+- [ ] Profil → Privatsphäre → „In der Suche vorschlagen“ ausschalten → für Nicht-Freunde fehlt das Profil in der
+      Suche nach Namensanfängen (mit einem **nicht befreundeten** Testkonto prüfen – Freunde finden es weiterhin);
+      mit dem exakten Benutzernamen bleibt es für alle auffindbar.
 - [ ] Profil → Datenschutz & Daten → „Export erstellen“ (JSON-Datei über iOS-Teilen). „Konto löschen“ nur mit einem
       **Testkonto** – es löscht wirklich alles.
 
@@ -88,6 +104,8 @@ deckt genau diese Punkte ab.
 - Schritte kommen vom Gerät; das System ist nicht vollständig manipulationssicher (siehe `docs/SOCIAL.md`).
 - Das Pace-Konto ist an das iPhone gebunden (anonyme Anmeldung, „Mit Apple anmelden“ ist nicht eingebaut). Serie,
   Rekord, Tagesziel und Home-Layout liegen nur auf dem Gerät.
+- Die Tagesziel-Erinnerung entfällt nur, wenn Pace nach dem Erreichen des Ziels geöffnet wurde (keine
+  HealthKit-Hintergrundzustellung).
 - Push-Mitteilungen bei neuen Chatnachrichten gibt es nicht (dafür wäre ein APNs-Schlüssel nötig); neue Nachrichten
   erscheinen, solange Pace geöffnet ist, und als Zähler beim nächsten Öffnen.
 - Lesebestätigungen („gelesen“) werden nicht angezeigt.

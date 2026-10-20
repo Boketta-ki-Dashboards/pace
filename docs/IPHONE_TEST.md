@@ -48,21 +48,24 @@ Aktualisieren nicht überschrieben.
 
 - **Tab-Leiste:** Der aktive Tab zeigt Symbol und Text in einer mint Fläche.
 - **Home:** Vier Regionskarten in einer Reihe; Kalender-Symbol öffnet den **Kalender** (erreichte Tage grün
-  gefüllt, sonst Ring), ein Tag öffnet die **Tagesdetails**. In den Tagesdetails kannst du optional den Puls aus
+  gefüllt, sonst Ring). Ein Tag wird beim ersten Antippen ausgewählt (Karte darunter); erneutes Antippen oder die
+  Karte öffnet die **Tagesdetails**. In den Tagesdetails kannst du optional den Puls aus
   Apple Health freigeben.
 - **Anpassen:** „Anpassen“ antippen → Widgets wackeln, X entfernt, „Größe auswählen“ (Klein/Mittel/Groß/Max),
   Widgets per Ziehgriff verschieben, „+ Widget hinzufügen“ öffnet die Galerie. Nach App-Neustart bleibt alles so.
 - **Ranking ausgeschaltet:** Profil → „In regionalen Rankings erscheinen“ ausschalten → Home und Rankings zeigen
   eine unscharfe Karte „Ranking ausgeschaltet“; Antippen → „Ranking-Sichtbarkeit aktivieren“.
 - **Profil:** Darstellung (Automatisch/Hell/Dunkel), **Sprache** (Deutsch/English/Русский – wirkt sofort),
-  App-Icon, Mitteilungen (Erinnerung an das Tagesziel zu einer Uhrzeit), Hilfe.
-- **Rankings:** Ebenen Stadt, Landkreis, Bundesland, Deutschland, Freunde, Gruppen.
+  App-Icon, Mitteilungen (Erinnerung an das Tagesziel zu einer Uhrzeit), Hilfe & Feedback (Häufige Fragen).
+- **Rankings:** Ebenen Stadt, Landkreis, Bundesland, Deutschland. „Freunde“ und „Gruppen“ sind schon zu sehen,
+  funktionieren aber erst nach den Migrationen.
 
 ### Erst nach Freigabe und Einspielen der Supabase-Migrationen
 
-Freunde, Gruppen, Chats, Profilbilder, Blockieren/Melden, Datenexport und Konto löschen brauchen die neuen
-Server-Funktionen. Bis sie eingespielt sind, zeigt die App dort ehrlich „Diese Funktion ist auf dem Server noch nicht
-eingerichtet“. Die Schritte zum Einspielen stehen in `docs/SUPABASE_ROLLOUT.md` – ich führe sie erst nach deiner
+Freunde, Gruppen, Chats, die Freunde- und Gruppen-Rankings, die Glocke, Profilbilder, Auffindbarkeit,
+Blockieren/Melden, „Problem melden“/„Feedback senden“, Datenexport und Konto löschen brauchen die neuen
+Server-Funktionen. Bis sie eingespielt sind, zeigt die App dort einen Hinweis, z. B. „Freunde, Gruppen und Chats sind
+auf dem Server noch nicht eingerichtet.“ oder „Diese Funktion ist auf dem Server noch nicht eingerichtet.“ Die Schritte zum Einspielen stehen in `docs/SUPABASE_ROLLOUT.md` – ich führe sie erst nach deiner
 ausdrücklichen Freigabe aus bzw. begleite dich dabei.
 
 Danach am besten mit **zwei iPhones** (oder einem zweiten Testkonto auf einem zweiten Gerät):

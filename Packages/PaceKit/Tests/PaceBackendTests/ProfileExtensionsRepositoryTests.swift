@@ -109,5 +109,15 @@ struct ProfileExtensionsRepositoryTests {
         await #expect(throws: ProfileError.rateLimited) {
             try await harness.backend.profiles.isUsernameAvailable("someone")
         }
+
+        // Ohne Migration 20261019100000 kennt der Server `is_discoverable` nicht.
+        harness.stub("PATCH", "/rest/v1/profiles", .postgrestError(
+            status: 400,
+            code: "PGRST204",
+            message: "Could not find the 'is_discoverable' column of 'profiles' in the schema cache"
+        ))
+        await #expect(throws: ProfileError.unavailable) {
+            try await harness.backend.profiles.updateDiscoverable(false, for: userID)
+        }
     }
 }

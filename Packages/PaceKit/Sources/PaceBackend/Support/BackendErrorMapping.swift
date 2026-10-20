@@ -33,6 +33,10 @@ enum BackendErrorMapping {
             case "PGRST116":
                 // Kein Profil getroffen (z. B. fremde oder fehlende Zeile): wie eine fehlende Anmeldung behandeln.
                 return .notAuthenticated
+            case "PGRST204":
+                // Spalte unbekannt (z. B. `is_discoverable`): Migration 20261019100000 ist auf dem Server noch nicht
+                // eingespielt.
+                return .unavailable
             default:
                 // Benutzername zu oft geändert bzw. zu viele Verfügbarkeitsprüfungen (Migration 20261019100000).
                 if message.contains("rate_limited") { return .rateLimited }

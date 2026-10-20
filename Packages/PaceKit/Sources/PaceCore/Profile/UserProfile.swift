@@ -90,6 +90,8 @@ public enum ProfileError: Error, Equatable, Sendable {
     case notAuthenticated
     case network
     case rateLimited
+    /// Der Server kennt die Profilspalte noch nicht (Migration noch nicht eingespielt, z. B. Auffindbarkeit).
+    case unavailable
     case unexpected(String)
 }
 

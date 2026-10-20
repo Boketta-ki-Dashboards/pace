@@ -114,9 +114,9 @@ public enum HelpContent {
                     ru: "Почему я не получаю напоминания?"
                 ),
                 body: PaceLocalization.text(
-                    de: "Prüfe unter „Mitteilungen“, ob die Erinnerung eingeschaltet ist und iOS Mitteilungen für Pace erlaubt. Hast du dein Tagesziel schon erreicht, erinnert dich Pace an diesem Tag nicht mehr.",
-                    en: "Check under “Notifications” that the reminder is turned on and iOS allows notifications for Pace. If you've already reached your daily goal, Pace won't remind you again that day.",
-                    ru: "Проверь в разделе «Уведомления», что напоминание включено и iOS разрешает уведомления для Pace. Если дневная цель уже достигнута, в этот день Pace больше не напомнит."
+                    de: "Prüfe unter „Mitteilungen“, ob die Erinnerung eingeschaltet ist und iOS Mitteilungen für Pace erlaubt. Hast du dein Tagesziel schon erreicht und Pace danach geöffnet, erinnert dich Pace an diesem Tag nicht mehr.",
+                    en: "Check under “Notifications” that the reminder is turned on and iOS allows notifications for Pace. If you've already reached your daily goal and opened Pace since, Pace won't remind you again that day.",
+                    ru: "Проверь в разделе «Уведомления», что напоминание включено и iOS разрешает уведомления для Pace. Если дневная цель уже достигнута и ты после этого открывал Pace, в этот день Pace больше не напомнит."
                 )
             ),
         ]
