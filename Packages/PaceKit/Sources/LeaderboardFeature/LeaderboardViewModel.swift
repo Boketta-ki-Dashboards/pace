@@ -29,6 +29,39 @@ public final class LeaderboardViewModel {
         case failed(message: String)
     }
 
+    /// Eine eigene Gruppe mit ihrem Tagesranking; `ranking` ist `nil`, wenn es nicht geladen werden konnte.
+    public struct GroupStanding: Equatable, Sendable, Identifiable {
+        public let group: GroupSummary
+        public let ranking: GroupRanking?
+
+        public var id: UUID { group.id }
+
+        /// Höchstens drei Plätze von oben plus – falls weiter unten – die eigene Zeile.
+        public var visibleEntries: [GroupRankingEntry] {
+            guard let ranking else { return [] }
+            let top = Array(ranking.entries.prefix(3))
+            guard let me = ranking.entries.first(where: \.isCurrentUser), !top.contains(me) else { return top }
+            return top + [me]
+        }
+
+        /// Ob zwischen den oberen Plätzen und der eigenen Zeile Plätze ausgelassen sind.
+        public var hasGap: Bool {
+            guard let ranking, let me = ranking.entries.first(where: \.isCurrentUser) else { return false }
+            return me.rank > 4
+        }
+    }
+
+    /// Gruppen-Rankings (alle eigenen Gruppen, Tageswerte nach Gruppentag).
+    public enum GroupsState: Equatable {
+        case idle
+        case loading
+        case loaded([GroupStanding])
+        case failed(message: String)
+    }
+
+    /// Höchstens so viele Gruppen werden auf einmal geladen.
+    public static let maximumGroups = 12
+
     /// Ändert sich, wenn die Rankings neu geladen werden müssen (andere Gemeinde, geänderte Teilnahme).
     public struct ReloadKey: Hashable, Sendable {
         let municipalityID: RegionID?
@@ -45,6 +78,9 @@ public final class LeaderboardViewModel {
     /// Das Freunde-Ranking ist ausgewählt (statt einer regionalen Ebene).
     public private(set) var isShowingFriends = false
     public private(set) var friends: FriendsState = .idle
+    /// Die Gruppen-Rankings sind ausgewählt.
+    public private(set) var isShowingGroups = false
+    public private(set) var groups: GroupsState = .idle
 
     /// Vom Nutzer gewählte Ebene; `nil` bedeutet die Gemeinde.
     private var selectedScopeID: RegionID?
@@ -63,6 +99,8 @@ public final class LeaderboardViewModel {
     @ObservationIgnored private let social: (any SocialRepository)?
     @ObservationIgnored private var friendsLoadedAt: ContinuousClock.Instant?
     @ObservationIgnored private var isLoadingFriends = false
+    @ObservationIgnored private var groupsLoadedAt: ContinuousClock.Instant?
+    @ObservationIgnored private var isLoadingGroups = false
 
     /// - Parameters:
     ///   - syncing: Sendet zurückgehaltene Schritte vor dem Laden, damit der eigene Platz aktuell ist.
@@ -119,7 +157,7 @@ public final class LeaderboardViewModel {
 
     /// Regionale Ebene gewählt, Sichtbarkeit aber ausgeschaltet.
     public var isRankingHidden: Bool {
-        !isShowingFriends && state == .hidden
+        !isShowingFriends && !isShowingGroups && state == .hidden
     }
 
     /// Text für ein leeres Ranking bzw. wenn der Nutzer allein darin ist. `nil`, wenn es nichts zu erklären gibt.
@@ -168,6 +206,10 @@ public final class LeaderboardViewModel {
             await loadFriendsIfNeeded()
             return
         }
+        if isShowingGroups {
+            await loadGroupsIfNeeded()
+            return
+        }
         let key = currentLoadKey
         guard inFlightKey != key else { return }
         if case .loaded = state, loadedKey == key, let lastLoadedAt, ContinuousClock.now - lastLoadedAt < maximumAge {
@@ -178,10 +220,11 @@ public final class LeaderboardViewModel {
 
     /// Wechselt die Ebene, z. B. von der Gemeinde zum Bundesland (auch zurück aus dem Freunde-Ranking).
     public func select(_ scope: Region) async {
-        let wasShowingFriends = isShowingFriends
+        let wasShowingOther = isShowingFriends || isShowingGroups
         isShowingFriends = false
+        isShowingGroups = false
         guard scope.id != selectedScope?.id else {
-            if wasShowingFriends { await loadIfNeeded() }
+            if wasShowingOther { await loadIfNeeded() }
             return
         }
         selectedScopeID = scope.id
@@ -194,8 +237,17 @@ public final class LeaderboardViewModel {
     /// Zeigt das Freunde-Ranking.
     public func selectFriends() async {
         guard offersFriends else { return }
+        isShowingGroups = false
         isShowingFriends = true
         await loadFriendsIfNeeded()
+    }
+
+    /// Zeigt die Rankings der eigenen Gruppen.
+    public func selectGroups() async {
+        guard offersFriends else { return }
+        isShowingFriends = false
+        isShowingGroups = true
+        await loadGroupsIfNeeded()
     }
 
     /// Pull-to-Refresh: liest die eigenen Schritte neu und lädt das Ranking, ohne die Anzeige vorher zu verwerfen.
@@ -204,6 +256,9 @@ public final class LeaderboardViewModel {
         if isShowingFriends {
             await syncing?.flush()
             await loadFriends()
+        } else if isShowingGroups {
+            await syncing?.flush()
+            await loadGroups()
         } else {
             await load()
         }
@@ -214,6 +269,11 @@ public final class LeaderboardViewModel {
         if isShowingFriends {
             friends = .loading
             await loadFriends()
+            return
+        }
+        if isShowingGroups {
+            groups = .loading
+            await loadGroups()
             return
         }
         state = .loading
@@ -265,6 +325,46 @@ public final class LeaderboardViewModel {
     }
 
     // MARK: Freunde
+
+    // MARK: Gruppen
+
+    private func loadGroupsIfNeeded() async {
+        if case .loaded = groups, let groupsLoadedAt, ContinuousClock.now - groupsLoadedAt < maximumAge { return }
+        await loadGroups()
+    }
+
+    private func loadGroups() async {
+        guard let social, !isLoadingGroups else { return }
+        isLoadingGroups = true
+        defer { isLoadingGroups = false }
+        if case .loaded = groups {} else { groups = .loading }
+        do {
+            let mine = Array(try await social.myGroups().prefix(Self.maximumGroups))
+            let period = period
+            // Rankings parallel laden; scheitert eine Gruppe, bleibt nur ihre Karte ohne Plätze.
+            let rankings = await withTaskGroup(of: (UUID, GroupRanking?).self) { group in
+                for summary in mine {
+                    group.addTask {
+                        (summary.id, try? await social.groupRanking(summary.id, period: period))
+                    }
+                }
+                var result: [UUID: GroupRanking] = [:]
+                for await (id, ranking) in group {
+                    if let ranking { result[id] = ranking }
+                }
+                return result
+            }
+            groups = .loaded(mine.map { GroupStanding(group: $0, ranking: rankings[$0.id]) })
+            groupsLoadedAt = .now
+        } catch is CancellationError {
+            if case .loading = groups { groups = .idle }
+        } catch {
+            if case .loaded = groups { return }
+            groups = .failed(message: Self.message(for: error))
+        }
+    }
+
+    // MARK: Freunde (laden)
 
     private func loadFriendsIfNeeded() async {
         if case .loaded = friends, let friendsLoadedAt, ContinuousClock.now - friendsLoadedAt < maximumAge { return }

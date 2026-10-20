@@ -107,6 +107,9 @@ struct ActivitySnapshotTests {
 
         await leaderboard.selectFriends()
         try Snapshot.render(page(LeaderboardContent(viewModel: leaderboard)), name: "rankings-friends")
+
+        await leaderboard.selectGroups()
+        try Snapshot.render(page(LeaderboardContent(viewModel: leaderboard)), name: "rankings-groups")
     }
 
     @Test func rankingsOff() async throws {

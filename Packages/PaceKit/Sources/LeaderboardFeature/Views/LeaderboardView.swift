@@ -45,20 +45,26 @@ struct LeaderboardContent: View {
             if !viewModel.scopes.isEmpty || viewModel.offersFriends {
                 ScopePicker(
                     scopes: viewModel.scopes,
-                    selectedID: viewModel.isShowingFriends ? nil : viewModel.selectedScope?.id,
+                    selectedID: viewModel.isShowingFriends || viewModel.isShowingGroups ? nil : viewModel.selectedScope?.id,
                     offersFriends: viewModel.offersFriends,
                     isFriendsSelected: viewModel.isShowingFriends,
+                    isGroupsSelected: viewModel.isShowingGroups,
                     onSelect: { scope in
                         Task { await viewModel.select(scope) }
                     },
                     onSelectFriends: {
                         Task { await viewModel.selectFriends() }
+                    },
+                    onSelectGroups: {
+                        Task { await viewModel.selectGroups() }
                     }
                 )
             }
 
             if viewModel.isShowingFriends {
                 friendsContent
+            } else if viewModel.isShowingGroups {
+                groupsContent
             } else {
                 regionalContent
             }
@@ -219,6 +225,34 @@ struct LeaderboardContent: View {
         }
     }
 
+    // MARK: Gruppen
+
+    @ViewBuilder
+    private var groupsContent: some View {
+        switch viewModel.groups {
+        case .idle, .loading:
+            PaceCard {
+                PaceLoadingView(LeaderboardTexts.loading)
+                    .frame(minHeight: 220)
+            }
+        case .failed(let message):
+            failedCard(message)
+        case .loaded(let standings):
+            if standings.isEmpty {
+                PaceCard {
+                    Label(LeaderboardTexts.noGroupsHint, systemImage: "person.3")
+                        .font(PaceFont.callout)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                ForEach(standings) { standing in
+                    GroupStandingCard(standing: standing)
+                }
+            }
+        }
+    }
+
     private func failedCard(_ message: String) -> some View {
         PaceCard {
             PaceStatusView(
@@ -279,6 +313,33 @@ enum LeaderboardTexts {
     }
     static var enable: String { PaceLocalization.text(de: "Aktivieren", en: "Turn on", ru: "Включить") }
     static var cancel: String { PaceLocalization.text(de: "Abbrechen", en: "Cancel", ru: "Отмена") }
+    static var groups: String { PaceLocalization.text(de: "Gruppen", en: "Groups", ru: "Группы") }
+    static var noGroupsHint: String {
+        PaceLocalization.text(
+            de: "Du bist noch in keiner Gruppe. Erstelle in Social eine Gruppe oder tritt einer bei.",
+            en: "You're not in a group yet. Create or join a group in Social.",
+            ru: "Ты пока не состоишь в группе. Создай группу или вступи в неё в разделе «Social»."
+        )
+    }
+    static var groupRankingUnavailable: String {
+        PaceLocalization.text(
+            de: "Das Ranking dieser Gruppe konnte nicht geladen werden.",
+            en: "This group's ranking couldn't be loaded.",
+            ru: "Не удалось загрузить рейтинг этой группы."
+        )
+    }
+
+    /// `Heute · 6 Mitglieder`
+    static func todayWithMembers(_ count: Int) -> String {
+        let members = PaceLocalization.plural(
+            count,
+            de: ("Mitglied", "Mitglieder"),
+            en: ("member", "members"),
+            ru: ("участник", "участника", "участников")
+        )
+        return "\(today) · \(count.paceFormatted) \(members)"
+    }
+
     static var addFriendsHint: String {
         PaceLocalization.text(
             de: "Füge in Social Freunde hinzu, um dich mit ihnen zu vergleichen.",
@@ -317,8 +378,10 @@ private struct ScopePicker: View {
     let selectedID: RegionID?
     let offersFriends: Bool
     let isFriendsSelected: Bool
+    let isGroupsSelected: Bool
     let onSelect: (Region) -> Void
     let onSelectFriends: () -> Void
+    let onSelectGroups: () -> Void
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -330,6 +393,7 @@ private struct ScopePicker: View {
                 }
                 if offersFriends {
                     chip(level: nil, name: LeaderboardTexts.friends, isSelected: isFriendsSelected, action: onSelectFriends)
+                    chip(level: nil, name: LeaderboardTexts.groups, isSelected: isGroupsSelected, action: onSelectGroups)
                 }
             }
             .padding(.vertical, 2)
@@ -416,6 +480,51 @@ private struct RankingRow: View {
             showsChevron: false,
             detail: entry.isCurrentUser ? nil : "@\(entry.username)"
         )
+    }
+}
+
+/// Eine eigene Gruppe: Name, Mitglieder, die oberen Plätze und – falls weiter unten – die eigene Zeile.
+private struct GroupStandingCard: View {
+    let standing: LeaderboardViewModel.GroupStanding
+
+    var body: some View {
+        PaceCard {
+            VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                RankingCardHeader(
+                    title: standing.group.name,
+                    detail: LeaderboardTexts.todayWithMembers(standing.group.memberCount)
+                )
+                if standing.ranking == nil {
+                    Text(LeaderboardTexts.groupRankingUnavailable)
+                        .font(PaceFont.callout)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    let entries = standing.visibleEntries
+                    VStack(spacing: PaceSpacing.xs) {
+                        ForEach(entries) { entry in
+                            if entry.isCurrentUser, standing.hasGap {
+                                Image(systemName: "ellipsis")
+                                    .font(.headline)
+                                    .foregroundStyle(PaceColor.textSecondary)
+                                    .frame(maxWidth: .infinity)
+                                    .accessibilityLabel(LeaderboardTexts.gap)
+                            }
+                            PaceRankingRow(
+                                rank: entry.rank,
+                                name: entry.isCurrentUser ? LeaderboardTexts.you : entry.profile.displayName,
+                                steps: entry.competitionSteps,
+                                seed: entry.profile.publicID.uuidString,
+                                image: entry.profile.avatar,
+                                isCurrentUser: entry.isCurrentUser,
+                                showsStepIcon: true,
+                                showsChevron: false
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

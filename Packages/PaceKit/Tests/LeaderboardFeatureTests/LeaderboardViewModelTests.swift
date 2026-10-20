@@ -466,6 +466,108 @@ struct LeaderboardViewModelTests {
             #expect(viewModel.emptyStateText == "Ты первый в рейтинге «Pfungstadt».")
         }
     }
+
+    // MARK: Gruppen
+
+    private func groupEntry(_ rank: Int, me: Bool = false) -> GroupRankingEntry {
+        GroupRankingEntry(
+            rank: rank,
+            profile: SocialProfile(
+                publicID: UUID(uuidString: String(format: "30000000-0000-4000-8000-%012d", rank))!,
+                username: me ? "niklas" : "member\(rank)",
+                displayName: me ? "Niklas" : "Mitglied \(rank)"
+            ),
+            competitionSteps: 20_000 - rank * 500,
+            isCurrentUser: me,
+            role: .member,
+            reachedGoalToday: rank < 3
+        )
+    }
+
+    @Test func groupRankingsLoadForAllOwnGroupsEvenWhenRegionalRankingIsHidden() async throws {
+        let first = SocialRepositoryStub.group(name: "Klasse 8b")
+        let second = SocialRepositoryStub.group(name: "Laufteam")
+        let social = SocialRepositoryStub { state in
+            state.groups = [first, second]
+            state.groupRankings[first.id] = GroupRanking(
+                totalParticipants: 6,
+                groupToday: Self.today,
+                dailyGoal: 8_000,
+                entries: (1...6).map { groupEntry($0, me: $0 == 6) }
+            )
+        }
+        let (viewModel, env) = makeViewModel(profile: Fixtures.profile(regionalLeaderboardEnabled: false), social: social)
+
+        await viewModel.selectGroups()
+
+        #expect(viewModel.isShowingGroups)
+        #expect(!viewModel.isShowingFriends)
+        #expect(!viewModel.isRankingHidden)
+        guard case .loaded(let standings) = viewModel.groups else {
+            Issue.record("Gruppen nicht geladen: \(viewModel.groups)")
+            return
+        }
+        #expect(standings.map(\.group.name) == ["Klasse 8b", "Laufteam"])
+        // Top 3 plus die eigene Zeile auf Platz 6, dazwischen ausgelassene Plätze.
+        #expect(standings[0].visibleEntries.map(\.rank) == [1, 2, 3, 6])
+        #expect(standings[0].hasGap)
+        // Die zweite Gruppe hat (im Stub) ein leeres Ranking.
+        #expect(standings[1].visibleEntries.isEmpty)
+        #expect(env.leaderboards.state.current.pageRequests.isEmpty)
+        #expect(social.state.current.calls.filter { $0.hasPrefix("groupRanking:daily") }.count == 2)
+    }
+
+    @Test func switchingBetweenFriendsAndGroups() async {
+        let social = SocialRepositoryStub {
+            $0.ranking = Fixtures.ranking(count: 2, currentUserRank: 1)
+            $0.groups = [SocialRepositoryStub.group()]
+        }
+        let (viewModel, _) = makeViewModel(social: social)
+
+        await viewModel.selectFriends()
+        await viewModel.selectGroups()
+        #expect(viewModel.isShowingGroups)
+        #expect(!viewModel.isShowingFriends)
+
+        await viewModel.selectFriends()
+        #expect(viewModel.isShowingFriends)
+        #expect(!viewModel.isShowingGroups)
+
+        await viewModel.select(Fixtures.pfungstadt)
+        #expect(!viewModel.isShowingFriends)
+        #expect(!viewModel.isShowingGroups)
+    }
+
+    @Test func groupErrorShowsMessageAndRetryRecovers() async {
+        let social = SocialRepositoryStub {
+            $0.groups = [SocialRepositoryStub.group()]
+            $0.error = .network
+        }
+        let (viewModel, _) = makeViewModel(social: social)
+
+        await viewModel.selectGroups()
+        guard case .failed(let message) = viewModel.groups else {
+            Issue.record("Kein Fehlerzustand: \(viewModel.groups)")
+            return
+        }
+        #expect(message.hasPrefix("Keine Verbindung."))
+
+        social.state.withLock { $0.error = nil }
+        await viewModel.retry()
+        guard case .loaded(let standings) = viewModel.groups else {
+            Issue.record("Erneut versuchen hat nicht geladen")
+            return
+        }
+        #expect(standings.count == 1)
+    }
+
+    @Test func noGroupsIsAnEmptyList() async {
+        let (viewModel, _) = makeViewModel(social: SocialRepositoryStub())
+
+        await viewModel.selectGroups()
+
+        #expect(viewModel.groups == .loaded([]))
+    }
 }
 
 /// Antwortet je Region mit einstellbarer Verzögerung.
