@@ -161,6 +161,11 @@ public final class AppSettings {
         preferences.language.resolved(preferredLanguages: preferredLanguages())
     }
 
+    /// Sprache, die bei „Wie iPhone“ gilt (passend zu den bevorzugten Sprachen des Geräts).
+    public var systemLanguage: AppLanguage {
+        LanguagePreference.system.resolved(preferredLanguages: preferredLanguages())
+    }
+
     /// Setzt alles auf den Ausgangszustand zurück (z. B. nach dem Löschen des Kontos).
     public func reset() {
         update { $0 = AppPreferences() }

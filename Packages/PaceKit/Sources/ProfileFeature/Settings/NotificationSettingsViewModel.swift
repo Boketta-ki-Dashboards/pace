@@ -17,6 +17,8 @@ public final class NotificationSettingsViewModel {
         let minute: Int
         let skipToday: Bool
         let language: AppLanguage
+        /// Tag der Planung: An einem neuen Tag wird neu geplant (der Planungszeitraum rückt weiter).
+        let day: Date
     }
 
     /// Erlaubnis von iOS; `nil`, solange sie nicht abgefragt wurde.
@@ -28,17 +30,20 @@ public final class NotificationSettingsViewModel {
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let notifications: (any LocalNotificationScheduling)?
     @ObservationIgnored private let isTodayGoalReached: @MainActor () -> Bool
+    @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var lastPlan: Plan??
 
     /// - Parameter isTodayGoalReached: Ob das heutige Tagesziel schon erreicht ist (dann beginnt die Erinnerung morgen).
     public init(
         settings: AppSettings,
         notifications: (any LocalNotificationScheduling)?,
-        isTodayGoalReached: @escaping @MainActor () -> Bool = { false }
+        isTodayGoalReached: @escaping @MainActor () -> Bool = { false },
+        now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.settings = settings
         self.notifications = notifications
         self.isTodayGoalReached = isTodayGoalReached
+        self.now = now
     }
 
     /// Ohne angebundene Mitteilungen (z. B. Tests) zeigt die Seite einen ehrlichen Hinweis.
@@ -58,6 +63,18 @@ public final class NotificationSettingsViewModel {
         var style = Date.FormatStyle.pace(Date.FormatStyle(date: .omitted, time: .shortened))
         style.timeZone = Calendar(identifier: .gregorian).timeZone
         return date.formatted(style)
+    }
+
+    /// Uhrzeit als Datum für die Zeitauswahl (heute zur gewählten Uhrzeit).
+    public var reminderDate: Date {
+        let today = now()
+        return Calendar.current.date(bySettingHour: reminder.hour, minute: reminder.minute, second: 0, of: today) ?? today
+    }
+
+    /// Übernimmt Stunde und Minute aus der Zeitauswahl.
+    public func setReminderTime(_ date: Date) async {
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+        await setReminderTime(hour: parts.hour ?? reminder.hour, minute: parts.minute ?? reminder.minute)
     }
 
     // MARK: Erlaubnis
@@ -168,7 +185,8 @@ public final class NotificationSettingsViewModel {
                 hour: reminder.hour,
                 minute: reminder.minute,
                 skipToday: isTodayGoalReached(),
-                language: PaceLocalization.shared.effectiveLanguage
+                language: PaceLocalization.shared.effectiveLanguage,
+                day: Calendar.current.startOfDay(for: now())
             )
             : nil
         if let lastPlan, lastPlan == plan { return }

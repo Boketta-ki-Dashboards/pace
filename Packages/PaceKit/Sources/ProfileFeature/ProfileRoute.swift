@@ -61,11 +61,6 @@ public enum LegalDocument: String, CaseIterable, Hashable, Sendable, Identifiabl
     }
 }
 
-/// Stelle im Profil, die von außen hervorgehoben werden soll (z. B. von einer ausgeschalteten Ranking-Karte auf Home).
-public enum ProfileFocus: Hashable, Sendable {
-    case rankingVisibility
-}
-
 /// Gemeinsame Texte des Profil-Bereichs.
 enum ProfileTexts {
     static var profileTitle: String {

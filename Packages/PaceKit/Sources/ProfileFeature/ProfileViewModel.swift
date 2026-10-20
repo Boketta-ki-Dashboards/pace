@@ -4,11 +4,86 @@ import Observation
 import PaceCore
 import RegionFeature
 
+/// Dienste für die Einstellungen im Profil-Tab. Alles ist optional: Ohne Server-Anbindung (Tests, Vorschauen) zeigen
+/// die Seiten einen ehrlichen „nicht verfügbar“-Zustand.
+@MainActor
+public struct ProfileSettingsServices {
+    /// Darstellung, Sprache, Erinnerung. Ohne Angabe nur im Speicher (Tests, Vorschauen), ohne die App-Sprache zu ändern.
+    public var settings: AppSettings?
+    /// Für die Verfügbarkeitsprüfung beim Ändern des Benutzernamens.
+    public var profiles: (any ProfileRepository)?
+    public var notifications: (any LocalNotificationScheduling)?
+    public var account: (any AccountRepository)?
+    public var media: (any MediaRepository)?
+    /// Blockierte Personen.
+    public var social: (any SocialRepository)?
+    /// Abmelden nach dem Löschen des Kontos; Konto-Art.
+    public var auth: (any AuthProviding)?
+    /// Nur auf dem Gerät gespeicherte Daten (Export, Löschen). Standard: nur im Speicher.
+    public var localData: any LocalAccountDataStoring
+    /// z. B. `0.1.0 (1)`.
+    public var appVersion: String
+    /// Nach dem vollständigen Löschen des Kontos (App-Rahmen: zurück zum Start).
+    public var onAccountDeleted: (@MainActor () -> Void)?
+    public var availabilityDebounce: Duration
+    public var exportDirectory: URL
+    public var now: @Sendable () -> Date
+
+    public init(
+        settings: AppSettings? = nil,
+        profiles: (any ProfileRepository)? = nil,
+        notifications: (any LocalNotificationScheduling)? = nil,
+        account: (any AccountRepository)? = nil,
+        media: (any MediaRepository)? = nil,
+        social: (any SocialRepository)? = nil,
+        auth: (any AuthProviding)? = nil,
+        localData: any LocalAccountDataStoring = InMemoryLocalAccountData(),
+        appVersion: String = "",
+        onAccountDeleted: (@MainActor () -> Void)? = nil,
+        availabilityDebounce: Duration = .milliseconds(400),
+        exportDirectory: URL = FileManager.default.temporaryDirectory,
+        now: @escaping @Sendable () -> Date = Date.init
+    ) {
+        self.settings = settings
+        self.profiles = profiles
+        self.notifications = notifications
+        self.account = account
+        self.media = media
+        self.social = social
+        self.auth = auth
+        self.localData = localData
+        self.appVersion = appVersion
+        self.onAccountDeleted = onAccountDeleted
+        self.availabilityDebounce = availabilityDebounce
+        self.exportDirectory = exportDirectory
+        self.now = now
+    }
+}
+
+/// Eine Sprache zur Auswahl („Wie iPhone“ oder eine der drei Sprachen).
+public struct LanguageChoice: Identifiable, Hashable, Sendable {
+    public let preference: LanguagePreference
+    /// Name in der eigenen Sprache („English“) bzw. „Wie iPhone“.
+    public let title: String
+    /// Zusatz, z. B. „Englisch“ (in der aktuellen Sprache) oder die Sprache des iPhones.
+    public let subtitle: String?
+
+    public var id: String {
+        switch preference {
+        case .system: "system"
+        case .fixed(let language): language.rawValue
+        }
+    }
+}
+
 /// Profil und Einstellungen: Namen, Aktivität (Tagesziel, Serie, Statistik), Region, Zustimmung zu regionalen
-/// Rankings, App-Icon.
+/// Rankings, Darstellung und die Unterseiten der Einstellungen.
 @MainActor
 @Observable
 public final class ProfileViewModel {
+    /// Geöffnete Unterseiten (Navigation des Profil-Tabs).
+    public var path: [ProfileRoute] = []
+
     public private(set) var isUpdatingParticipation = false
     /// Gewünschter Wert, solange die Anfrage läuft – der Schalter springt so nicht zurück.
     public private(set) var pendingParticipation: Bool?
@@ -32,12 +107,27 @@ public final class ProfileViewModel {
     /// Serie, Rekord und Tagesziel; `nil`, wenn keine Bewegungsdaten angebunden sind (z. B. in Tests).
     public let streak: StepStreakTracker?
 
+    /// Darstellung, Sprache und Erinnerung.
+    public let settings: AppSettings
+    /// Konto & Profil.
+    public let account: AccountSettingsViewModel
+    /// Privatsphäre (Auffindbarkeit, blockierte Personen) – auch für die Social-Einstellungen.
+    public let privacy: PrivacySettingsViewModel
+    public let notifications: NotificationSettingsViewModel
+    /// Datenschutz & Daten: Export und Konto löschen.
+    public let dataPrivacy: DataPrivacyViewModel
+    /// z. B. `0.1.0 (1)`; leer, wenn unbekannt.
+    public let appVersion: String
+    /// Wechselt in den Social-Tab (Anfragen, Einladungen); vom App-Rahmen gesetzt.
+    @ObservationIgnored public var openSocial: (@MainActor () -> Void)?
+
     @ObservationIgnored private let store: ProfileStore
     @ObservationIgnored private let regions: any RegionRepository
     @ObservationIgnored private let appIcons: any AppIconSetting
     @ObservationIgnored private let makeStatistics: (@MainActor (StatisticsRoute) -> StatisticsViewModel)?
     @ObservationIgnored private let formatter: ActivityFormatter
     @ObservationIgnored private let searchDebounce: Duration
+    @ObservationIgnored private let accountRepository: (any AccountRepository)?
 
     public init(
         store: ProfileStore,
@@ -46,7 +136,8 @@ public final class ProfileViewModel {
         streak: StepStreakTracker? = nil,
         statistics: (@MainActor (StatisticsRoute) -> StatisticsViewModel)? = nil,
         formatter: ActivityFormatter = ActivityFormatter(),
-        searchDebounce: Duration = .milliseconds(300)
+        searchDebounce: Duration = .milliseconds(300),
+        services: ProfileSettingsServices = ProfileSettingsServices()
     ) {
         self.store = store
         self.regions = regions
@@ -56,6 +147,120 @@ public final class ProfileViewModel {
         self.formatter = formatter
         self.searchDebounce = searchDebounce
         appIcon = AppIconChoice(alternateIconName: appIcons.currentAlternateIconName)
+
+        let settings = services.settings ?? AppSettings(
+            store: InMemoryAppPreferencesStore(),
+            preferredLanguages: { [] },
+            applyLanguage: { _ in }
+        )
+        self.settings = settings
+        appVersion = services.appVersion
+        accountRepository = services.account
+        account = AccountSettingsViewModel(
+            store: store,
+            profiles: services.profiles,
+            media: services.media,
+            auth: services.auth,
+            availabilityDebounce: services.availabilityDebounce
+        )
+        privacy = PrivacySettingsViewModel(store: store, blockedUsers: BlockedUsersViewModel(repository: services.social))
+        let notifications = NotificationSettingsViewModel(
+            settings: settings,
+            notifications: services.notifications,
+            isTodayGoalReached: { [weak streak] in streak?.streak?.isTodayReached ?? false },
+            now: services.now
+        )
+        self.notifications = notifications
+        dataPrivacy = DataPrivacyViewModel(
+            store: store,
+            account: services.account,
+            media: services.media,
+            auth: services.auth,
+            localData: services.localData,
+            settings: settings,
+            notifications: notifications,
+            appVersion: services.appVersion,
+            exportDirectory: services.exportDirectory,
+            now: services.now,
+            onAccountDeleted: services.onAccountDeleted
+        )
+    }
+
+    // MARK: Navigation
+
+    /// Öffnet eine Unterseite direkt (von außen, z. B. aus den Social-Einstellungen).
+    public func show(_ route: ProfileRoute) {
+        path = [route]
+    }
+
+    /// Öffnet eine weitere Unterseite über der aktuellen.
+    public func open(_ route: ProfileRoute) {
+        path.append(route)
+    }
+
+    /// Neues Formular für „Problem melden“ bzw. „Feedback senden“.
+    public func makeFeedback(_ kind: FeedbackKind) -> FeedbackViewModel {
+        FeedbackViewModel(kind: kind, account: accountRepository, appVersion: appVersion)
+    }
+
+    /// Profilbild für den Kopf.
+    public var avatar: MediaReference? { store.profile.avatar }
+    /// Stabiler Wert für die Farbe der Initialen.
+    public var avatarSeed: String { store.profile.publicID.uuidString }
+    public var share: ProfileShare { ProfileShare(username: store.profile.username) }
+
+    // MARK: Darstellung und Sprache
+
+    public var appearance: AppearancePreference { settings.appearance }
+
+    /// Wirkt sofort (RootView) und bleibt gespeichert.
+    public func setAppearance(_ appearance: AppearancePreference) {
+        settings.appearance = appearance
+    }
+
+    public var language: LanguagePreference { settings.language }
+
+    public var languageChoices: [LanguageChoice] {
+        let system = LanguageChoice(
+            preference: .system,
+            title: PaceLocalization.text(de: "Wie iPhone", en: "Same as iPhone", ru: "Как на iPhone"),
+            subtitle: settings.systemLanguage.nativeName
+        )
+        return [system] + AppLanguage.allCases.map { language in
+            let localizedName = Self.localizedName(of: language)
+            return LanguageChoice(
+                preference: .fixed(language),
+                title: language.nativeName,
+                subtitle: localizedName == language.nativeName ? nil : localizedName
+            )
+        }
+    }
+
+    /// Wechselt die Sprache sofort und plant die Erinnerung in der neuen Sprache neu.
+    public func setLanguage(_ preference: LanguagePreference) async {
+        guard preference != settings.language else { return }
+        settings.language = preference
+        await notifications.reschedule()
+    }
+
+    /// Kurzer Wert für die Zeile „Sprache“, z. B. „Wie iPhone (Deutsch)“ oder „English“.
+    public var languageSummary: String {
+        switch settings.language {
+        case .system:
+            PaceLocalization.text(de: "Wie iPhone", en: "Same as iPhone", ru: "Как на iPhone")
+                + " (\(settings.resolvedLanguage.nativeName))"
+        case .fixed(let language):
+            language.nativeName
+        }
+    }
+
+    /// Name einer Sprache in der aktuellen Sprache, z. B. „Englisch“.
+    static func localizedName(of language: AppLanguage) -> String {
+        switch language {
+        case .german: PaceLocalization.text(de: "Deutsch", en: "German", ru: "Немецкий")
+        case .english: PaceLocalization.text(de: "Englisch", en: "English", ru: "Английский")
+        case .russian: PaceLocalization.text(de: "Russisch", en: "Russian", ru: "Русский")
+        }
     }
 
     public var displayName: String { store.profile.displayName }
@@ -77,7 +282,9 @@ public final class ProfileViewModel {
     /// Kreis bzw. „kreisfreie Stadt“, wenn Gemeinde und Kreis zusammenfallen.
     public var districtName: String? {
         guard let hierarchy = store.hierarchy else { return nil }
-        return hierarchy.district.municipalityCount <= 1 ? "kreisfreie Stadt" : hierarchy.district.displayName
+        return hierarchy.district.municipalityCount <= 1
+            ? PaceLocalization.text(de: "kreisfreie Stadt", en: "independent city", ru: "внерайонный город")
+            : hierarchy.district.displayName
     }
 
     public var stateName: String? {
@@ -135,26 +342,46 @@ public final class ProfileViewModel {
     public var errorMessage: String? {
         guard let failedParticipation, failedParticipation != regionalLeaderboardEnabled else { return nil }
         return failedParticipation
-            ? "Du konntest nicht zu den Rankings hinzugefügt werden. Bitte versuche es erneut."
-            : "Du konntest nicht aus den Rankings entfernt werden. Bitte versuche es erneut."
+            ? PaceLocalization.text(
+                de: "Du konntest nicht zu den Rankings hinzugefügt werden. Bitte versuche es erneut.",
+                en: "You couldn't be added to the rankings. Please try again.",
+                ru: "Не удалось добавить тебя в рейтинги. Попробуй снова."
+            )
+            : PaceLocalization.text(
+                de: "Du konntest nicht aus den Rankings entfernt werden. Bitte versuche es erneut.",
+                en: "You couldn't be removed from the rankings. Please try again.",
+                ru: "Не удалось убрать тебя из рейтингов. Попробуй снова."
+            )
     }
 
     /// z. B. `10.000 Schritte`; `nil` ohne angebundene Bewegungsdaten.
     public var goalText: String? {
-        streak.map { "\(formatter.steps($0.goals.currentGoal)) Schritte" }
+        streak.map { tracker in
+            let goal = tracker.goals.currentGoal
+            return "\(formatter.steps(goal)) " + PaceLocalization.plural(
+                goal,
+                de: ("Schritt", "Schritte"),
+                en: ("step", "steps"),
+                ru: ("шаг", "шага", "шагов")
+            )
+        }
     }
 
     /// z. B. `Rekord: 33 Tage`. Ein gespeicherter Rekord erscheint auch, solange der Verlauf lädt oder nicht lesbar
     /// ist; „Noch kein Rekord“ nur, wenn der Verlauf wirklich keinen ergibt.
     public var recordText: String {
         if let record = streak?.record, record.days > 0 {
-            return "Rekord: \(record.days == 1 ? "1 Tag" : "\(record.days) Tage")"
+            return PaceLocalization.text(de: "Rekord", en: "Record", ru: "Рекорд") + ": " + PaceLocalization.days(record.days)
         }
-        guard let streak else { return "Noch kein Rekord" }
+        let noRecord = PaceLocalization.text(de: "Noch kein Rekord", en: "No record yet", ru: "Рекорда пока нет")
+        guard let streak else { return noRecord }
         switch streak.history.state {
-        case .idle, .loading: return "Rekord wird berechnet …"
-        case .noReadAccess, .failed: return "Rekord nicht verfügbar"
-        case .loaded: return "Noch kein Rekord"
+        case .idle, .loading:
+            return PaceLocalization.text(de: "Rekord wird berechnet …", en: "Calculating record …", ru: "Считаем рекорд …")
+        case .noReadAccess, .failed:
+            return PaceLocalization.text(de: "Rekord nicht verfügbar", en: "Record not available", ru: "Рекорд недоступен")
+        case .loaded:
+            return noRecord
         }
     }
 
@@ -195,7 +422,11 @@ public final class ProfileViewModel {
         } catch {
             // Tatsächlichen Stand anzeigen, nicht die gewünschte Auswahl.
             appIcon = AppIconChoice(alternateIconName: appIcons.currentAlternateIconName)
-            appIconError = "Das App-Icon konnte nicht geändert werden. Bitte versuche es erneut."
+            appIconError = PaceLocalization.text(
+                de: "Das App-Icon konnte nicht geändert werden. Bitte versuche es erneut.",
+                en: "The app icon couldn't be changed. Please try again.",
+                ru: "Не удалось сменить значок приложения. Попробуй снова."
+            )
         }
     }
 
@@ -228,12 +459,16 @@ public final class ProfileViewModel {
 
     static func regionChangeMessage(for error: Error) -> String {
         switch error as? ProfileError {
-        case .invalidRegion:
-            "Diese Gemeinde kann nicht gewählt werden. Bitte suche erneut."
-        case .network:
-            "Keine Verbindung. Prüfe deine Internetverbindung und versuche es erneut."
+        case .some(.invalidRegion):
+            ProfileError.invalidRegion.message
+        case .some(.network):
+            ProfileError.network.message
         default:
-            "Deine Region konnte nicht geändert werden. Bitte versuche es erneut."
+            PaceLocalization.text(
+                de: "Deine Region konnte nicht geändert werden. Bitte versuche es erneut.",
+                en: "Your region couldn't be changed. Please try again.",
+                ru: "Не удалось изменить регион. Попробуй снова."
+            )
         }
     }
 }
