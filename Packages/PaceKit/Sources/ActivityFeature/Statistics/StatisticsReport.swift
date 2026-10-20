@@ -89,6 +89,8 @@ public struct StatisticsReport: Equatable, Sendable {
 
     public let period: StatisticsPeriod
     public let metric: StatisticsMetric
+    /// Der angezeigte Tag bzw. ein Tag im angezeigten Zeitraum.
+    public let anchor: LocalDate
     public let title: String
     public let subtitle: String?
     /// Große Zahl ohne Einheit; `nil`, wenn die Kennzahl nicht verfügbar ist.
@@ -279,6 +281,7 @@ public struct StatisticsReport: Equatable, Sendable {
         return StatisticsReport(
             period: input.period,
             metric: metric,
+            anchor: input.anchor,
             title: title,
             subtitle: subtitle,
             valueText: isAvailable ? metric.format(total, formatter: formatter) : nil,
@@ -486,6 +489,7 @@ public struct StatisticsReport: Equatable, Sendable {
         return StatisticsReport(
             period: .day,
             metric: metric,
+            anchor: input.anchor,
             title: title,
             subtitle: formatter.dayLong(day),
             valueText: value.map { metric.format($0, formatter: formatter) },

@@ -13,7 +13,7 @@ struct StatisticsChart: View {
         Chart {
             ForEach(report.bars) { bar in
                 BarMark(
-                    x: .value("Zeit", bar.id),
+                    x: .value("time", bar.id),
                     y: .value(report.metric.title, bar.value ?? 0)
                 )
                 .foregroundStyle(color(for: bar))
@@ -24,11 +24,11 @@ struct StatisticsChart: View {
             }
 
             if let goal = report.goalLine {
-                RuleMark(y: .value("Ziel", goal))
+                RuleMark(y: .value("goal", goal))
                     .foregroundStyle(PaceColor.accentStrong.opacity(0.7))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 3]))
                     .annotation(position: .top, alignment: .trailing) {
-                        Text("Ziel")
+                        Text(PaceLocalization.text(de: "Ziel", en: "Goal", ru: "Цель"))
                             .font(PaceFont.micro)
                             .foregroundStyle(PaceColor.accentStrong)
                             .chartLineLabel()
@@ -37,11 +37,11 @@ struct StatisticsChart: View {
             }
 
             if let average = report.averageLine {
-                RuleMark(y: .value("Durchschnitt", average))
+                RuleMark(y: .value("average", average))
                     .foregroundStyle(PaceColor.textSecondary)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                     .annotation(position: .top, alignment: .leading) {
-                        Text("Ø")
+                        Text(verbatim: "Ø")
                             .font(PaceFont.micro.weight(.semibold))
                             .foregroundStyle(PaceColor.textSecondary)
                             .chartLineLabel()
@@ -81,7 +81,11 @@ struct StatisticsChart: View {
         .accessibilityActions {
             // VoiceOver: Tage auch ohne Tippen auf einen Balken öffnen.
             ForEach(report.bars.filter { $0.day != nil && $0.value != nil }) { bar in
-                Button("\(bar.accessibilityLabel) öffnen") {
+                Button(PaceLocalization.text(
+                    de: "\(bar.accessibilityLabel) öffnen",
+                    en: "Open \(bar.accessibilityLabel)",
+                    ru: "Открыть: \(bar.accessibilityLabel)"
+                )) {
                     if let day = bar.day { onSelectDay(day) }
                 }
             }
@@ -112,7 +116,9 @@ struct StatisticsChart: View {
         guard let value = bar.value else { return "" }
         let raw = report.metric == .distance ? value * 1_000 : value
         let text = report.metric.formatWithUnit(raw, formatter: ActivityFormatter())
-        return bar.reachedGoal ? "\(text), Ziel erreicht" : text
+        return bar.reachedGoal
+            ? "\(text), " + PaceLocalization.text(de: "Ziel erreicht", en: "goal reached", ru: "цель достигнута")
+            : text
     }
 }
 
