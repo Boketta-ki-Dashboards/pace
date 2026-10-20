@@ -96,9 +96,17 @@ public struct Region: Hashable, Sendable, Identifiable {
         self.municipalityCount = municipalityCount
     }
 
+    /// Anzeigename in der App-Sprache: Amtliche Namen von Gemeinden, Kreisen und Ländern bleiben unverändert, nur
+    /// Deutschland heißt auf Englisch „Germany“ und auf Russisch „Германия“.
+    public var localizedName: String {
+        guard level == .country, code == "DE" else { return name }
+        return PaceLocalization.text(de: name, en: "Germany", ru: "Германия")
+    }
+
     /// Name mit Art der Gebietseinheit, z. B. `Landkreis Darmstadt-Dieburg`. Namen, die die Art schon enthalten
     /// (`Main-Kinzig-Kreis`, `Landkreis Rostock`, `Region Hannover`, `Regionalverband Saarbrücken`), bleiben unverändert.
     public var displayName: String {
+        guard level != .country else { return localizedName }
         guard !nameIncludesKind else { return name }
         switch kind {
         case .landkreis: return "Landkreis \(name)"

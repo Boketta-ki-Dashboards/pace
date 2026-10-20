@@ -40,7 +40,7 @@ public struct HomeRegionCard: Equatable, Sendable, Identifiable {
 
     /// Name des Gebiets, z. B. `Darmstadt-Dieburg`.
     public var name: String {
-        region?.name ?? ""
+        region?.localizedName ?? ""
     }
 
     /// z. B. `#12`; ohne Platz `–`.
@@ -167,15 +167,15 @@ public enum HomeRankingTexts {
         if neighborhood.isAlone {
             return PaceLocalization.text(
                 de: "Du bist der Erste \(region.locative).",
-                en: "You're the first one in \(region.name).",
-                ru: "В рейтинге «\(region.name)» пока только ты."
+                en: "You're the first one in \(region.localizedName).",
+                ru: "В рейтинге «\(region.localizedName)» пока только ты."
             )
         }
         if neighborhood.currentUser.rank == 1 {
             return PaceLocalization.text(
                 de: "Du führst \(region.locative).",
-                en: "You're in the lead in \(region.name).",
-                ru: "Ты лидируешь в рейтинге: \(region.name)."
+                en: "You're in the lead in \(region.localizedName).",
+                ru: "Ты лидируешь в рейтинге: \(region.localizedName)."
             )
         }
         guard let steps = neighborhood.stepsToNextPlace else { return nil }

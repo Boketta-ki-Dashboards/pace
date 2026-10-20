@@ -90,6 +90,23 @@ struct SocialViewModelTests {
         #expect(repository.state.current.calls.count == calls)
     }
 
+    /// Die Social-Ansicht löst einen geteilten Link mit `.task(id: requestedProfile)` auf. Würde die Anfrage schon vor
+    /// der Server-Antwort zurückgesetzt, bräche SwiftUI genau diese Aufgabe samt Anfrage ab.
+    @Test func requestedProfileStaysSetUntilTheServerAnswered() async throws {
+        let repository = SocialRepositoryStub { $0.profiles["mia"] = self.mia }
+        repository.gate.close("findProfile")
+        let viewModel = makeViewModel(repository)
+        viewModel.showProfile(username: "mia")
+
+        let resolving = Task { await viewModel.resolveRequestedProfile() }
+        try await waitUntil { repository.gate.waitingCount("findProfile") == 1 }
+        #expect(viewModel.requestedProfile == "mia")
+
+        repository.gate.open("findProfile")
+        #expect(await resolving.value == mia)
+        #expect(viewModel.requestedProfile == nil)
+    }
+
     @Test func sendingARequestReportsTheServerOutcome() async {
         let repository = SocialRepositoryStub { $0.friendRequestOutcome = .accepted }
         let viewModel = makeViewModel(repository)

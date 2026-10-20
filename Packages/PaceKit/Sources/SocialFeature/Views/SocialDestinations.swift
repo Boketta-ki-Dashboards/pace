@@ -12,6 +12,8 @@ struct SocialDestination: View {
     let onReplace: (SocialRoute) -> Void
     /// Zurück zur Hauptseite (z. B. nach dem Verlassen einer Gruppe).
     let onPopToRoot: () -> Void
+    /// Ersetzt die aktuelle Seite durch einen Chat (z. B. nach „Profil teilen“ an genau einen Chat).
+    var onReplaceWithChat: (ChatTarget) -> Void = { _ in }
 
     var body: some View {
         switch route {
@@ -56,7 +58,7 @@ struct SocialDestination: View {
         case .settings:
             SocialSettingsView(model: viewModel.settings(), social: viewModel, onOpen: onOpen)
         case .shareProfile(let profile):
-            ShareProfileView(model: viewModel.shareProfile(profile))
+            ShareProfileView(model: viewModel.shareProfile(profile), onSentToSingleChat: onReplaceWithChat)
         case .report(let subject):
             ReportView(model: viewModel.reportForm(subject), social: viewModel)
         }

@@ -42,7 +42,7 @@ public struct PaceRankingRow: View {
 
     public var body: some View {
         HStack(spacing: PaceSpacing.s) {
-            Text("#\(rank.paceFormatted)")
+            Text(verbatim: "#\(rank.paceFormatted)")
                 .font(.system(.headline, weight: .bold))
                 .monospacedDigit()
                 .foregroundStyle(isCurrentUser ? PaceColor.accent : PaceColor.textPrimary)

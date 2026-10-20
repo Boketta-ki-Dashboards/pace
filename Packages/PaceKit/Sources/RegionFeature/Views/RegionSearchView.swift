@@ -21,7 +21,7 @@ public struct RegionSearchView: View {
                     Text(PaceLocalization.text(de: "Ausgewählt", en: "Selected", ru: "Выбрано"))
                         .font(PaceFont.caption.weight(.semibold))
                         .foregroundStyle(PaceColor.textSecondary)
-                    RegionResultRow(hierarchy: selection, isSelected: true) {}
+                    RegionResultRow(hierarchy: selection, isSelected: true, onSelect: nil)
                 }
             }
             content
@@ -81,9 +81,11 @@ public struct RegionSearchView: View {
         case .results(let results):
             VStack(spacing: PaceSpacing.xxs) {
                 ForEach(results) { hierarchy in
-                    RegionResultRow(hierarchy: hierarchy, isSelected: hierarchy.id == viewModel.selection?.id) {
-                        viewModel.select(hierarchy)
-                    }
+                    RegionResultRow(
+                        hierarchy: hierarchy,
+                        isSelected: hierarchy.id == viewModel.selection?.id,
+                        onSelect: { viewModel.select(hierarchy) }
+                    )
                 }
             }
 
@@ -117,36 +119,47 @@ public struct RegionSearchView: View {
 private struct RegionResultRow: View {
     let hierarchy: RegionHierarchy
     let isSelected: Bool
-    let onSelect: () -> Void
+    /// `nil` für die reine Anzeige der Auswahl (kein Knopf ohne Wirkung).
+    let onSelect: (() -> Void)?
 
     var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: PaceSpacing.s) {
-                VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
-                    Text(hierarchy.municipality.name)
-                        .font(PaceFont.headline)
-                        .foregroundStyle(PaceColor.textPrimary)
-                    Text(hierarchy.subtitle)
-                        .font(PaceFont.caption)
-                        .foregroundStyle(PaceColor.textSecondary)
-                }
-                Spacer()
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(PaceColor.accent)
-                }
+        if let onSelect {
+            Button(action: onSelect) {
+                rowContent
             }
-            .padding(PaceSpacing.s)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                isSelected ? PaceColor.accent.opacity(0.12) : PaceColor.surface,
-                in: RoundedRectangle(cornerRadius: PaceRadius.button, style: .continuous)
-            )
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+        } else {
+            rowContent
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
         }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var rowContent: some View {
+        HStack(spacing: PaceSpacing.s) {
+            VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
+                Text(hierarchy.municipality.name)
+                    .font(PaceFont.headline)
+                    .foregroundStyle(PaceColor.textPrimary)
+                Text(hierarchy.subtitle)
+                    .font(PaceFont.caption)
+                    .foregroundStyle(PaceColor.textSecondary)
+            }
+            Spacer()
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(PaceColor.accent)
+            }
+        }
+        .padding(PaceSpacing.s)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            isSelected ? PaceColor.accent.opacity(0.12) : PaceColor.surface,
+            in: RoundedRectangle(cornerRadius: PaceRadius.button, style: .continuous)
+        )
+        .contentShape(Rectangle())
     }
 }

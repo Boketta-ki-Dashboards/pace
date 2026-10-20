@@ -61,7 +61,8 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
     }
 
     public func findProfile(username: String) async throws -> ProfileSearchResult? {
-        try read("findProfile") { state in
+        await gate.pass("findProfile")
+        return try read("findProfile") { state in
             state.profiles[username.lowercased()].map {
                 ProfileSearchResult(profile: $0, relationship: state.relationships[$0.publicID] ?? .none, requestID: nil)
             }

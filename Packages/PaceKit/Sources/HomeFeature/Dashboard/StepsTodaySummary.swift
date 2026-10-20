@@ -64,7 +64,7 @@ public struct StepsTodaySummary: Equatable, Sendable {
             ru: "из \(goalSteps) " + PaceLocalization.plural(goal, de: ("", ""), en: ("", ""), ru: ("шага", "шагов", "шагов"))
         )
         progress = Double(today.competitionSteps) / Double(goal)
-        percentText = "\(ActivityFormatter.wholePercent(progress))%"
+        percentText = formatter.compactPercent(progress)
         isGoalReached = today.competitionSteps >= goal
         let remaining = formatter.steps(max(goal - today.competitionSteps, 0))
         remainingText = isGoalReached

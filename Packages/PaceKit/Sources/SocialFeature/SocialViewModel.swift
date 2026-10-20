@@ -213,7 +213,11 @@ public final class SocialViewModel {
     /// Gibt es das Profil nicht oder ist es nicht sichtbar, steht ein Hinweis in `notice`.
     public func resolveRequestedProfile() async -> SocialProfile? {
         guard let requested = requestedProfile else { return nil }
-        clearRequestedProfile()
+        // Erst nach der Server-Antwort zurücksetzen: Die Social-Ansicht startet die Auflösung mit
+        // `.task(id: requestedProfile)`; ein früheres Zurücksetzen bräche genau diese Aufgabe samt Anfrage ab.
+        defer {
+            if requestedProfile == requested { clearRequestedProfile() }
+        }
         let username = Self.normalizedQuery(requested)
         guard let repository else {
             show(Notice(text: SocialError.unavailable.message, isError: true))

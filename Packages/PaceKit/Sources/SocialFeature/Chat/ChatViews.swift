@@ -6,13 +6,11 @@ import SwiftUI
 /// Chatliste mit Filter Alle/Freunde/Gruppen auf der Social-Hauptseite (Referenzbild 9). Die Überschrift „Chats“
 /// zeichnet die Hauptseite selbst.
 ///
-/// Solange die Liste sichtbar ist und die App im Vordergrund läuft, hält sie sich per Echtzeit und regelmäßigem
-/// Abfragen aktuell.
+/// Aktuell gehalten wird die Liste app-weit (`ChatListViewModel.observe()` in der Tab-Ansicht), damit auch das
+/// Ungelesen-Badge am Social-Tab live stimmt, während ein anderer Tab offen ist.
 public struct ChatListSection: View {
     private let viewModel: ChatListViewModel
     private let onOpen: (ChatTarget) -> Void
-
-    @Environment(\.scenePhase) private var scenePhase
 
     public init(viewModel: ChatListViewModel, onOpen: @escaping (ChatTarget) -> Void) {
         self.viewModel = viewModel
@@ -21,10 +19,6 @@ public struct ChatListSection: View {
 
     public var body: some View {
         ChatListContent(viewModel: viewModel, onOpen: onOpen)
-            .task(id: scenePhase == .active) { [viewModel, scenePhase] in
-                guard scenePhase == .active else { return }
-                await viewModel.observe()
-            }
     }
 }
 

@@ -57,7 +57,11 @@ public struct SocialView: View {
                         if !path.isEmpty { path.removeLast() }
                         path.append(route)
                     },
-                    onPopToRoot: { path = NavigationPath() }
+                    onPopToRoot: { path = NavigationPath() },
+                    onReplaceWithChat: { target in
+                        if !path.isEmpty { path.removeLast() }
+                        path.append(target)
+                    }
                 )
             }
             .navigationDestination(for: ChatTarget.self) { target in

@@ -372,7 +372,7 @@ public final class HomeDashboardViewModel {
         case .neighborhood:
             let level = standings.effectiveLevel(for: module.regionLevel ?? .municipality)
             guard let region = standings.scopes.first(where: { $0.level == level }) else { return module.title }
-            return "\(region.name) · \(module.title)"
+            return "\(region.localizedName) · \(module.title)"
         case .groups where module.configuration.groupID != nil:
             return PaceLocalization.text(de: "Gruppen-Streak", en: "Group streak", ru: "Серия группы")
         default:

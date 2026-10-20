@@ -396,18 +396,31 @@ enum SocialText {
     }
 
     static func groupRowDetail(reached: Int, required: Int, memberCount: Int) -> String {
-        t(
-            "Heute \(reached.paceFormatted) von \(required.paceFormatted) nötig",
-            "Today \(reached.paceFormatted) of \(required.paceFormatted) needed",
-            "Сегодня \(reached.paceFormatted) из \(required.paceFormatted) нужных"
+        let needed = PaceLocalization.plural(
+            required,
+            de: ("nötig", "nötig"),
+            en: ("needed", "needed"),
+            ru: ("нужного", "нужных", "нужных")
+        )
+        return t(
+            "Heute \(reached.paceFormatted) von \(required.paceFormatted) \(needed)",
+            "Today \(reached.paceFormatted) of \(required.paceFormatted) \(needed)",
+            "Сегодня \(reached.paceFormatted) из \(required.paceFormatted) \(needed)"
         ) + " · " + members(memberCount)
     }
 
     static func groupRowAccessibility(name: String, streak: Int, reached: Int, required: Int) -> String {
-        t(
-            "\(name), Serie \(PaceLocalization.days(streak)), heute \(reached) von \(required) nötigen Mitgliedern",
-            "\(name), streak \(PaceLocalization.days(streak)), today \(reached) of \(required) required members",
-            "\(name), серия \(PaceLocalization.days(streak)), сегодня \(reached) из \(required) нужных участников"
+        let neededMembers = PaceLocalization.plural(
+            required,
+            de: ("nötigen Mitglied", "nötigen Mitgliedern"),
+            en: ("required member", "required members"),
+            ru: ("нужного участника", "нужных участников", "нужных участников")
+        )
+        let days = PaceLocalization.days(streak)
+        return t(
+            "\(name), Serie \(days), heute \(reached.paceFormatted) von \(required.paceFormatted) \(neededMembers)",
+            "\(name), streak \(days), today \(reached.paceFormatted) of \(required.paceFormatted) \(neededMembers)",
+            "\(name), серия \(days), сегодня \(reached.paceFormatted) из \(required.paceFormatted) \(neededMembers)"
         )
     }
 

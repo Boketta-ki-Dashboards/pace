@@ -205,7 +205,7 @@ public final class HomeWidgetGalleryViewModel {
         if kind == .regionRanks {
             return level.widgetTitle
         }
-        return standings.hierarchy?.allLevels.first { $0.level == level }?.name ?? level.widgetTitle
+        return standings.hierarchy?.allLevels.first { $0.level == level }?.localizedName ?? level.widgetTitle
     }
 
     public func isSelected(level: RegionLevel) -> Bool {

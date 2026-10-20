@@ -13,6 +13,7 @@ import SwiftUI
 struct MainTabView: View {
     @Bindable var viewModel: MainViewModel
     @State private var openedTabs: Set<MainViewModel.Tab> = [.home]
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -44,6 +45,12 @@ struct MainTabView: View {
         }
         // Bewegungsdaten und Sync laufen für die ganze Main App, nicht nur, solange der Home-Tab offen ist.
         .activityUpdates(viewModel.home)
+        // Chatliste und Ungelesen-Badge app-weit aktuell halten (Echtzeit, sonst regelmäßige Abfrage), solange die
+        // App im Vordergrund ist – unabhängig davon, welcher Tab offen ist.
+        .task(id: scenePhase == .active) { [chats = viewModel.social.chats, scenePhase] in
+            guard scenePhase == .active else { return }
+            await chats.observe()
+        }
     }
 
     @ViewBuilder

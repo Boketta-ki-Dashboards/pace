@@ -5,16 +5,25 @@ import SwiftUI
 /// „Profil teilen“: Empfängerauswahl (Freunde und eigene Gruppen) und Link zum Teilen außerhalb von Pace.
 struct ShareProfileView: View {
     @State private var model: ShareProfileViewModel
+    /// Ging das Profil an genau einen Chat, öffnet dieser Chat statt der vorigen Seite.
+    private let onSentToSingleChat: ((ChatTarget) -> Void)?
     @Environment(\.dismiss) private var dismiss
 
-    init(model: ShareProfileViewModel) {
+    init(model: ShareProfileViewModel, onSentToSingleChat: ((ChatTarget) -> Void)? = nil) {
         _model = State(initialValue: model)
+        self.onSentToSingleChat = onSentToSingleChat
     }
 
     var body: some View {
         ShareProfileContent(model: model) {
             Task {
-                if await model.send() { dismiss() }
+                let targets = model.selectedTargets
+                guard await model.send() else { return }
+                if targets.count == 1, let target = targets.first, let onSentToSingleChat {
+                    onSentToSingleChat(target)
+                } else {
+                    dismiss()
+                }
             }
         }
         .socialSubpageScroll()

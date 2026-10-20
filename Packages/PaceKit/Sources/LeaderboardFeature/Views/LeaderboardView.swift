@@ -318,7 +318,7 @@ enum LeaderboardTexts {
         PaceLocalization.text(
             de: "Du bist noch in keiner Gruppe. Erstelle in Social eine Gruppe oder tritt einer bei.",
             en: "You're not in a group yet. Create or join a group in Social.",
-            ru: "Ты пока не состоишь в группе. Создай группу или вступи в неё в разделе «Social»."
+            ru: "Ты пока не состоишь в группе. Создай группу или вступи в неё во вкладке «Друзья»."
         )
     }
     static var groupRankingUnavailable: String {
@@ -344,7 +344,7 @@ enum LeaderboardTexts {
         PaceLocalization.text(
             de: "Füge in Social Freunde hinzu, um dich mit ihnen zu vergleichen.",
             en: "Add friends in Social to compare yourself with them.",
-            ru: "Добавь друзей в разделе «Social», чтобы соревноваться с ними."
+            ru: "Добавь друзей во вкладке «Друзья», чтобы соревноваться с ними."
         )
     }
 
