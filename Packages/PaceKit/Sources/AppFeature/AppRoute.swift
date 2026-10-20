@@ -14,6 +14,8 @@ public enum AppRoute {
     case connectionFailed(message: String)
     case onboarding(OnboardingViewModel)
     case main(MainViewModel)
+    /// Das Konto wurde gelöscht; ein neuer Start führt in das Onboarding mit einer neuen Identität.
+    case accountDeleted
 
     public enum Kind: Hashable, Sendable {
         case launching
@@ -24,6 +26,7 @@ public enum AppRoute {
         case connectionFailed
         case onboarding
         case main
+        case accountDeleted
     }
 
     public var kind: Kind {
@@ -36,6 +39,7 @@ public enum AppRoute {
         case .connectionFailed: .connectionFailed
         case .onboarding: .onboarding
         case .main: .main
+        case .accountDeleted: .accountDeleted
         }
     }
 }

@@ -1,3 +1,4 @@
+import PaceCore
 import SwiftUI
 
 /// Eintrag der Tab-Leiste.
@@ -6,14 +7,17 @@ public struct PaceTabItem<Value: Hashable>: Identifiable {
     public let title: String
     public let systemImage: String
     public let selectedSystemImage: String
+    /// Zähler am Symbol (z. B. ungelesene Nachrichten); 0 blendet ihn aus.
+    public let badge: Int
 
     public var id: Value { value }
 
-    public init(value: Value, title: String, systemImage: String, selectedSystemImage: String) {
+    public init(value: Value, title: String, systemImage: String, selectedSystemImage: String, badge: Int = 0) {
         self.value = value
         self.title = title
         self.systemImage = systemImage
         self.selectedSystemImage = selectedSystemImage
+        self.badge = badge
     }
 }
 
@@ -39,6 +43,12 @@ public struct PaceTabBar<Value: Hashable>: View {
                         Image(systemName: isSelected ? item.selectedSystemImage : item.systemImage)
                             .font(.system(size: 21, weight: .medium))
                             .frame(height: 26)
+                            .overlay(alignment: .topTrailing) {
+                                if item.badge > 0 {
+                                    TabBadge(count: item.badge)
+                                        .offset(x: 12, y: -4)
+                                }
+                            }
                         Text(item.title)
                             .font(.system(size: 13, weight: isSelected ? .bold : .medium))
                             .lineLimit(1)
@@ -56,6 +66,7 @@ public struct PaceTabBar<Value: Hashable>: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(item.title)
+                .accessibilityValue(item.badge > 0 ? TabBadge.accessibilityText(item.badge) : "")
                 .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
         }
@@ -71,5 +82,32 @@ public struct PaceTabBar<Value: Hashable>: View {
                 }
                 .ignoresSafeArea(edges: .bottom)
         }
+    }
+}
+
+/// Kleiner Zähler am Tab-Symbol.
+private struct TabBadge: View {
+    let count: Int
+
+    var body: some View {
+        Text(verbatim: count > 99 ? "99+" : count.paceFormatted)
+            .font(.system(size: 11, weight: .bold))
+            .monospacedDigit()
+            .foregroundStyle(PaceColor.onAccent)
+            .padding(.horizontal, 5)
+            .frame(minWidth: 18, minHeight: 18)
+            .background(PaceColor.actionFill, in: Capsule())
+            .overlay(Capsule().strokeBorder(PaceColor.surface, lineWidth: 1.5))
+            .fixedSize()
+            .accessibilityHidden(true)
+    }
+
+    static func accessibilityText(_ count: Int) -> String {
+        PaceLocalization.plural(
+            count,
+            de: ("\(count) ungelesen", "\(count) ungelesen"),
+            en: ("\(count) unread", "\(count) unread"),
+            ru: ("\(count) непрочитанное", "\(count) непрочитанных", "\(count) непрочитанных")
+        )
     }
 }

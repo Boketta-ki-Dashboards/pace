@@ -40,6 +40,10 @@ public struct RootView: View {
                 OnboardingView(viewModel: viewModel)
             case .main(let viewModel):
                 MainTabView(viewModel: viewModel)
+            case .accountDeleted:
+                AccountDeletedView {
+                    Task { await router.startOver() }
+                }
             }
         }
         .animation(.default, value: router.route.kind)
@@ -48,6 +52,10 @@ public struct RootView: View {
         // Systemsteuerelemente (Datumsauswahl, Teilen-Dialog) in der gewählten Sprache.
         .environment(\.locale, PaceLocalization.shared.locale)
         .environment(\.paceImageLoader, imageLoader)
+        // Geteilte Profil-Links (`pace://u/<name>`); vor dem Start der Main App werden sie gemerkt.
+        .onOpenURL { url in
+            router.open(url)
+        }
         .task { [router] in await router.start() }
     }
 }
