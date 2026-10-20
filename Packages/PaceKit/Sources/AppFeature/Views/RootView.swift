@@ -54,7 +54,7 @@ public struct RootView: View {
         .environment(\.paceImageLoader, imageLoader)
         // Geteilte Profil-Links (`pace://u/<name>`); vor dem Start der Main App werden sie gemerkt.
         .onOpenURL { url in
-            router.open(url)
+            _ = router.open(url)
         }
         .task { [router] in await router.start() }
     }
