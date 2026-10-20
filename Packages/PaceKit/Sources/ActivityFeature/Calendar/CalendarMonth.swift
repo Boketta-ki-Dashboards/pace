@@ -60,6 +60,28 @@ public struct CalendarMonth: Equatable, Sendable {
     public let cells: [CalendarDay?]
     public let canShowPrevious: Bool
     public let canShowNext: Bool
+    /// Karte unter dem Raster für den ausgewählten Tag; `nil` ohne Auswahl in diesem Monat.
+    public let selectedCard: DayCard?
+
+    /// Karte des ausgewählten Tages: „Samstag, 17. Oktober“, „8.432 Schritte“, „Tagesziel 10.000“, Balken, Ring.
+    public struct DayCard: Equatable, Sendable {
+        public let date: LocalDate
+        /// `Samstag, 17. Oktober`
+        public let title: String
+        /// `8.432`; `nil` ohne Daten.
+        public let stepsText: String?
+        /// `Schritte`
+        public let stepsUnit: String
+        /// `Tagesziel 10.000`
+        public let goalText: String
+        /// `Noch 1.568 Schritte`, `Ziel erreicht` bzw. ohne Daten ein Hinweis.
+        public let detailText: String
+        /// `84%`
+        public let percentText: String
+        public let fraction: Double
+        public let isReached: Bool
+        public let accessibilityLabel: String
+    }
 
     public var weeks: [[CalendarDay?]] {
         stride(from: 0, to: cells.count, by: 7).map { Array(cells[$0..<min($0 + 7, cells.count)]) }
@@ -128,13 +150,47 @@ public struct CalendarMonth: Equatable, Sendable {
 
         let firstMonth = calendar.startOfMonth(containing: input.firstMonth)
         let currentMonth = calendar.startOfMonth(containing: input.today)
+        let selected = cells.compactMap { $0 }.first { $0.isSelected }
         return CalendarMonth(
             month: first,
             title: formatter.monthYear(first),
             weekdays: weekdays,
             cells: cells,
             canShowPrevious: first > firstMonth,
-            canShowNext: first < currentMonth
+            canShowNext: first < currentMonth,
+            selectedCard: selected.map { card(for: $0, input: input) }
+        )
+    }
+
+    private static func card(for day: CalendarDay, input: Input) -> DayCard {
+        let formatter = input.formatter
+        let title = formatter.dayLong(day.date)
+        guard let progress = day.progress else {
+            let goal = DayGoalProgress(day: day.date, steps: 0, goal: input.goals.goal(on: day.date), isToday: day.isToday)
+            return DayCard(
+                date: day.date,
+                title: title,
+                stepsText: nil,
+                stepsUnit: "",
+                goalText: goal.goalText(formatter: formatter),
+                detailText: Texts.noDataForDay,
+                percentText: "–",
+                fraction: 0,
+                isReached: false,
+                accessibilityLabel: "\(title): \(Texts.noDataForDay)"
+            )
+        }
+        return DayCard(
+            date: day.date,
+            title: title,
+            stepsText: progress.stepsText(formatter: formatter),
+            stepsUnit: progress.stepsUnit,
+            goalText: progress.goalText(formatter: formatter),
+            detailText: progress.remainingText(formatter: formatter),
+            percentText: progress.percentText(formatter: formatter),
+            fraction: progress.fraction,
+            isReached: progress.isReached,
+            accessibilityLabel: "\(title): \(progress.accessibilityText(formatter: formatter)). \(progress.goalText(formatter: formatter))"
         )
     }
 
