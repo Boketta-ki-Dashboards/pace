@@ -108,9 +108,16 @@ public struct Region: Hashable, Sendable, Identifiable {
         }
     }
 
-    /// Ortsangabe mit Präposition für Sätze wie „Du bist der Erste …“: `in Pfungstadt`, `im Landkreis
-    /// Darmstadt-Dieburg`, `im Oberbergischen Kreis`, `in der Region Hannover`, `im Saarland`.
+    /// Ortsangabe für Sätze wie „Du bist der Erste …“ in der Sprache der App.
+    ///
+    /// Deutsch mit passender Präposition: `in Pfungstadt`, `im Landkreis Darmstadt-Dieburg`, `im Oberbergischen
+    /// Kreis`, `in der Region Hannover`, `im Saarland`. Englisch `in Pfungstadt`. Russisch bleibt der amtliche
+    /// (deutsche) Name unverändert und wird nicht gebeugt: `в рейтинге «Pfungstadt»`.
     public var locative: String {
+        PaceLocalization.text(de: germanLocative, en: "in \(displayName)", ru: "в рейтинге «\(displayName)»")
+    }
+
+    private var germanLocative: String {
         if name.hasPrefix("Region ") || name.hasPrefix("Städteregion ") {
             return "in der \(name)"
         }

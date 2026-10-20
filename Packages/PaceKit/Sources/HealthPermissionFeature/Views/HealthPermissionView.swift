@@ -1,4 +1,5 @@
 import DesignSystem
+import PaceCore
 import SwiftUI
 
 /// Erklärt, wofür Pace Health-Zugriff braucht, und startet die System-Abfrage.
@@ -17,28 +18,55 @@ public struct HealthPermissionView: View {
                     VStack(alignment: .leading, spacing: PaceSpacing.l) {
                         HealthPermissionPoint(
                             systemImage: "figure.walk",
-                            title: "Nur Bewegungsdaten",
-                            text: "Schritte, Distanz, aktive Kalorien, Stockwerke und Trainingsminuten. Keine Herzfrequenz, kein Schlaf, keine medizinischen Daten."
+                            title: PaceLocalization.text(de: "Nur Bewegungsdaten", en: "Only activity data", ru: "Только данные об активности"),
+                            text: PaceLocalization.text(
+                                de: "Schritte, Distanz, aktive Kalorien, Stockwerke und Trainingsminuten. Kein Schlaf, keine medizinischen Daten. "
+                                    + "Puls fragt Pace nur, wenn du ihn später in den Tagesdetails ausdrücklich anzeigen möchtest.",
+                                en: "Steps, distance, active calories, floors and exercise minutes. No sleep, no medical data. "
+                                    + "Pace only asks for heart rate if you later choose to show it in the day details.",
+                                ru: "Шаги, дистанция, активные калории, этажи и минуты тренировки. Без сна и медицинских данных. "
+                                    + "Пульс Pace запросит, только если ты сам захочешь показать его в подробностях дня."
+                            )
                         )
                         HealthPermissionPoint(
                             systemImage: "trophy.fill",
-                            title: "Nur Schritte zählen für Rankings",
-                            text: "Geteilt wird ausschließlich deine tägliche Schrittzahl. Alle anderen Werte bleiben auf deinem iPhone."
+                            title: PaceLocalization.text(
+                                de: "Nur Schritte zählen für Rankings",
+                                en: "Only steps count for rankings",
+                                ru: "В рейтингах учитываются только шаги"
+                            ),
+                            text: PaceLocalization.text(
+                                de: "Geteilt wird ausschließlich deine tägliche Schrittzahl. Alle anderen Werte bleiben auf deinem iPhone.",
+                                en: "Only your daily step count is shared. All other values stay on your iPhone.",
+                                ru: "Передаётся только твоё количество шагов за день. Все остальные данные остаются на твоём iPhone."
+                            )
                         )
                         HealthPermissionPoint(
                             systemImage: "lock.fill",
-                            title: "Nur lesen",
-                            text: "Pace schreibt keine Daten in Apple Health."
+                            title: PaceLocalization.text(de: "Nur lesen", en: "Read only", ru: "Только чтение"),
+                            text: PaceLocalization.text(
+                                de: "Pace schreibt keine Daten in Apple Health.",
+                                en: "Pace doesn't write any data to Apple Health.",
+                                ru: "Pace ничего не записывает в Apple Health."
+                            )
                         )
                         HealthPermissionPoint(
                             systemImage: "location.slash",
-                            title: "Kein Standort nötig",
-                            text: "Für Schritte und Rankings brauchst du keine Standortfreigabe."
+                            title: PaceLocalization.text(de: "Kein Standort nötig", en: "No location needed", ru: "Геопозиция не нужна"),
+                            text: PaceLocalization.text(
+                                de: "Für Schritte und Rankings brauchst du keine Standortfreigabe.",
+                                en: "You don't need to share your location for steps and rankings.",
+                                ru: "Для шагов и рейтингов не нужен доступ к геопозиции."
+                            )
                         )
                         HealthPermissionPoint(
                             systemImage: "hand.raised.fill",
-                            title: "Du behältst die Kontrolle",
-                            text: "Du kannst den Zugriff jederzeit in der Health-App ändern."
+                            title: PaceLocalization.text(de: "Du behältst die Kontrolle", en: "You stay in control", ru: "Всё под твоим контролем"),
+                            text: PaceLocalization.text(
+                                de: "Du kannst den Zugriff jederzeit in der Health-App ändern.",
+                                en: "You can change access in the Health app at any time.",
+                                ru: "Доступ можно в любой момент изменить в приложении «Здоровье»."
+                            )
                         )
                     }
                 }
@@ -63,11 +91,15 @@ public struct HealthPermissionView: View {
                 .background(PaceColor.accentStrong, in: RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous))
                 .accessibilityHidden(true)
 
-            Text("Deine Schritte zählen")
+            Text(PaceLocalization.text(de: "Deine Schritte zählen", en: "Your steps count", ru: "Твои шаги важны"))
                 .font(PaceFont.largeTitle)
                 .foregroundStyle(PaceColor.textPrimary)
 
-            Text("Verbinde Pace mit Apple Health, damit wir deine Bewegung von heute anzeigen können.")
+            Text(PaceLocalization.text(
+                de: "Verbinde Pace mit Apple Health, damit wir deine Bewegung von heute anzeigen können.",
+                en: "Connect Pace to Apple Health so we can show today's activity.",
+                ru: "Подключи Pace к Apple Health, чтобы видеть свою активность за сегодня."
+            ))
                 .font(PaceFont.body)
                 .foregroundStyle(PaceColor.textSecondary)
         }
@@ -78,7 +110,7 @@ public struct HealthPermissionView: View {
             if case .failed(let message) = viewModel.state {
                 Text(message)
                     .font(PaceFont.callout)
-                    .foregroundStyle(PaceColor.danger)
+                    .foregroundStyle(PaceColor.textSecondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -89,7 +121,7 @@ public struct HealthPermissionView: View {
                     ProgressView()
                         .tint(PaceColor.onAccent)
                 } else {
-                    Text("Mit Apple Health verbinden")
+                    Text(PaceLocalization.text(de: "Mit Apple Health verbinden", en: "Connect to Apple Health", ru: "Подключить Apple Health"))
                 }
             }
             .buttonStyle(.pacePrimary)

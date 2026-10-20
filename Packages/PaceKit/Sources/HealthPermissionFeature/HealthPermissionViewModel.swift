@@ -47,11 +47,23 @@ public final class HealthPermissionViewModel {
     static func message(for error: Error) -> String {
         switch error as? HealthDataError {
         case .healthDataUnavailable:
-            "Apple Health ist auf diesem Gerät nicht verfügbar."
+            PaceLocalization.text(
+                de: "Apple Health ist auf diesem Gerät nicht verfügbar.",
+                en: "Apple Health isn't available on this device.",
+                ru: "Apple Health недоступно на этом устройстве."
+            )
         case .protectedDataUnavailable:
-            "Entsperre dein iPhone und versuche es erneut."
+            PaceLocalization.text(
+                de: "Entsperre dein iPhone und versuche es erneut.",
+                en: "Unlock your iPhone and try again.",
+                ru: "Разблокируй iPhone и попробуй ещё раз."
+            )
         default:
-            "Die Verbindung zu Apple Health konnte nicht hergestellt werden. Bitte versuche es erneut."
+            PaceLocalization.text(
+                de: "Die Verbindung zu Apple Health konnte nicht hergestellt werden. Bitte versuche es erneut.",
+                en: "Couldn't connect to Apple Health. Please try again.",
+                ru: "Не удалось подключиться к Apple Health. Попробуй ещё раз."
+            )
         }
     }
 }

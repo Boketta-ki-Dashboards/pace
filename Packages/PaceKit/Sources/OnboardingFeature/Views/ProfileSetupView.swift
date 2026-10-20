@@ -22,14 +22,24 @@ struct ProfileSetupView: View {
             VStack(alignment: .leading, spacing: PaceSpacing.l) {
                 OnboardingStepHeader(
                     step: 1,
-                    title: "Wie sollen dich andere sehen?",
-                    message: "Anzeigename und Benutzername erscheinen in Rankings neben deinen Schritten – "
-                        + "aber nur, wenn du regional antrittst."
+                    title: PaceLocalization.text(
+                        de: "Wie sollen dich andere sehen?",
+                        en: "How should others see you?",
+                        ru: "Как тебя будут видеть другие?"
+                    ),
+                    message: PaceLocalization.text(
+                        de: "Anzeigename und Benutzername erscheinen in Rankings neben deinen Schritten – "
+                            + "aber nur, wenn du regional antrittst.",
+                        en: "Your display name and username appear next to your steps in rankings – "
+                            + "but only if you compete regionally.",
+                        ru: "Имя и имя пользователя видны в рейтингах рядом с твоими шагами – "
+                            + "но только если ты участвуешь в региональных рейтингах."
+                    )
                 )
 
                 VStack(alignment: .leading, spacing: PaceSpacing.xs) {
-                    fieldLabel("Anzeigename")
-                    TextField("z. B. Niklas", text: $viewModel.displayName)
+                    fieldLabel(PaceLocalization.text(de: "Anzeigename", en: "Display name", ru: "Имя"))
+                    TextField(PaceLocalization.text(de: "z. B. Niklas", en: "e.g. Niklas", ru: "например, Niklas"), text: $viewModel.displayName)
                         .textContentType(.nickname)
                         .submitLabel(.next)
                         .focused($focusedField, equals: .displayName)
@@ -41,12 +51,12 @@ struct ProfileSetupView: View {
                 }
 
                 VStack(alignment: .leading, spacing: PaceSpacing.xs) {
-                    fieldLabel("Benutzername")
+                    fieldLabel(PaceLocalization.text(de: "Benutzername", en: "Username", ru: "Имя пользователя"))
                     HStack(spacing: PaceSpacing.xxs) {
-                        Text("@")
+                        Text(verbatim: "@")
                             .foregroundStyle(PaceColor.textSecondary)
                             .accessibilityHidden(true)
-                        TextField("benutzername", text: $viewModel.username)
+                        TextField(PaceLocalization.text(de: "benutzername", en: "username", ru: "username"), text: $viewModel.username)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .submitLabel(.done)
@@ -71,7 +81,7 @@ struct ProfileSetupView: View {
                     if viewModel.isSubmitting {
                         ProgressView().tint(PaceColor.onAccent)
                     } else {
-                        Text("Weiter")
+                        Text(OnboardingTexts.next)
                     }
                 }
                 .buttonStyle(.pacePrimary)

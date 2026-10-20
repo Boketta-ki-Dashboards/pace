@@ -7,8 +7,10 @@ zum Zweck: Sie liefern die Schritte für den Wettbewerb und ein paar persönlich
 
 1. **Nur lesen, nichts schreiben.** Pace fordert ausschließlich Lesezugriff an. Es gibt keinen
    `NSHealthUpdateUsageDescription`-Text, weil Pace nichts in Health schreibt (die CI prüft das).
-2. **Nur Bewegungsdaten.** Keine Herzfrequenz, kein Ruhepuls, kein Gewicht, kein Körperfett, kein Schlaf, kein
-   Blutdruck, kein Blutzucker, keine Zyklusdaten, keine medizinischen Daten.
+2. **Bewegungsdaten – Puls nur auf ausdrücklichen Wunsch.** Beim ersten Start fragt Pace nur nach Bewegungsdaten.
+   Ruhepuls und Ø Puls beim Gehen liest Pace erst, wenn der Nutzer in den Tagesdetails „Puls aus Apple Health
+   anzeigen“ antippt (eigene Abfrage, siehe unten). Kein Gewicht, kein Körperfett, kein Schlaf, kein Blutdruck, kein
+   Blutzucker, keine Zyklusdaten, keine medizinischen Daten.
 3. **Ins Backend geht nur, was der Wettbewerb braucht:** die tägliche Zahl der Competition Steps. Alles andere bleibt
    auf dem iPhone.
 4. **Keine Rohdaten.** Weder lokal gespeichert noch übertragen werden einzelne HealthKit-Samples – nur Tagessummen.
@@ -22,6 +24,15 @@ zum Zweck: Sie liefern die Schritte für den Wettbewerb und ein paar persönlich
 | `activeEnergyBurned` | aktive Kalorien auf Home und in den Statistiken | ja |
 | `flightsClimbed` | Stockwerke in den Statistiken | ja |
 | `appleExerciseTime` | Trainingsminuten in den Statistiken (in der Praxis nur mit Apple Watch) | ja |
+| `restingHeartRate` | optional: Ruhepuls in den Tagesdetails (Tagesdurchschnitt) | ja, nie ans Backend |
+| `walkingHeartRateAverage` | optional: Ø Puls beim Gehen in den Tagesdetails | ja, nie ans Backend |
+
+Die beiden Herztypen gehören **nicht** zur Abfrage beim ersten Start (`HealthKitService.readTypes`) und nicht zu den
+Hintergrund-Observern. Sie werden über `ActivityDataProviding.requestHeartRateAccess()` separat angefragt – nur nach
+einem Tipp auf „Puls aus Apple Health anzeigen“. `heartRateAccess()` meldet nur, ob schon gefragt wurde: Ob der Nutzer
+zugestimmt hat, verrät HealthKit bei Lesezugriffen nicht. Ohne Zustimmung oder ohne Messung gibt es schlicht keine
+Werte; die Kacheln erscheinen dann nicht (nie als 0, nie geschätzt). Der vorhandene Text
+`NSHealthShareUsageDescription` deckt beide Abfragen ab.
 
 Implementiert in `Packages/PaceKit/Sources/PaceHealth` – dem einzigen Modul mit `import HealthKit`.
 
@@ -89,6 +100,12 @@ Das betrifft nur die Statistik der letzten 7 Tage.
 - Woche = ISO-Woche Montag bis Sonntag. Das passt zu den späteren Weekly-Rankings im Backend.
 - Geladen werden immer die letzten 7 Tage. Daraus ergeben sich „heute“, „gestern“, „aktuelle Woche“ und
   „letzte 7 Tage“.
+- Der **Monatskalender** zeigt die Wochentage nach App-Sprache (Deutsch und Russisch ab Montag, Englisch ab Sonntag).
+  Er liest nichts zusätzlich, sondern nutzt den Verlauf (siehe unten): zurück bis zum Anfang des Verlaufs (12 volle
+  Monate), vorwärts bis zum aktuellen Monat. Zustände je Tag: Ziel erreicht (volle Fläche), gemessen aber nicht
+  erreicht (Ring, auch bei gemessenen 0 Schritten), keine Daten (gestrichelter Ring, „–“), Zukunft (neutral, „–“).
+- Bewertet wird jeder Tag mit dem **damals gültigen Tagesziel** (`StepGoalHistory`) – dieselbe Grundlage wie die
+  Streak. Eine spätere Zieländerung verändert vergangene Tage nicht.
 
 ## Wann gelesen wird
 
@@ -107,8 +124,17 @@ Das betrifft nur die Statistik der letzten 7 Tage.
   Statistik-Abfrage (`HKStatisticsCollectionQuery`, Tages-Buckets) je Kennzahl. Neu gelesen wird erst nach einem
   Tageswechsel oder wenn der Stand älter als eine Stunde ist – dadurch fließen spät synchronisierte Werte (z. B. von
   der Apple Watch, die teils erst Stunden später in Health landen) ein, ohne den Akku zu belasten.
-- Stundenwerte liest nur die Tagesansicht der Statistik (`hourlyTotals`, Stunden-Buckets) – für vergangene Tage
-  einmal, für heute erneut, sobald sich der Tageswert ändert, plus der Vortag für den Vergleich „zur gleichen Zeit“.
+- Stundenwerte lesen nur die Tagesansicht der Statistik und die Tagesdetails (`hourlyTotals`, Stunden-Buckets,
+  Wettbewerbsschritte) – für vergangene Tage einmal, für heute erneut, sobald sich der Tageswert ändert; die
+  Statistik zusätzlich den Vortag für den Vergleich „zur gleichen Zeit“.
+- Die **Tagesdetails** (Kalender → Tag, Statistik → „Alle Tagesdetails“) zeigen Schritte, das Ziel dieses Tages, den
+  Rest bis zum Ziel, Distanz, aktive Kalorien, Stockwerke, Trainingsminuten, den Tagesverlauf, die Streak und die
+  letzten 7 Tage. Nicht lesbare Kennzahlen erscheinen als „–“.
+- **Streak:** Ein laufender Tag unterbricht die Serie nicht. Die Tagesdetails zeigen deshalb „aktuelle Serie bis
+  gestern“ und „Erreiche heute dein Ziel für Tag n“; sobald heute erreicht ist, zählt der Tag sofort. Für vergangene
+  Tage beschreibt die Karte die Serie an diesem Tag. Tagesgrenzen folgen dem Kalender oben (auch beim
+  Sommerzeitwechsel wird jeder Tag genau einmal gezählt); spät synchronisierte Werte fließen über die live
+  aktualisierten letzten 7 Tage bzw. das stündliche Neuladen des Verlaufs ein.
 - Alle Werte bleiben auf dem Gerät. Für Streak und Zieltage zählt wie überall die Wettbewerbsschrittzahl.
 - CoreMotion wird nicht verwendet: Die Schritte des iPhones stehen über Health bereits zur Verfügung, und nur Health
   führt iPhone und Apple Watch ohne Doppelzählung zusammen.
@@ -124,8 +150,8 @@ Tabelle `daily_activity` (siehe `docs/BACKEND.md`):
 | `competition_steps` | Competition Steps dieses Tags (0 bis 200.000) |
 | `synced_at`, `steps_changed_at` | vom Server gesetzt |
 
-Bewusst **nicht** im Backend: Health Steps, Distanz, aktive Energie, Stockwerke, Trainingsminuten. Keine dieser
-Zahlen wird für eine Social- oder Wettbewerbsfunktion gebraucht.
+Bewusst **nicht** im Backend: Health Steps, Distanz, aktive Energie, Stockwerke, Trainingsminuten, Ruhepuls und
+Puls beim Gehen. Keine dieser Zahlen wird für eine Social- oder Wettbewerbsfunktion gebraucht.
 
 Synchronisiert werden die Competition Steps der letzten 7 Tage, aber nur Tage, deren Wert sich geändert hat:
 
@@ -139,3 +165,9 @@ Es gibt kein Polling.
 In öffentlichen Regionalrankings (nur nach ausdrücklicher Zustimmung) sehen andere Nutzer ausschließlich
 Anzeigename, Benutzername, die Competition Steps des Tags und den Rang. Keine weiteren Gesundheitswerte, keine
 Gemeinde anderer Nutzer, keine Standortdaten.
+
+Ist die Ranking-Sichtbarkeit ausgeschaltet, lädt der Rankings-Tab **keine** regionalen Rankingdaten und lädt auch
+keine Schritte „für das Ranking“ hoch. Die Karte zeigt nur eine unscharfe Struktur mit neutralen Platzhaltern,
+„Ranking ausgeschaltet“ und die Aktion „Ranking-Sichtbarkeit aktivieren“ (mit Bestätigung, gespeichert über
+`ProfileStore.setRegionalLeaderboardEnabled`). Das Freunde-Ranking ist davon unabhängig: Freunde teilen ihre
+Wettbewerbsschritte mit der Freundschaft.

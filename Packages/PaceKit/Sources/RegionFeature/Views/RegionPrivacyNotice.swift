@@ -1,4 +1,5 @@
 import DesignSystem
+import PaceCore
 import SwiftUI
 
 /// Erklärt, wofür die Region verwendet wird – und wofür nicht.
@@ -9,10 +10,28 @@ public struct RegionPrivacyNotice: View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
             point(
                 "trophy.fill",
-                "Deine Region ordnet dich ausschließlich regionalen Pace-Rankings zu: Gemeinde, Kreis, Bundesland, Deutschland."
+                PaceLocalization.text(
+                    de: "Deine Region ordnet dich ausschließlich regionalen Pace-Rankings zu: Gemeinde, Kreis, Bundesland, Deutschland.",
+                    en: "Your region is used only to place you in regional Pace rankings: municipality, district, state, Germany.",
+                    ru: "Регион нужен только для региональных рейтингов Pace: населённый пункт, район, федеральная земля, Германия."
+                )
             )
-            point("location.slash", "Kein Live-GPS, keine Adresse, keine Koordinaten, keine Standortverfolgung.")
-            point("arrow.triangle.2.circlepath", "Du kannst deine Region jederzeit im Profil ändern.")
+            point(
+                "location.slash",
+                PaceLocalization.text(
+                    de: "Kein Live-GPS, keine Adresse, keine Koordinaten, keine Standortverfolgung.",
+                    en: "No live GPS, no address, no coordinates, no location tracking.",
+                    ru: "Без GPS в реальном времени, адреса, координат и отслеживания местоположения."
+                )
+            )
+            point(
+                "arrow.triangle.2.circlepath",
+                PaceLocalization.text(
+                    de: "Du kannst deine Region jederzeit im Profil ändern.",
+                    en: "You can change your region in your profile at any time.",
+                    ru: "Регион можно в любой момент изменить в профиле."
+                )
+            )
         }
         .padding(PaceSpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
