@@ -126,7 +126,7 @@ struct CalendarContent: View {
                     .font(.system(.body, weight: .semibold))
                     .foregroundStyle(PaceColor.accent)
                     .opacity(canShowPrevious ? 1 : 0.3)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 40, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -146,7 +146,7 @@ struct CalendarContent: View {
                     .font(.system(.body, weight: .semibold))
                     .foregroundStyle(PaceColor.accent)
                     .opacity(canShowNext ? 1 : 0.3)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 40, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -165,14 +165,15 @@ struct CalendarContent: View {
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 5, style: .continuous)
                 .fill(PaceColor.goalReachedFill)
-                .frame(width: 18, height: 18)
+                .frame(width: 14, height: 14)
                 .overlay(
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .strokeBorder(PaceColor.accent.opacity(0.5), lineWidth: 1)
                 )
                 .accessibilityHidden(true)
+            // Klein wie in Bild 9, damit die Legende neben der Monatsnavigation Platz hat.
             Text(CalendarTexts.goalReached)
-                .font(.system(.footnote, weight: .medium))
+                .font(.system(.caption, weight: .medium))
                 .foregroundStyle(PaceColor.accent)
                 .lineLimit(1)
                 .fixedSize()
