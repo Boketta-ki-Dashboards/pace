@@ -47,12 +47,18 @@ App-Start
   → Profil: fehlt → Onboarding Profil → Onboarding Region
             ohne Region → Onboarding Region
             vollständig → Main App (Tabs: Home · Rankings · Social · Profil)
+  → Konto gelöscht (Profil → Datenschutz & Daten) → Hinweis „Konto gelöscht“ → „Neu beginnen“
+            → neue anonyme Sitzung → Onboarding
 ```
 
 - Ein vollständiges Profil wird lokal zwischengespeichert (`UserDefaultsProfileCache`). Ist es vorhanden, startet
   die App auch offline direkt in die Main App und gleicht das Profil im Hintergrund ab.
 - `AppRoute` besitzt das ViewModel des aktuellen Screens. Die Main App teilt einen `ProfileStore` (Profil + Region)
   zwischen Home, Rankings und Profil.
+- Deep Links: `pace://u/<benutzername>` (URL-Schema in `Config/Info.plist`). `RootView.onOpenURL` → `AppRouter.open(_:)`
+  → `PaceLink(url:)` → `MainViewModel.open(_:)` (Social-Tab, `SocialViewModel.showProfile(username:)`). Kommt der Link
+  vor dem Start der Main App (Kaltstart, Onboarding), merkt sich der Router ihn (`pendingLink`) und führt ihn danach
+  aus. Ob das Profil sichtbar ist, entscheidet der Server.
 - Weitere Tabs kommen als zusätzlicher Fall in `MainViewModel.Tab` mit eigenem Feature-Modul hinzu. Home wechselt
   über Callbacks in andere Tabs (z. B. eine Ranking-Karte → Rankings mit dieser Ebene), ohne die Main App zu kennen.
 
@@ -88,12 +94,17 @@ App-Start
 - Fehlt die Migration auf dem Server (PostgREST `PGRST202`), zeigen Social-Tab und Module einen ehrlichen Hinweis
   statt scheinbar funktionierender Oberflächen. Einen Gruppenchat gibt es bewusst nicht (keine Moderation).
 
-## Profil
+## Profil und Einstellungen
 
-- „Deine Aktivität“: Tagesziel (änderbar, gleiches Sheet wie auf Home), aktuelle Serie und Rekord, Zugang zur
-  Statistik. „Darstellung → App-Icon“: Automatisch, Hell, Dunkel (alternative App-Icons über `AppIconSetting`; die
-  App zeigt keine eigene Erfolgsmeldung, iOS bestätigt den Wechsel selbst). Es gibt keinen eigenen
-  Einstellungen-Tab.
+- Es gibt keinen eigenen Einstellungen-Tab: Der Profil-Tab zeigt oben Wortmarke, Titel und die Profilkarte
+  (Profilbild, Namen, Teilen-Knopf), darunter Aktivität (Tagesziel, Serie, Rekord, Statistik), Region,
+  Ranking-Sichtbarkeit, Darstellung und die Kategorien der Einstellungen als eigene Unterseiten
+  (`ProfileRoute`, `NavigationStack(path: $viewModel.path)`). Details, Datenflüsse und Grenzen: `docs/SETTINGS.md`.
+- `ProfileViewModel` bekommt die Dienste über `ProfileSettingsServices` (Einstellungen, Mitteilungen, Konto, Medien,
+  Social, Anmeldung, lokale Daten, App-Version) und besitzt die Unter-ViewModels (`AccountSettingsViewModel`,
+  `PrivacySettingsViewModel`, `NotificationSettingsViewModel`, `DataPrivacyViewModel`).
+- „App-Icon“: Automatisch, Hell, Dunkel (alternative App-Icons über `AppIconSetting`; die App zeigt keine eigene
+  Erfolgsmeldung, iOS bestätigt den Wechsel selbst).
 
 ## Statistik, Zielverlauf und Streak
 
@@ -168,6 +179,7 @@ pace/
 │   │   │   ├── Health/                 HealthAuthorizationProviding, HealthDataError
 │   │   │   ├── Identity/               AuthProviding, UserID
 │   │   │   ├── Profile/                UserProfile, Regeln, Repository, Cache, Bootstrap, ProfileStore
+│   │   │   ├── Settings/               AppSettings, Mitteilungen, lokale Kontodaten, Datenexport
 │   │   │   ├── Region/                 Region, RegionHierarchy, RegionRepository
 │   │   │   ├── Leaderboard/            Modelle, Repository, LeaderboardLoader
 │   │   │   └── Sync/                   DailyCompetitionSteps, ActivitySyncCoordinator
@@ -217,6 +229,7 @@ Neue Swift-Dateien im Ordner `Pace/` erkennt Xcode automatisch. Neue Dateien in
 | `connectionFailed` | keine Verbindung beim ersten Start (ohne Profil-Cache) – mit „Erneut versuchen“ |
 | `onboarding` | Profil oder Region fehlen |
 | `main` | Tabs Home · Rankings · Social · Profil |
+| `accountDeleted` | Konto gelöscht – „Neu beginnen“ startet mit einer neuen anonymen Identität (Onboarding) |
 
 ## Tests
 
@@ -228,7 +241,8 @@ Neue Swift-Dateien im Ordner `Pace/` erkennt Xcode automatisch. Neue Dateien in
   und bricht bei Compiler-Warnungen in App-, Paket- oder Test-Code ab. CI benötigt keine Zugangsdaten.
 - `backend.yml` startet einen lokalen Supabase-Stack (keine Produktionsdaten, keine Zugangsdaten) und führt
   pgTAP-Tests und Swift-Integrationstests aus.
-- `PaceSnapshotTests` rendert Home, Rankings, Social und Profil mit Beispieldaten in Hell und Dunkel als PNG – nur,
+- `PaceSnapshotTests` rendert Home, Rankings, Social, Profil und die Einstellungs-Unterseiten mit Beispieldaten in Hell
+  und Dunkel (Hauptscreens zusätzlich auf Englisch und Russisch) als PNG – nur,
   wenn `PACE_SNAPSHOT_DIR` gesetzt ist. `ios.yml` lädt die Bilder als Artefakt „snapshots“ hoch (visuelle Kontrolle,
   kein Pixelvergleich).
 - HealthKit selbst lässt sich nur auf echten Geräten bzw. im Simulator mit eingetragenen Daten sinnvoll prüfen.
