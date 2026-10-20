@@ -1,0 +1,140 @@
+# Chats
+
+Private Chats zwischen Freunden und Gruppenchats für Pace-Gruppen – im Social-Bereich, ohne eigenen Tab.
+Gestaltung nach Referenzbild 5 (Chat) und Bild 9 (Chatliste auf der Social-Hauptseite).
+
+Die App spricht ausschließlich über die Verträge `ChatRepository` und `MediaRepository`
+(`Packages/PaceKit/Sources/PaceCore/Chat/Chat.swift`, `…/Media/Media.swift`). Zugriffsregeln, Rate Limits und
+Validierung prüft der Server (siehe `docs/BACKEND.md` bzw. die Supabase-Dokumentation des Backend-Pakets); die App
+zeigt Fehler ehrlich an und täuscht nichts vor.
+
+## Dateien
+
+| Datei (`Sources/SocialFeature/Chat/`) | Inhalt |
+|---|---|
+| `ChatListViewModel.swift` | `ChatTarget`, Chatliste: Laden, Filter, Suche, Ungelesen, Echtzeit/Polling, `chat(for:)`, `shareProfile(_:with:)` |
+| `ChatViewModel.swift` | Ein Chat: Verlauf, Pagination, optimistisches Senden, Bilder/GIFs, Lesestand, Löschen, Melden, Blockieren |
+| `ChatTimeline.swift` | `PendingChatMessage`, Tages-Trenner und Nachrichtenblöcke (`ChatTimeline.build`) |
+| `ChatFormatting.swift` | Zeiten (heute/gestern/Wochentag/Datum), Vorschau der letzten Nachricht, Streak- und Mitgliedertexte |
+| `ChatTexts.swift`, `ChatUIText.swift` | Fehler, Hinweise, Beschriftungen und VoiceOver-Texte in DE/EN/RU |
+| `ChatMediaSupport.swift` | GIF-Erkennung (Dateisignatur), Größen- und Qualitätsregeln für Fotos |
+| `ChatViews.swift` | Öffentliche Views `ChatListSection` und `ChatView` (Rahmen, Dialoge, Bildauswahl, Vollbild) |
+| `ChatListViews.swift` | `ChatListContent`, Zeilen, Gruppen-Avatar |
+| `ChatScreen.swift` | `ChatContent` (Kopf, Gruppen- bzw. Profilkopf, Zustände), Streak-Karte, Navigationslinks |
+| `ChatMessageViews.swift` | Verlauf, Sprechblasen, Profilkarten, ausstehende und eingeklappte Nachrichten, Kontextmenüs |
+| `ChatMediaViews.swift` | Bild-/GIF-Vorschau, animierte GIFs, Vollbild mit Zoom, Foto-Aufbereitung (JPEG) |
+| `ChatInputBar.swift` | Eingabeleiste („+“, Textfeld, Senden) bzw. Hinweis, wenn nicht geschrieben werden kann |
+
+Alles ohne SwiftUI (ViewModels, Texte, Verlauf, Medienregeln) wird auf Linux gebaut und getestet.
+
+## Chatliste (Bild 9)
+
+- `SocialContent` zeichnet die Überschrift „Chats“ und bettet `ChatListSection(viewModel: social.chats, onOpen:)` ein.
+- Filter Alle/Freunde/Gruppen (`PaceSegmentedControl`), Sortierung nach `updatedAt` (neueste zuerst),
+  `unreadCount` als Summe über alle Unterhaltungen (`SocialViewModel` bzw. Tab-Badge können ihn anzeigen).
+- Zeile: Profilbild bzw. Gruppenbild (ohne Bild: Gruppensymbol auf Mint), Name, letzte Nachricht („Foto“, „GIF“,
+  „Profil geteilt“, in Gruppen „Name: Text“, eigene „Du: …“), Zeit relativ in der App-Sprache, Ungelesen-Badge,
+  Pfeil. Zustände: Laden, leer (je Filter eigener Text), Fehler mit „Erneut versuchen“, nicht verfügbar.
+- Aktualisierung: `observe()` läuft, solange die Liste sichtbar ist und die App aktiv ist
+  (`.task(id: scenePhase == .active)`): Echtzeit über `conversationEvents()`, als Rückfall alle 25 s, und beim
+  Zurückkehren in die App (älter als 20 s → neu laden). Gleichzeitige Ladeaufrufe werden gebündelt: nie zwei
+  Abfragen parallel, höchstens eine frische direkt danach.
+- Suche: `conversations(matching:)` (Name, Benutzername mit/ohne „@“, ohne Akzente). Die Social-Hauptseite nutzt
+  derzeit `SocialViewModel.matchingConversations`.
+
+## Chat (Bild 5)
+
+- Kopf: `PaceSubpageHeader` („‹ Social“ → Wortmarke mit Info- und Einstellungen-Knopf → Titel).
+  - Gruppe: Avatarreihe (höchstens 6 Mitglieder aus dem heutigen Gruppenranking, „+“ zum Einladen), „n Mitglieder“,
+    Streak-Karte („12 Tage Streak“, Häkchen bei gesicherter Flamme, „Flamme gesichert“ bzw. „Noch 2 Ziele heute“).
+    Info → Gruppendetails, Zahnrad → Gruppeneinstellungen, Avatare/„+“ → Mitglieder (dort Einladen), Streak-Karte →
+    Gruppendetails.
+  - Privatchat: Profil-Kopf (Profilbild, @Benutzername, „Profil ansehen“). Info → Profil, Zahnrad → Menü
+    „Profil ansehen“, „Person melden“, „Person blockieren“.
+- Verlauf: Tages-Trenner („Heute“, „Gestern“, Wochentag, Datum), Blöcke aufeinanderfolgender Nachrichten derselben
+  Person (Name und Profilbild einmal oben, Uhrzeit einmal unten), fremde links (hellgrau), eigene rechts (mint,
+  `selectionFill`). Bilder als abgerundete Vorschau (antippen → Vollbild mit Zoom und Schließen), GIFs animiert mit
+  „GIF“-Kennzeichnung (bei „Bewegung reduzieren“ erst nach Antippen), geteilte Profile als Karte → Profil.
+  Lesestatus-Haken gibt es nicht, weil der Vertrag keine Lesebestätigungen anderer liefert.
+- Kontextmenü: Text kopieren; eigene Nachricht löschen (mit Rückfrage); fremde Nachricht melden (Grund wählen →
+  `report(.message(id:))`), Profil ansehen, in Gruppen Person blockieren. Für VoiceOver gibt es die wichtigsten
+  Aktionen zusätzlich als Bedienhilfen-Aktionen.
+- Eingabeleiste: „+“ öffnet die Mediathek (Fotos und GIFs), mehrzeiliges Textfeld (höchstens
+  `ChatRules.maximumTextLength` Zeichen; ab 90 % zeigt die Leiste die Restzeichen), Senden-Knopf (dunkelgrüner
+  Kreis, deaktiviert ohne gültigen Text). Kann nicht geschrieben werden (`canSend == false`, Blockierung, kein
+  Mitglied mehr), steht dort stattdessen eine Erklärung.
+
+## Senden und Empfangen
+
+- Eigene Nachrichten erscheinen sofort als `PendingChatMessage` mit Status „Wird hochgeladen …“, „Wird gesendet …“
+  bzw. „Nicht gesendet“ (Grund, „Erneut senden“, „Verwerfen“). „Erneut senden“ nutzt dieselbe `clientID`; ein bereits
+  hochgeladenes Bild wird nicht noch einmal hochgeladen.
+- Keine Doppelanzeige: Server-Nachrichten werden nach `id` zusammengeführt; ausstehende Nachrichten verschwinden,
+  sobald eine Server-Nachricht mit ihrer `clientID` da ist – egal ob über die Antwort des Sendens, ein
+  Echtzeit-Ereignis oder ein Neuladen.
+- Neueste Seite (`ChatRules.pageSize`) beim Öffnen; ältere beim Hochscrollen über `messages(before:limit:)`.
+  Beim Aktualisieren ersetzt die neueste Seite den abgedeckten Zeitraum, sodass anderswo gelöschte Nachrichten
+  verschwinden; bereits geladene ältere Seiten bleiben.
+- Echtzeit über `messageEvents(in:)`, Polling-Rückfall alle 25 s, solange der Chat sichtbar und die App aktiv ist.
+  Ohne Verbindung beim Öffnen versucht der Chat es im selben Takt erneut.
+- `markRead(_:through:)` beim Öffnen und bei neuen Nachrichten – nur solange der Chat sichtbar ist; die Chatliste
+  setzt den Zähler sofort zurück.
+- Fehler bleiben sichtbar und erholbar: Laden (Karte mit „Erneut versuchen“), Aktualisieren (Hinweis über dem
+  Verlauf), ältere Nachrichten („Ältere Nachrichten laden“), Senden/Hochladen (an der Nachricht).
+
+## Bilder und GIFs
+
+- Auswahl per `PhotosPicker` (`matching: .images`, `preferredItemEncoding: .current`), kein externer GIF-Dienst.
+- GIF (Mediathek-Typ `com.compuserve.gif`, erkannt an der Dateisignatur `GIF87a`/`GIF89a`): unverändert als
+  `image/gif` hochladen. Fotos: auf höchstens 2.048 px verkleinern und als JPEG (Qualität 0,85 → 0,45) unter die
+  Grenze von `MediaRules` (10 MB für Chats) bringen. Format und Größe prüft das ViewModel vor dem Hochladen.
+- Hochladen nach `MediaUploadTarget.chat(conversationID:)`, danach `ChatMessageDraft(kind: .image/.gif, mediaPath:)`.
+  Das gerade hochgeladene Bild kommt direkt in den Cache des `PaceImageLoader` (keine zweite Übertragung).
+- Anzeige über den gemeinsamen `PaceImageLoader` (Environment `\.paceImageLoader`, privater Bucket `chat-media`).
+
+## Profil teilen
+
+`ChatListViewModel.shareProfile(_:with:)` (aufgerufen von `ShareProfileViewModel`): Für jedes Ziel (doppelte
+entfernt) wird die Unterhaltung gefunden bzw. geöffnet (`openDirectConversation`, `groupConversation`) und
+`ChatMessageDraft(kind: .profile, sharedProfileID:)` gesendet. Schlägt es bei einzelnen Zielen fehl, wird bei den
+anderen trotzdem gesendet und danach `ProfileShareError` (gesendet an n Chats, nicht gesendet an …) geworfen.
+
+## Blockieren und Melden
+
+- Blockieren über `SocialRepository.block` (Privatchat: Gegenüber im Menü; Gruppe: Absender im Kontextmenü).
+  Danach ist der Privatchat schreibgeschützt; in Gruppen erscheinen Nachrichten blockierter Personen eingeklappt
+  („Nachricht einer blockierten Person“, „Anzeigen“). Die Liste blockierter Personen kommt aus `blockedUsers()`.
+- Melden über `SocialRepository.report`: Nachricht (`.message(id:)`), Person (`.user(publicID:)`) bzw. Gruppe
+  (`.group(id:)`) mit Grund aus `ReportReason`.
+- Ohne verdrahtetes `SocialRepository` zeigen diese Aktionen ehrlich „nicht verfügbar“; der Chat selbst funktioniert.
+
+## Schnittstellen zur Social-Navigation
+
+- `ChatListSection(viewModel:onOpen:)` – unverändert.
+- `ChatView(viewModel:backTitle:onOpenRoute:onOpenProfile:)` – `backTitle` (Standard „Social“) und `onOpenRoute`
+  sind optional. Ohne `onOpenRoute` öffnet der Chat Gruppendetails, -einstellungen und -mitglieder per
+  `NavigationLink(value: SocialRoute…)`; der Social-Tab registriert diese Ziele bereits.
+- `ChatListViewModel.chat(for:)` liefert je Unterhaltung immer dieselbe Instanz (auch wenn sie einmal über die Liste,
+  einmal über ein Profil oder eine Gruppe geöffnet wird) – Verlauf und Entwurf bleiben beim Zurücknavigieren.
+- `ChatListViewModel(repository:media:social:calendar:now:pollInterval:sleep:)` – `social` liefert Gruppenkopf,
+  blockierte Personen, Blockieren und Melden; ohne Angabe fehlen nur diese Teile.
+
+## Tests
+
+- `Tests/SocialFeatureTests/ChatListViewModelTests.swift`, `ChatViewModelTests.swift`, `ChatFormattingTests.swift`
+  (Linux und iOS): Zustände, Filter, Sortierung, Ungelesen, gebündeltes Laden, Echtzeit, Polling-Rückfall mit
+  steuerbarem Warten (`ManualTicker`), Pagination, optimistisches Senden, Wiederholen mit gleicher `clientID`, keine
+  Duplikate bei Ereignis + Neuladen, Lesestand nur sichtbar, schreibgeschützte Chats, Bild-/GIF-Upload inklusive
+  Fehlern, Profil teilen an mehrere Ziele, Blockieren, Melden, Löschen, Datums-Trenner, Sprachen.
+- Test-Doubles: `Tests/PaceTestSupport/ChatAndMediaStubs.swift` (`ChatRepositoryStub`, `MediaRepositoryStub`,
+  `ManualTicker`, `ChatFixtures`).
+- Snapshots (`Tests/PaceSnapshotTests/ChatSnapshotTests.swift`, nur mit `PACE_SNAPSHOT_DIR`): `chat-list`
+  (DE/EN/RU), `group-chat` (wie Bild 5, DE/EN/RU), `direct-chat` (DE/EN/RU), `chat-states`, `chat-read-only`,
+  `chat-unavailable` – jeweils Hell und Dunkel, mit Kopfzeile. Das Textfeld erscheint im Snapshot als Platzhalter
+  (Grenze des `ImageRenderer`).
+
+## Nur auf dem iPhone prüfbar
+
+Mediathek-Auswahl inkl. GIFs aus „Fotos“, Upload und Anzeige aus dem privaten Bucket, Echtzeit zwischen zwei
+Konten, Scrollverhalten (unten beginnen, ältere Nachrichten nachladen, Mitscrollen bei neuen Nachrichten), Tastatur
+mit der globalen Tab-Leiste, Kontextmenüs, Vollbild-Zoom, VoiceOver und „Bewegung reduzieren“ bei GIFs.
