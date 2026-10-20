@@ -6,12 +6,15 @@
 -- * Policies auf storage.objects und realtime.messages rufen Security-Definer-Funktionen im Schema pace_access auf.
 --   Das Schema ist nicht über die Data API erreichbar (nicht in [api].schemas); authenticated darf nur diese
 --   Prüffunktionen ausführen. Die Funktionen lesen die Social-Tabellen, auf die Clients selbst keinen Zugriff haben.
---     avatars       lesen: alle Angemeldeten mit Profil, außer die Besitzerin des Ordners hat sie blockiert;
+--     avatars       lesen: das aktuelle Profilbild (profiles.avatar_path) alle Angemeldeten mit Profil, außer die
+--                   Besitzerin hat sie blockiert; andere Dateien im Ordner nur die Besitzerin selbst;
 --                   schreiben/löschen: nur im Ordner der eigenen public_id.
 --     group-images  lesen: Mitglieder und Personen mit offener Einladung; schreiben: owner der Gruppe;
 --                   löschen: owner der Gruppe oder wer die Datei hochgeladen hat.
 --     chat-media    lesen: wer die Unterhaltung lesen darf; schreiben: wer in ihr schreiben darf;
 --                   löschen: wer die Datei hochgeladen hat.
+-- * Dateien, die Beweis einer offenen Meldung sind, lassen sich nicht löschen (Delete-Policies, ergänzt in
+--   20261019100400_moderation_account.sql nach dem Anlegen von public.reports).
 -- * Realtime: Private Broadcast-Topics chat:<conversation_id> (wer die Unterhaltung lesen darf) und
 --   user:<public_id> (nur die Person selbst). Nur Empfangen – Clients senden keine Broadcasts (keine insert-Policy).
 -- =============================================================================================================
@@ -55,6 +58,11 @@ $$;
 revoke all on function pace_access.object_folder(text) from public, anon;
 grant execute on function pace_access.object_folder(text) to authenticated;
 
+-- Lesen: die Besitzerin alles im eigenen Ordner (auch frisch hochgeladene, noch nicht gesetzte Bilder); alle
+-- anderen Angemeldeten mit Profil nur das aktuelle Profilbild (profiles.avatar_path) und nicht, wenn die Besitzerin
+-- sie blockiert hat. Alte oder nie gesetzte Dateien bleiben so privat, und ein Listing des Buckets zeigt Fremden nur
+-- Ordner mit aktuellem Profilbild (die public_ids allein lösen social_public_profile & Co. nicht zu nicht
+-- auffindbaren Profilen auf).
 create function pace_access.can_read_avatar(p_name text)
 returns boolean
 language sql
@@ -64,10 +72,16 @@ set search_path = ''
 as $$
   select exists (
     select 1
-      from public.profiles me, public.profiles owner
-     where me.id = auth.uid()
-       and owner.public_id = pace_access.object_folder(p_name)
-       and not private.has_blocked(owner.id, me.id)
+      from public.profiles owner
+     where owner.public_id = pace_access.object_folder(p_name)
+       and (
+         owner.id = auth.uid()
+         or (
+           owner.avatar_path = p_name
+           and exists (select 1 from public.profiles me where me.id = auth.uid())
+           and not private.has_blocked(owner.id, auth.uid())
+         )
+       )
   );
 $$;
 revoke all on function pace_access.can_read_avatar(text) from public, anon;

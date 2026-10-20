@@ -1,6 +1,6 @@
 -- Pace: Gruppen – Privatsphäre, Erstellen mit Einladungen, Details ändern, Gruppenbild.
 begin;
-select plan(33);
+select plan(37);
 
 -- 1 ole, 2 pia, 3 quirin, 4 ronja, 5 sami (Fremde), 6 theo; 101–160 Statisten (Freunde von ole für Limits).
 insert into auth.users (id, aud, role, is_anonymous)
@@ -65,9 +65,16 @@ select throws_ok(
 );
 select throws_ok(
   format('select public.social_create_group(%L, %L, %L, 8000, null, %L, %L::uuid[])', 'Lauftreff', '', 'friends', 'code',
-         (select array_agg(pg_temp.pid(n)) from generate_series(101, 150) n)),
-  'P0001', 'limit_reached', 'höchstens 49 Einladungen'
+         (select array_agg(pg_temp.pid(n)) from generate_series(101, 131) n)),
+  'P0001', 'limit_reached', 'höchstens 30 Einladungen (wie das Einladungs-Rate-Limit je 24 h)'
 );
+reset role;
+select is(
+  (select count(*)::int from private.rate_limit_events
+    where user_id = 'aa000000-0000-4000-8000-000000000001' and action in ('group_invite', 'group_create')),
+  0, 'abgelehnte Erstellungen zählen nicht zum Rate Limit'
+);
+set local role authenticated;
 
 insert into t_results select 'g1', public.social_create_group(
   '  Morgenrunde ', 'Früh am See', 'friends', 9000, 'Europe/Berlin', 'invite_only',
@@ -211,21 +218,32 @@ select is(
 -- Einladungen beim Erstellen zählen zum Einladungs-Limit (30 je 24 h)
 -- =============================================================================================================
 
--- Bisher 2 Einladungen gezählt; 28 weitere sind erlaubt, die 29. nicht.
+-- Bisher 2 Einladungen gezählt. 29 weitere passen nicht mehr: Die Gruppe entsteht gar nicht erst (limit_reached
+-- vorab statt rate_limited mitten in der Schleife). 28 weitere passen genau.
+select throws_ok(
+  format('select public.social_create_group(%L, %L, %L, 8000, null, %L, %L::uuid[])', 'Zu groß', '', 'club', 'code',
+         (select array_agg(pg_temp.pid(n)) from generate_series(101, 129) n)),
+  'P0001', 'limit_reached', 'Restkontingent zu klein: limit_reached vor dem Anlegen'
+);
 select ok(
   public.social_create_group('Großgruppe', '', 'club', 8000, null, 'code',
     (select array_agg(pg_temp.pid(n)) from generate_series(101, 128) n)) ? 'group_id',
-  '28 weitere Einladungen beim Erstellen'
+  '28 weitere Einladungen beim Erstellen (zusammen 30 je 24 h)'
 );
 select throws_ok(
   format('select public.social_create_group(%L, %L, %L, 8000, null, %L, array[%L]::uuid[])', 'Noch eine', '', 'club', 'code', pg_temp.pid(129)),
-  'P0001', 'rate_limited', 'Einladungs-Limit greift auch beim Erstellen'
+  'P0001', 'limit_reached', 'Einladungs-Limit greift auch beim Erstellen'
+);
+select throws_ok(
+  format('select public.social_invite_to_group(%L, %L)', pg_temp.gid('g1'), pg_temp.pid(4)),
+  'P0001', 'rate_limited', 'Einladungen beim Erstellen und einzeln teilen sich das Kontingent'
 );
 reset role;
 select is(
   (select count(*)::int from public.group_invitations i join public.groups g on g.id = i.group_id where g.name = 'Großgruppe'),
   28, 'alle Einladungen der Großgruppe angelegt'
 );
+select ok(not exists (select 1 from public.groups where name in ('Zu groß', 'Noch eine')), 'abgelehnte Gruppen nicht angelegt');
 set local role authenticated;
 
 -- Gruppen-Limit: 5 neue Gruppen je 24 h (bisher 3).

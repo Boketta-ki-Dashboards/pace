@@ -1,6 +1,6 @@
 -- Pace: Profilbild, Auffindbarkeit, Rate Limits für Benutzernamen, Präfixsuche, öffentliches Profil, Blockieren.
 begin;
-select plan(69);
+select plan(89);
 
 -- =============================================================================================================
 -- Struktur
@@ -302,6 +302,108 @@ select ok(
   public.social_public_profile(pg_temp.pid(5), (now() at time zone 'utc')::date)::text not like '%a9000000-%',
   'öffentliches Profil: keine Auth-IDs'
 );
+
+-- =============================================================================================================
+-- Nicht auffindbare Profile: öffentliches Profil nur mit Kontext (dana)
+-- =============================================================================================================
+
+reset role;
+create function pg_temp.as_user(n int) returns void language sql as $$
+  select set_config('request.jwt.claims', format('{"sub":"%s","role":"authenticated"}', pg_temp.uid(n)), true);
+$$;
+create function pg_temp.profile_of(n int) returns text language sql as $$
+  select public.social_public_profile(pg_temp.pid(n), (now() at time zone 'utc')::date)->>'username';
+$$;
+select is(
+  (select p.provolatile::text from pg_proc p where p.oid = 'public.social_public_profile(uuid, date)'::regprocedure), 'v',
+  'social_public_profile ist volatile (Rate Limit)'
+);
+
+-- Kontexte: 101 in derselben Gruppe wie dana; 102 in einer Gruppe, die dana verlassen hat; 103 von dana in eine
+-- Gruppe eingeladen (103 ist ebenfalls nicht auffindbar); 104 hat dana blockiert; 105 ohne Kontext; 108 mit abgelaufenem Fund (25 Stunden).
+insert into public.groups (id, name, kind, invite_code, created_by)
+values ('c9000000-0000-4000-8000-000000000002', 'Abendrunde', 'friends', 'ABENDXYZ', pg_temp.uid(102));
+insert into public.group_goal_history (group_id, effective_from, daily_goal)
+values ('c9000000-0000-4000-8000-000000000002', current_date - 30, 8000);
+insert into public.group_members (group_id, user_id, role)
+values ('c9000000-0000-4000-8000-000000000001', pg_temp.uid(4), 'member'),
+       ('c9000000-0000-4000-8000-000000000001', pg_temp.uid(101), 'member'),
+       ('c9000000-0000-4000-8000-000000000002', pg_temp.uid(102), 'owner'),
+       ('c9000000-0000-4000-8000-000000000002', pg_temp.uid(4), 'member');
+delete from public.group_members where group_id = 'c9000000-0000-4000-8000-000000000002' and user_id = pg_temp.uid(4);
+insert into public.group_invitations (group_id, inviter_id, invitee_id)
+values ('c9000000-0000-4000-8000-000000000001', pg_temp.uid(4), pg_temp.uid(103));
+insert into public.user_blocks (blocker_id, blocked_id) values (pg_temp.uid(104), pg_temp.uid(4));
+update public.profiles set is_discoverable = false where id = pg_temp.uid(103);
+insert into private.profile_lookups (viewer_id, target_id, looked_up_at)
+values (pg_temp.uid(108), pg_temp.uid(4), now() - interval '25 hours');
+set local role authenticated;
+
+select pg_temp.as_user(105);
+select throws_ok(
+  format('select public.social_public_profile(%L, %L)', pg_temp.pid(4), (now() at time zone 'utc')::date),
+  'P0001', 'not_found', 'nicht auffindbar, keine Beziehung, kein Kontext: not_found'
+);
+select is(pg_temp.profile_of(2), 'alexa', 'auffindbares Profil ohne Beziehung: sichtbar');
+select pg_temp.as_user(101);
+select is(pg_temp.profile_of(4), 'dana', 'gemeinsame Gruppe: sichtbar');
+select pg_temp.as_user(102);
+select is(pg_temp.profile_of(4), 'dana', 'frühere Mitglieder einer eigenen Gruppe: sichtbar (Verlauf im Gruppenchat)');
+select pg_temp.as_user(103);
+select is(pg_temp.profile_of(4), 'dana', 'offene Gruppeneinladung: sichtbar');
+select pg_temp.as_user(4);
+select is(pg_temp.profile_of(103), 'statist_103', 'offene Gruppeneinladung: auch in Gegenrichtung');
+select pg_temp.as_user(104);
+select is(
+  public.social_public_profile(pg_temp.pid(4), (now() at time zone 'utc')::date)->>'is_blocked_by_me', 'true',
+  'von mir blockiert: sichtbar (zum Aufheben)'
+);
+select pg_temp.as_user(108);
+select throws_ok(
+  format('select public.social_public_profile(%L, %L)', pg_temp.pid(4), (now() at time zone 'utc')::date),
+  'P0001', 'not_found', 'exakter Fund älter als 24 Stunden: kein Kontext mehr'
+);
+
+-- Exakt per Benutzernamen gefunden (exakte Suche, exakter Treffer der Präfixsuche): 24 Stunden sichtbar.
+select pg_temp.as_user(106);
+select is(public.social_find_profile('DANA')->>'username', 'dana', 'exakte Suche findet dana');
+select is(pg_temp.profile_of(4), 'dana', 'nach exakter Suche: öffentliches Profil sichtbar');
+select pg_temp.as_user(107);
+select is(pg_temp.names(public.social_search_profiles('dan')), null, 'Präfix ohne exakten Treffer: nichts');
+select throws_ok(
+  format('select public.social_public_profile(%L, %L)', pg_temp.pid(4), (now() at time zone 'utc')::date),
+  'P0001', 'not_found', 'Präfix allein gibt keinen Kontext'
+);
+select is(pg_temp.names(public.social_search_profiles('dana')), array['dana'], 'exakter Treffer der Präfixsuche');
+select is(pg_temp.profile_of(4), 'dana', 'nach exaktem Präfixtreffer: öffentliches Profil sichtbar');
+
+-- Wer mich blockiert, bleibt verborgen – auch mit Kontext.
+reset role;
+insert into public.user_blocks (blocker_id, blocked_id) values (pg_temp.uid(4), pg_temp.uid(101));
+set local role authenticated;
+select pg_temp.as_user(101);
+select throws_ok(
+  format('select public.social_public_profile(%L, %L)', pg_temp.pid(4), (now() at time zone 'utc')::date),
+  'P0001', 'not_found', 'Blockierung schlägt Kontext'
+);
+
+-- Rate Limit: 120 Abrufe je 10 Minuten.
+select pg_temp.as_user(109);
+select is(
+  (select count(*)::int from generate_series(1, 120) s cross join lateral pg_temp.profile_of(2 + 0 * s) r),
+  120, 'bis 120 Abrufe je 10 Minuten'
+);
+select throws_ok(
+  format('select public.social_public_profile(%L, %L)', pg_temp.pid(2), (now() at time zone 'utc')::date),
+  'P0001', 'rate_limited', '121. Abruf: rate_limited'
+);
+select is(public.social_find_profile('alexa')->>'username', 'alexa', 'andere Suchen bleiben vom Limit unberührt');
+
+reset role;
+select ok(not exists (select 1 from private.profile_lookups where target_id = pg_temp.uid(2)),
+  'auffindbare Profile werden nicht als Fund gemerkt');
+select pg_temp.as_user(1);
+set local role authenticated;
 
 -- Aufheben: idempotent, Freundschaft wird nicht wiederhergestellt.
 select lives_ok(format('select public.social_unblock_user(%L)', pg_temp.pid(7)), 'Blockierung aufheben');

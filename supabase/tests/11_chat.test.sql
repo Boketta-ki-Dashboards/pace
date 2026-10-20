@@ -1,6 +1,6 @@
 -- Pace: Chats – Privatchats, Gruppenchats, Senden (idempotent), Lesestand, Löschen, Zugriff, Echtzeit-Hinweise.
 begin;
-select plan(81);
+select plan(91);
 
 -- =============================================================================================================
 -- Struktur
@@ -348,6 +348,61 @@ select is(
   30, '30 Nachrichten je Minute erlaubt'
 );
 select throws_ok(format('select public.chat_send(%L, gen_random_uuid(), %L, %L)', pg_temp.cid('gruppe'), 'text', 'zu viel'), 'P0001', 'rate_limited', '31. Nachricht: rate_limited');
+
+-- =============================================================================================================
+-- Nicht auffindbare Profile teilen und öffnen (olli ist nicht auffindbar und mit niemandem verbunden)
+-- =============================================================================================================
+
+reset role;
+update public.profiles set is_discoverable = false where username = 'olli';
+create function pg_temp.profile_of(n int) returns text language sql as $$
+  select public.social_public_profile(pg_temp.pid(n), (now() at time zone 'utc')::date)->>'username';
+$$;
+set local role authenticated;
+
+select pg_temp.as_user(1);
+select throws_ok(
+  format('select public.chat_send(%L, gen_random_uuid(), %L, null, null, %L)', pg_temp.cid('gruppe'), 'profile', pg_temp.pid(3)),
+  'P0001', 'not_found', 'nicht sichtbares Profil lässt sich nicht teilen (keine Auflösung beliebiger public_ids)'
+);
+select is(public.social_find_profile('olli')->>'username', 'olli', 'mara findet olli exakt per Benutzernamen');
+insert into t_results select 'olli_geteilt', public.chat_send(pg_temp.cid('gruppe'), gen_random_uuid(), 'profile', null, null, pg_temp.pid(3));
+select is(pg_temp.result('olli_geteilt')->'shared_profile'->>'username', 'olli', 'nach exaktem Fund: teilen erlaubt');
+
+select pg_temp.as_user(5);
+select is(pg_temp.profile_of(3), 'olli', 'im Gruppenchat geteiltes Profil: für Mitglieder sichtbar');
+select pg_temp.as_user(2);
+select throws_ok(
+  format('select public.social_public_profile(%L, %L)', pg_temp.pid(3), (now() at time zone 'utc')::date),
+  'P0001', 'not_found', 'von einer blockierten Person geteilt (ausgeblendet): kein Kontext'
+);
+select pg_temp.as_user(4);
+select throws_ok(
+  format('select public.social_public_profile(%L, %L)', pg_temp.pid(3), (now() at time zone 'utc')::date),
+  'P0001', 'not_found', 'ohne Zugriff auf den Chat: kein Kontext'
+);
+
+select pg_temp.as_user(1);
+select lives_ok(format('select public.chat_delete_message(%L)', pg_temp.cid('olli_geteilt')), 'geteiltes Profil löschen');
+select pg_temp.as_user(5);
+select throws_ok(
+  format('select public.social_public_profile(%L, %L)', pg_temp.pid(3), (now() at time zone 'utc')::date),
+  'P0001', 'not_found', 'gelöschte Nachricht: kein Kontext mehr'
+);
+
+-- Privatchat bleibt Kontext, auch nach Ende der Freundschaft (paula ist nicht in einer Gruppe mit olli).
+reset role;
+insert into public.friendships (user_a, user_b)
+values ('ab000000-0000-4000-8000-000000000003', 'ab000000-0000-4000-8000-000000000004');
+set local role authenticated;
+select pg_temp.as_user(4);
+select lives_ok(format('select public.chat_open_direct(%L)', pg_temp.pid(3)), 'paula öffnet einen Privatchat mit olli');
+reset role;
+delete from public.friendships
+ where user_a = 'ab000000-0000-4000-8000-000000000003' and user_b = 'ab000000-0000-4000-8000-000000000004';
+set local role authenticated;
+select pg_temp.as_user(4);
+select is(pg_temp.profile_of(3), 'olli', 'Privatchat: Profil auch ohne Freundschaft sichtbar');
 
 select * from finish();
 rollback;
