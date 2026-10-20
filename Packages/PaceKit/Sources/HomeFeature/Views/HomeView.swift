@@ -2,6 +2,7 @@ import ActivityFeature
 import DesignSystem
 import PaceCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Home-Dashboard: Wortmarke und Begrüßung, danach die Widgets des Nutzers in seiner Reihenfolge und Größe.
 ///
@@ -37,7 +38,7 @@ public struct HomeView: View {
                 undoBanner
             }
             .navigationDestination(for: StatisticsRoute.self) { route in
-                StatisticsView(viewModel: viewModel.statistics(for: route))
+                StatisticsView(viewModel: viewModel.statistics(for: route), backTitle: HomeTexts.home)
             }
             .navigationDestination(for: CalendarRoute.self) { route in
                 HomeCalendarScreen(viewModel: viewModel.calendar(for: route))
@@ -150,6 +151,7 @@ struct HomeDashboardContent: View {
                     .zIndex(viewModel.sizeMenuModuleID == module.id ? 1 : 0)
             }
         }
+        .onDrop(of: [UTType.text], delegate: HomeDragEndDropDelegate(viewModel: viewModel))
         .animation(reduceMotion ? nil : .snappy, value: viewModel.modules.map(\.id))
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.isEditing)
         .sensoryFeedback(.selection, trigger: viewModel.modules.map(\.id))

@@ -387,6 +387,11 @@ public final class HomeDashboardViewModel {
         activeModuleID = draggingModuleID
     }
 
+    /// Ziehen beendet (abgelegt oder abgebrochen): Das Widget ist wieder normal sichtbar.
+    public func endDragging() {
+        draggingModuleID = nil
+    }
+
     public func moveUp(_ id: HomeModule.ID) {
         settings.moveUp(id)
         activeModuleID = id

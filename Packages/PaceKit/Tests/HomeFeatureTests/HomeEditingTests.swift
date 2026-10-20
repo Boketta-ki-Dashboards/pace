@@ -119,6 +119,13 @@ struct HomeEditModeTests {
         dashboard.draggingModuleID = streak.id
         dashboard.moveDragged(to: steps.id)
         #expect(dashboard.modules[1].id == streak.id)
+        #expect(dashboard.activeModuleID == streak.id)
+        // Abgelegt (oder abgebrochen): das Widget ist wieder normal, die neue Reihenfolge bleibt.
+        dashboard.endDragging()
+        #expect(dashboard.draggingModuleID == nil)
+        #expect(dashboard.modules[1].id == streak.id)
+        dashboard.moveDragged(to: steps.id)
+        #expect(dashboard.modules[1].id == streak.id)
         dashboard.moveDown(streak.id)
         #expect(dashboard.modules[2].id == streak.id)
         dashboard.moveUp(streak.id)

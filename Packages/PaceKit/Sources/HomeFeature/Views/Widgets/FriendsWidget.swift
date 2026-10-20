@@ -65,7 +65,7 @@ struct FriendsWidgetContent: View {
                             .foregroundStyle(PaceColor.textSecondary)
                     }
                     Spacer(minLength: 0)
-                    Text(verbatim: "#1")
+                    Text(verbatim: "#\(first.rank.paceFormatted)")
                         .font(.system(.headline, weight: .bold))
                         .foregroundStyle(PaceColor.accent)
                 }
@@ -76,19 +76,8 @@ struct FriendsWidgetContent: View {
             .accessibilityLabel(rowLabel(first))
         } else {
             if size == .max {
-                HomeBarChart(
-                    bars: widget.chartRows.map { row in
-                        HomeBarChart.Bar(
-                            id: row.id.uuidString,
-                            label: row.entry.isCurrentUser ? HomeTexts.you : row.entry.displayName,
-                            level: Double(row.entry.competitionSteps) / Double(max(widget.chartRows.first?.entry.competitionSteps ?? 1, 1)),
-                            valueText: row.entry.competitionSteps.paceFormatted,
-                            isHighlighted: row.entry.isCurrentUser
-                        )
-                    },
-                    height: 80
-                )
-                .padding(.bottom, PaceSpacing.xxs)
+                HomeBarChart(bars: chartBars, height: 80)
+                    .padding(.bottom, PaceSpacing.xxs)
             }
             ForEach(widget.rows(for: size)) { row in
                 Button(action: onOpenSocial) {
@@ -139,9 +128,24 @@ struct FriendsWidgetContent: View {
         .buttonStyle(.pacePressable)
     }
 
+    private var chartBars: [HomeBarChart.Bar] {
+        let rows = widget.chartRows
+        let maximum = Double(max(rows.map(\.entry.competitionSteps).max() ?? 1, 1))
+        return rows.map { row in
+            HomeBarChart.Bar(
+                id: row.id.uuidString,
+                label: row.entry.isCurrentUser ? HomeTexts.you : row.entry.displayName,
+                level: Double(row.entry.competitionSteps) / maximum,
+                valueText: row.entry.competitionSteps.paceFormatted,
+                isHighlighted: row.entry.isCurrentUser
+            )
+        }
+    }
+
     private func rowLabel(_ row: HomeFriendsWidget.Row) -> String {
-        PaceLocalization.text(de: "Platz \(row.rank)", en: "Rank \(row.rank)", ru: "Место \(row.rank)")
-            + ", " + (row.entry.isCurrentUser ? HomeTexts.you : row.entry.displayName)
-            + ", " + PaceLocalization.steps(row.entry.competitionSteps)
+        let rank = row.rank.paceFormatted
+        let place = PaceLocalization.text(de: "Platz \(rank)", en: "Rank \(rank)", ru: "Место \(rank)")
+        let name = row.entry.isCurrentUser ? HomeTexts.you : row.entry.displayName
+        return [place, name, PaceLocalization.steps(row.entry.competitionSteps)].joined(separator: ", ")
     }
 }

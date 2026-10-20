@@ -32,6 +32,7 @@ struct HomeEditableModule: View {
     private var editing: some View {
         HomeModuleView(module: module, viewModel: viewModel, mode: .editing) {
             // Ein offenes Größenmenü schließt zuerst; sonst öffnet Antippen die Galerie zum Bearbeiten.
+            viewModel.endDragging()
             if viewModel.sizeMenuModuleID != nil {
                 viewModel.sizeMenuModuleID = nil
             } else {
@@ -185,6 +186,11 @@ struct HomeModuleDropDelegate: DropDelegate {
     let viewModel: HomeDashboardViewModel
     let animation: Animation?
 
+    /// Nur Widgets von Home – kein Text aus anderen Apps.
+    func validateDrop(info: DropInfo) -> Bool {
+        viewModel.draggingModuleID != nil
+    }
+
     func dropEntered(info: DropInfo) {
         guard let dragging = viewModel.draggingModuleID, dragging != targetID else { return }
         withAnimation(animation) {
@@ -197,7 +203,26 @@ struct HomeModuleDropDelegate: DropDelegate {
     }
 
     func performDrop(info: DropInfo) -> Bool {
-        viewModel.draggingModuleID = nil
+        viewModel.endDragging()
+        return true
+    }
+}
+
+/// Ablage außerhalb eines Widgets (Kopf, Zwischenräume): beendet das Ziehen, damit kein Widget halb durchsichtig
+/// zurückbleibt.
+struct HomeDragEndDropDelegate: DropDelegate {
+    let viewModel: HomeDashboardViewModel
+
+    func validateDrop(info: DropInfo) -> Bool {
+        viewModel.draggingModuleID != nil
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        viewModel.endDragging()
         return true
     }
 }

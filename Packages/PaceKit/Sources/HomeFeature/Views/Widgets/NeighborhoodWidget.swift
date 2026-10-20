@@ -92,31 +92,39 @@ struct NeighborhoodWidgetContent: View {
                 Button {
                     onOpenRankings(neighborhood.region)
                 } label: {
-                    HomeBarChart(
-                        bars: neighborhood.entries.map { entry in
-                            HomeBarChart.Bar(
-                                id: entry.publicUserID.uuidString,
-                                label: entry.isCurrentUser ? HomeTexts.you : entry.displayName,
-                                level: Double(entry.competitionSteps) / Double(max(neighborhood.entries.map(\.competitionSteps).max() ?? 1, 1)),
-                                valueText: entry.competitionSteps.paceFormatted,
-                                isHighlighted: entry.isCurrentUser
-                            )
-                        },
-                        height: 110,
-                        showsValues: true
-                    )
-                    .contentShape(Rectangle())
+                    HomeBarChart(bars: bars(neighborhood), height: 110, showsValues: true)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.pacePressable)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(neighborhood.entries.map { entry in
-                    PaceLocalization.text(
-                        de: "Platz \(entry.rank.paceFormatted)", en: "Rank \(entry.rank.paceFormatted)", ru: "Место \(entry.rank.paceFormatted)"
-                    ) + ", " + (entry.isCurrentUser ? HomeTexts.you : entry.displayName) + ", " + PaceLocalization.steps(entry.competitionSteps)
-                }.joined(separator: "; "))
+                .accessibilityLabel(chartAccessibilityLabel(neighborhood))
                 footer(neighborhood)
             }
         }
+    }
+
+    private func bars(_ neighborhood: RegionalStandings.Neighborhood) -> [HomeBarChart.Bar] {
+        let maximum = Double(max(neighborhood.entries.map(\.competitionSteps).max() ?? 1, 1))
+        return neighborhood.entries.map { entry in
+            HomeBarChart.Bar(
+                id: entry.publicUserID.uuidString,
+                label: entry.isCurrentUser ? HomeTexts.you : entry.displayName,
+                level: Double(entry.competitionSteps) / maximum,
+                valueText: entry.competitionSteps.paceFormatted,
+                isHighlighted: entry.isCurrentUser
+            )
+        }
+    }
+
+    /// VoiceOver: alle Plätze des Diagramms, z. B. „Platz 12, DU, 8.432 Schritte; …“.
+    private func chartAccessibilityLabel(_ neighborhood: RegionalStandings.Neighborhood) -> String {
+        neighborhood.entries.map { entry -> String in
+            let rank = entry.rank.paceFormatted
+            let place = PaceLocalization.text(de: "Platz \(rank)", en: "Rank \(rank)", ru: "Место \(rank)")
+            let name = entry.isCurrentUser ? HomeTexts.you : entry.displayName
+            return [place, name, PaceLocalization.steps(entry.competitionSteps)].joined(separator: ", ")
+        }
+        .joined(separator: "; ")
     }
 
     @ViewBuilder
