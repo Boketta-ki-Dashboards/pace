@@ -479,8 +479,10 @@ private struct StatisticsTileView: View {
                     .foregroundStyle(PaceColor.accent)
                     .frame(width: 18)
                     .accessibilityHidden(true)
+                // Einzelne lange Wörter verkleinern statt mitten im Wort trennen.
                 Text(tile.title)
-                    .lineLimit(2)
+                    .lineLimit(tile.title.contains(" ") ? 2 : 1)
+                    .minimumScaleFactor(0.7)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .font(PaceFont.caption)

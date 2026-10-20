@@ -354,11 +354,11 @@ private struct DayDetailsTileView: View {
     let tile: DayDetailsReport.Tile
 
     var body: some View {
-        HStack(alignment: .center, spacing: PaceSpacing.s) {
+        HStack(alignment: .center, spacing: PaceSpacing.xs) {
             Image(systemName: tile.kind.systemImage)
-                .font(.system(size: 24, weight: .regular))
+                .font(.system(size: 22, weight: .regular))
                 .foregroundStyle(PaceColor.accent)
-                .frame(width: 34)
+                .frame(width: 28)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -375,11 +375,13 @@ private struct DayDetailsTileView: View {
                             .lineLimit(1)
                     }
                 }
+                // Ein einzelnes langes Wort („Trainingsminuten“) wird verkleinert statt mitten im Wort getrennt;
+                // mehrere Wörter („Ø Puls beim Gehen“) dürfen auf zwei Zeilen umbrechen.
                 Text(tile.title)
                     .font(.system(.subheadline))
                     .foregroundStyle(PaceColor.textSecondary)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
+                    .lineLimit(tile.title.contains(" ") ? 2 : 1)
+                    .minimumScaleFactor(0.7)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
