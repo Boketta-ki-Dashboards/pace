@@ -119,15 +119,23 @@ public final class AppSettings {
 
     @ObservationIgnored private let store: any AppPreferencesStoring
     @ObservationIgnored private let preferredLanguages: @Sendable () -> [String]
+    @ObservationIgnored private let languageSink: @MainActor (AppLanguage) -> Void
 
+    /// - Parameters:
+    ///   - preferredLanguages: Bevorzugte Sprachen des Geräts (bei „Wie iPhone“). Enthält auch die Sprache, die in den
+    ///     iOS-Einstellungen nur für Pace gewählt wurde.
+    ///   - applyLanguage: Wendet die Sprache an; Standard ist die Sprache der ganzen App (`PaceLocalization.shared`).
+    ///     Tests übergeben hier einen Rekorder, damit parallel laufende Tests nicht die App-Sprache wechseln.
     public init(
         store: any AppPreferencesStoring,
-        preferredLanguages: @escaping @Sendable () -> [String] = { Locale.preferredLanguages }
+        preferredLanguages: @escaping @Sendable () -> [String] = { Locale.preferredLanguages },
+        applyLanguage: @escaping @MainActor (AppLanguage) -> Void = { PaceLocalization.shared.language = $0 }
     ) {
         self.store = store
         self.preferredLanguages = preferredLanguages
+        languageSink = applyLanguage
         preferences = store.load()
-        applyLanguage()
+        self.applyLanguage()
     }
 
     public var appearance: AppearancePreference {
@@ -153,6 +161,11 @@ public final class AppSettings {
         preferences.language.resolved(preferredLanguages: preferredLanguages())
     }
 
+    /// Sprache, die bei „Wie iPhone“ gilt (passend zu den bevorzugten Sprachen des Geräts).
+    public var systemLanguage: AppLanguage {
+        LanguagePreference.system.resolved(preferredLanguages: preferredLanguages())
+    }
+
     /// Setzt alles auf den Ausgangszustand zurück (z. B. nach dem Löschen des Kontos).
     public func reset() {
         update { $0 = AppPreferences() }
@@ -168,6 +181,6 @@ public final class AppSettings {
     }
 
     private func applyLanguage() {
-        PaceLocalization.shared.language = resolvedLanguage
+        languageSink(resolvedLanguage)
     }
 }

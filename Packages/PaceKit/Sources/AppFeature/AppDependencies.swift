@@ -28,6 +28,8 @@ public struct AppDependencies: Sendable {
     public let notifications: any LocalNotificationScheduling
     /// Versionsangabe für „Hilfe & Rechtliches“, z. B. `0.1.0 (1)`.
     public let appVersion: String
+    /// Alle nur auf dem Gerät gespeicherten Pace-Daten (Datenexport, Löschen nach dem Löschen des Kontos).
+    public let localData: any LocalAccountDataStoring
 
     public init(
         healthAuthorization: any HealthAuthorizationProviding,
@@ -39,7 +41,8 @@ public struct AppDependencies: Sendable {
         appIcons: any AppIconSetting = UnsupportedAppIconSetting(),
         preferences: any AppPreferencesStoring = UserDefaultsAppPreferencesStore(),
         notifications: any LocalNotificationScheduling = NoLocalNotifications(),
-        appVersion: String = ""
+        appVersion: String = "",
+        localData: any LocalAccountDataStoring = UserDefaultsLocalAccountData()
     ) {
         self.healthAuthorization = healthAuthorization
         self.activityData = activityData
@@ -51,6 +54,7 @@ public struct AppDependencies: Sendable {
         self.preferences = preferences
         self.notifications = notifications
         self.appVersion = appVersion
+        self.localData = localData
     }
 }
 

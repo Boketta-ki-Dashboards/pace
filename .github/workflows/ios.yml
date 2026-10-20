@@ -63,6 +63,19 @@ jobs:
           if plutil -extract NSHealthUpdateUsageDescription raw "$PLIST" >/dev/null 2>&1; then
             echo "NSHealthUpdateUsageDescription darf nicht gesetzt sein"; exit 1
           fi
+          # Geteilte Profil-Links pace://u/<name> öffnen die App.
+          plutil -extract CFBundleURLTypes.0.CFBundleURLSchemes.0 raw "$PLIST" | grep -qx pace \
+            || { echo "::error::URL-Schema pace fehlt im Info.plist"; exit 1; }
+          # iOS kennt die drei App-Sprachen (Sprachauswahl in den iOS-Einstellungen, Systemdialoge).
+          for language in de en ru; do
+            plutil -extract CFBundleLocalizations xml1 -o - "$PLIST" | grep -q "<string>$language</string>" \
+              || { echo "::error::CFBundleLocalizations ohne $language"; exit 1; }
+          done
+          # Übersetzte Health-Begründung aus Pace/Resources/InfoPlist.xcstrings (nur Hinweis, kein Abbruch).
+          for language in en ru; do
+            test -f "$(dirname "$PLIST")/$language.lproj/InfoPlist.strings" \
+              || echo "::warning::$language.lproj/InfoPlist.strings fehlt – InfoPlist.xcstrings prüfen"
+          done
 
       - name: Verify app icons
         # Profil → Darstellung → App-Icon braucht das primäre Icon und die alternativen Icons „Hell“ und „Dunkel“.

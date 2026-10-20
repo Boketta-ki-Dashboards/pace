@@ -27,9 +27,9 @@ public enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
 
     public var title: String {
         switch self {
-        case .automatic: "Automatisch"
-        case .light: "Hell"
-        case .dark: "Dunkel"
+        case .automatic: PaceLocalization.text(de: "Automatisch", en: "Automatic", ru: "Автоматически")
+        case .light: PaceLocalization.text(de: "Hell", en: "Light", ru: "Светлая")
+        case .dark: PaceLocalization.text(de: "Dunkel", en: "Dark", ru: "Тёмная")
         }
     }
 }

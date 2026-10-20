@@ -1,0 +1,30 @@
+{
+  "sourceLanguage" : "de",
+  "strings" : {
+    "NSHealthShareUsageDescription" : {
+      "comment" : "Begründung für den Lesezugriff auf Apple Health (Quelle: INFOPLIST_KEY_NSHealthShareUsageDescription im Projekt).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pace liest Bewegungsdaten aus Apple Health (Schritte, Distanz, aktive Energie, Stockwerke, Trainingsminuten), um deinen Tag anzuzeigen. Für Rankings wird nur deine tägliche Schrittzahl geteilt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pace reads activity data from Apple Health (steps, distance, active energy, flights climbed, exercise minutes) to show your day. Only your daily step count is shared for rankings."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pace считывает данные об активности из приложения «Здоровье» (шаги, расстояние, активная энергия, этажи, минуты тренировок), чтобы показать твой день. Для рейтингов передаётся только количество шагов за день."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

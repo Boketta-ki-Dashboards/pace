@@ -38,6 +38,10 @@ struct MainTabView: View {
         .onChange(of: viewModel.selectedTab) { _, tab in
             Task { await viewModel.didSelect(tab) }
         }
+        // Ist das Tagesziel erreicht, entfällt die Erinnerung für heute.
+        .onChange(of: viewModel.profile.notifications.todayGoalReached) {
+            Task { await viewModel.profile.notifications.reschedule() }
+        }
         // Bewegungsdaten und Sync laufen für die ganze Main App, nicht nur, solange der Home-Tab offen ist.
         .activityUpdates(viewModel.home)
     }
@@ -70,7 +74,9 @@ struct MainTabView: View {
                 value: .social,
                 title: PaceLocalization.text(de: "Social", en: "Social", ru: "Друзья"),
                 systemImage: "person.2",
-                selectedSystemImage: "person.2.fill"
+                selectedSystemImage: "person.2.fill",
+                // Ungelesene Nachrichten aller Chats.
+                badge: viewModel.social.chats.unreadCount
             ),
             PaceTabItem(
                 value: .profile,

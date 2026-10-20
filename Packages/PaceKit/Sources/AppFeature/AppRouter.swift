@@ -12,7 +12,7 @@ import SocialFeature
 /// Entscheidet, welcher Screen gezeigt wird, und erzeugt die zugehörigen ViewModels.
 ///
 /// Ablauf: Health-Abfrage → Sitzung (vorhandene nutzen, sonst anonym anmelden) → Profil prüfen →
-/// Onboarding (Profil, Region) → Main App.
+/// Onboarding (Profil, Region) → Main App. Nach dem Löschen des Kontos: Hinweis → neuer Start (Onboarding).
 @MainActor
 @Observable
 public final class AppRouter {
@@ -23,12 +23,18 @@ public final class AppRouter {
     /// Profil-, Gruppen- und Chatbilder; `nil` ohne Backend.
     public let media: (any MediaRepository)?
 
+    /// Link, der vor dem Start der Main App geöffnet wurde (z. B. `pace://u/niklas` beim Kaltstart); wird danach
+    /// ausgeführt.
+    public private(set) var pendingLink: PaceLink?
+
     @ObservationIgnored private let dependencies: AppDependencies
     @ObservationIgnored private var isConnecting = false
 
-    public init(dependencies: AppDependencies) {
+    /// - Parameter settings: Nur für Tests: Einstellungen, die die Sprache nicht app-weit anwenden. Standard: aus
+    ///   `dependencies.preferences`, angewendet auf die ganze App.
+    public init(dependencies: AppDependencies, settings: AppSettings? = nil) {
         self.dependencies = dependencies
-        settings = AppSettings(store: dependencies.preferences)
+        self.settings = settings ?? AppSettings(store: dependencies.preferences)
         if case .available(let services) = dependencies.backend {
             media = services.media
         } else {
@@ -89,6 +95,36 @@ public final class AppRouter {
         } catch {
             route = .connectionFailed(message: Self.message(for: error))
         }
+    }
+
+    // MARK: Links
+
+    /// Öffnet einen Link aus `onOpenURL`. Läuft die Main App noch nicht, wird er gemerkt und nach dem Start ausgeführt.
+    /// - Returns: `false`, wenn es kein gültiger Pace-Link ist.
+    @discardableResult
+    public func open(_ url: URL) -> Bool {
+        guard let link = PaceLink(url: url) else { return false }
+        if case .main(let main) = route {
+            main.open(link)
+        } else {
+            pendingLink = link
+        }
+        return true
+    }
+
+    // MARK: Konto gelöscht
+
+    /// Nach dem vollständigen Löschen des Kontos (Server und Gerät): Die Main App wird verlassen.
+    func didDeleteAccount() {
+        pendingLink = nil
+        route = .accountDeleted
+    }
+
+    /// „Neu beginnen“ nach dem Löschen: neuer Start mit neuer anonymer Identität und Onboarding.
+    public func startOver() async {
+        guard case .accountDeleted = route else { return }
+        route = .launching
+        await start()
     }
 
     private func showHealthPermission() {
@@ -154,21 +190,47 @@ public final class AppRouter {
             onOpenRankings: { [navigation] scope in navigation.openRankings(scope) },
             onOpenSocial: { [navigation] in navigation.openSocial() }
         )
+        let profile = ProfileViewModel(
+            store: store,
+            regions: services.regions,
+            appIcons: dependencies.appIcons,
+            streak: streak,
+            statistics: { [dashboard] route in dashboard.statistics(for: route) },
+            services: ProfileSettingsServices(
+                settings: settings,
+                profiles: services.profiles,
+                notifications: dependencies.notifications,
+                account: services.account,
+                media: services.media,
+                social: services.social,
+                auth: services.auth,
+                localData: dependencies.localData,
+                appVersion: dependencies.appVersion,
+                onAccountDeleted: { [weak self] in self?.didDeleteAccount() }
+            )
+        )
+        profile.openSocial = { [navigation] in navigation.openSocial() }
         let main = MainViewModel(
             dashboard: dashboard,
             leaderboard: leaderboard,
             social: social,
-            profile: ProfileViewModel(
-                store: store,
-                regions: services.regions,
-                appIcons: dependencies.appIcons,
-                streak: streak,
-                statistics: { [dashboard] route in dashboard.statistics(for: route) }
-            ),
+            profile: profile,
             store: store
         )
         navigation.main = main
+        social.openPrivacySettings = { [navigation] in navigation.openProfileSettings(.privacy) }
         route = .main(main)
+
+        if let link = pendingLink {
+            pendingLink = nil
+            main.open(link)
+        }
+
+        // Erinnerung an das Tagesziel beim Start neu planen (Sprache, Uhrzeit, heutiges Ziel).
+        Task { [notifications = profile.notifications] in
+            await notifications.refreshAuthorization()
+            await notifications.reschedule()
+        }
 
         // Start aus dem Cache: Profil und Region im Hintergrund mit dem Server abgleichen.
         Task { [store] in
@@ -179,11 +241,29 @@ public final class AppRouter {
     static func message(for error: Error) -> String {
         switch error as? BootstrapError {
         case .auth(.anonymousSignInDisabled):
-            "Die Anmeldung ist derzeit nicht möglich. Bitte versuche es später erneut."
+            PaceLocalization.text(
+                de: "Die Anmeldung ist derzeit nicht möglich. Bitte versuche es später erneut.",
+                en: "Signing in isn't possible right now. Please try again later.",
+                ru: "Войти сейчас невозможно. Попробуй позже."
+            )
         case .auth(.network), .profile(.network):
-            "Keine Verbindung zu Pace. Prüfe deine Internetverbindung und versuche es erneut."
+            PaceLocalization.text(
+                de: "Keine Verbindung zu Pace. Prüfe deine Internetverbindung und versuche es erneut.",
+                en: "No connection to Pace. Check your internet connection and try again.",
+                ru: "Нет соединения с Pace. Проверь подключение к интернету и попробуй снова."
+            )
+        case .auth(.rateLimited), .profile(.rateLimited):
+            PaceLocalization.text(
+                de: "Zu viele Versuche in kurzer Zeit. Bitte versuche es später erneut.",
+                en: "Too many attempts in a short time. Please try again later.",
+                ru: "Слишком много попыток за короткое время. Попробуй позже."
+            )
         default:
-            "Pace konnte nicht gestartet werden. Bitte versuche es erneut."
+            PaceLocalization.text(
+                de: "Pace konnte nicht gestartet werden. Bitte versuche es erneut.",
+                en: "Pace couldn't be started. Please try again.",
+                ru: "Не удалось запустить Pace. Попробуй снова."
+            )
         }
     }
 }
@@ -200,5 +280,9 @@ private final class MainNavigation {
 
     func openSocial() {
         main?.openSocial()
+    }
+
+    func openProfileSettings(_ route: ProfileRoute) {
+        main?.openProfileSettings(route)
     }
 }

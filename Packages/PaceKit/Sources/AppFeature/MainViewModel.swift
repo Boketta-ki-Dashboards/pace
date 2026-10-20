@@ -57,6 +57,22 @@ public final class MainViewModel {
         selectedTab = .social
     }
 
+    /// Öffnet einen Pace-Link (z. B. `pace://u/niklas`): Profile erscheinen im Social-Tab, der sie über den Server
+    /// auflöst – ob man die Person sehen darf, entscheidet wie immer der Server.
+    public func open(_ link: PaceLink) {
+        switch link {
+        case .profile(let username):
+            selectedTab = .social
+            social.showProfile(username: username)
+        }
+    }
+
+    /// Öffnet eine Einstellungsseite im Profil-Tab (z. B. die Privatsphäre aus den Social-Einstellungen).
+    public func openProfileSettings(_ route: ProfileRoute) {
+        selectedTab = .profile
+        profile.show(route)
+    }
+
     /// Beim Wechsel in einen Tab: veraltete Inhalte nachladen (die Tabs bleiben im Speicher und erscheinen dabei nicht
     /// neu, deshalb löst das nicht `.task` aus).
     public func didSelect(_ tab: Tab) async {

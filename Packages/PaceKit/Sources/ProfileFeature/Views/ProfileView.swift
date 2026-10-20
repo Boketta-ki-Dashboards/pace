@@ -4,7 +4,8 @@ import PaceCore
 import RegionFeature
 import SwiftUI
 
-/// Profil und Einstellungen im Kartenstil des Home-Screens.
+/// Profil-Tab: Profil, persönliche Aktivität, Region, Ranking-Sichtbarkeit, Darstellung und die Kategorien der
+/// Einstellungen mit eigenen Unterseiten.
 public struct ProfileView: View {
     @Bindable private var viewModel: ProfileViewModel
 
@@ -13,19 +14,17 @@ public struct ProfileView: View {
     }
 
     public var body: some View {
-        NavigationStack {
+        NavigationStack(path: $viewModel.path) {
             ScrollView {
-                ProfileContent(viewModel: viewModel)
+                ProfileContent(viewModel: viewModel, onOpen: { viewModel.open($0) })
                     .padding(.horizontal, PaceSpacing.m)
                     .padding(.bottom, PaceSpacing.l)
             }
             .refreshable { [viewModel] in await viewModel.load() }
             .paceScreenBackground()
-            .navigationTitle("Profil")
-            .navigationDestination(for: StatisticsRoute.self) { route in
-                if let statistics = viewModel.statistics(for: route) {
-                    StatisticsView(viewModel: statistics)
-                }
+            .paceRootPage()
+            .navigationDestination(for: ProfileRoute.self) { route in
+                destination(for: route, backTitle: backTitle(for: route))
             }
         }
         .task { [viewModel] in await viewModel.load() }
@@ -40,11 +39,51 @@ public struct ProfileView: View {
         }
     }
 
+    @ViewBuilder
+    private func destination(for route: ProfileRoute, backTitle: String) -> some View {
+        switch route {
+        case .account:
+            AccountPage(viewModel: viewModel.account, backTitle: backTitle)
+        case .appearance:
+            AppearancePage(viewModel: viewModel, backTitle: backTitle)
+        case .language:
+            LanguagePage(viewModel: viewModel, backTitle: backTitle)
+        case .privacy:
+            PrivacyPage(viewModel: viewModel, backTitle: backTitle)
+        case .notifications:
+            NotificationsPage(viewModel: viewModel.notifications, backTitle: backTitle)
+        case .social:
+            SocialSettingsPage(viewModel: viewModel, backTitle: backTitle)
+        case .dataPrivacy:
+            DataPrivacyPage(viewModel: viewModel, backTitle: backTitle)
+        case .deleteAccount:
+            DeleteAccountPage(viewModel: viewModel.dataPrivacy, backTitle: backTitle)
+        case .help:
+            HelpPage(viewModel: viewModel, backTitle: backTitle)
+        case .feedback(let kind):
+            FeedbackPage(viewModel: viewModel.makeFeedback(kind), backTitle: backTitle)
+        case .legal:
+            LegalPage(backTitle: backTitle) { viewModel.open($0) }
+        case .legalDocument(let document):
+            LegalDocumentPage(document: document, backTitle: backTitle)
+        case .statistics(let statisticsRoute):
+            if let statistics = viewModel.statistics(for: statisticsRoute) {
+                StatisticsView(viewModel: statistics, backTitle: backTitle)
+            }
+        }
+    }
+
+    /// Zurück führt zur vorherigen Seite bzw. zum Profil.
+    private func backTitle(for route: ProfileRoute) -> String {
+        guard let index = viewModel.path.firstIndex(of: route), index > 0 else { return ProfileTexts.profileTitle }
+        return viewModel.path[index - 1].title
+    }
+
     /// Mit `sheet(item:)` behält SwiftUI den Inhalt während der Schließen-Animation.
     private var regionSheetBinding: Binding<RegionSearchViewModel?> {
         Binding(
-            get: { viewModel.regionSearch },
-            set: { search in
+            get: { [viewModel] in viewModel.regionSearch },
+            set: { [viewModel] search in
                 if search == nil { viewModel.cancelRegionChange() }
             }
         )
@@ -54,55 +93,102 @@ public struct ProfileView: View {
 /// Inhalt des Profil-Tabs (ohne Navigation und Scrollen).
 struct ProfileContent: View {
     let viewModel: ProfileViewModel
+    var onOpen: (ProfileRoute) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
             header
+            identityCard
             if viewModel.goalText != nil {
                 activityCard
             }
             regionCard
             rankingsCard
             appearanceCard
-            dataCard
+            settingsSections
+            footer
         }
     }
 
+    // MARK: Kopf und Profil
+
     private var header: some View {
+        VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
+            PaceWordmark(height: 33)
+            Text(ProfileTexts.profileTitle)
+                .font(.system(.title, weight: .bold))
+                .foregroundStyle(PaceColor.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, PaceSpacing.xs)
+        .padding(.bottom, PaceSpacing.xxs)
+    }
+
+    private var identityCard: some View {
         PaceCard {
-            HStack(spacing: PaceSpacing.m) {
-                Text(viewModel.initials)
-                    .font(.system(.title, weight: .bold))
-                    .foregroundStyle(PaceColor.onAccent)
-                    .frame(width: 68, height: 68)
-                    .background(PaceColor.accentStrong, in: Circle())
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
-                    Text(viewModel.displayName)
-                        .font(PaceFont.title)
-                        .foregroundStyle(PaceColor.textPrimary)
-                    Text(viewModel.username)
-                        .font(PaceFont.callout)
-                        .foregroundStyle(PaceColor.textSecondary)
+            HStack(alignment: .center, spacing: PaceSpacing.s) {
+                Button {
+                    onOpen(.account)
+                } label: {
+                    HStack(spacing: PaceSpacing.m) {
+                        PaceAvatar(name: viewModel.displayName, seed: viewModel.avatarSeed, size: 68, image: viewModel.avatar)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(viewModel.displayName)
+                                .font(PaceFont.title)
+                                .foregroundStyle(PaceColor.textPrimary)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.8)
+                            Text(viewModel.username)
+                                .font(PaceFont.callout)
+                                .foregroundStyle(PaceColor.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
                 }
-                Spacer(minLength: 0)
+                .buttonStyle(.pacePressable)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint(PaceLocalization.text(
+                    de: "Öffnet Konto & Profil",
+                    en: "Opens account & profile",
+                    ru: "Открывает аккаунт и профиль"
+                ))
+
+                ShareLink(
+                    item: viewModel.share.url,
+                    subject: Text(viewModel.share.subject),
+                    message: Text(viewModel.share.message)
+                ) {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .buttonStyle(PaceIconButtonStyle(size: 40))
+                .accessibilityLabel(ProfileTexts.shareProfile)
             }
-            .accessibilityElement(children: .combine)
         }
     }
+
+    // MARK: Aktivität
 
     private var activityCard: some View {
         PaceCard {
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                PaceCardHeader("Deine Aktivität")
+                PaceCardHeader(PaceLocalization.text(de: "Deine Aktivität", en: "Your activity", ru: "Твоя активность"))
 
                 Button {
                     viewModel.isEditingGoal = true
                 } label: {
-                    ActivityRow(systemImage: "scope", title: "Tagesziel", value: viewModel.goalText ?? "–", showsChevron: true)
+                    ActivityRow(
+                        systemImage: "scope",
+                        title: PaceLocalization.text(de: "Tagesziel", en: "Daily goal", ru: "Дневная цель"),
+                        value: viewModel.goalText ?? ProfileTexts.placeholder,
+                        showsChevron: true
+                    )
                 }
                 .buttonStyle(.pacePressable)
-                .accessibilityHint("Tagesziel ändern")
+                .accessibilityHint(PaceLocalization.text(de: "Tagesziel ändern", en: "Change daily goal", ru: "Изменить дневную цель"))
 
                 PaceTile {
                     HStack(spacing: PaceSpacing.s) {
@@ -112,7 +198,8 @@ struct ProfileContent: View {
                             size: 36
                         )
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Serie: \(viewModel.streakSummary?.currentText ?? "–")")
+                            Text(PaceLocalization.text(de: "Serie", en: "Streak", ru: "Серия")
+                                + ": " + (viewModel.streakSummary?.currentText ?? ProfileTexts.placeholder))
                                 .font(PaceFont.headline)
                                 .foregroundStyle(PaceColor.textPrimary)
                             Text(viewModel.recordText)
@@ -126,35 +213,63 @@ struct ProfileContent: View {
                 .accessibilityElement(children: .combine)
 
                 if viewModel.showsStatistics {
-                    NavigationLink(value: StatisticsRoute(period: .week, metric: .steps)) {
-                        ActivityRow(systemImage: "chart.bar.xaxis", title: "Statistik", value: "Tag · Woche · Monat", showsChevron: true)
+                    Button {
+                        onOpen(.statistics(StatisticsRoute(period: .week, metric: .steps)))
+                    } label: {
+                        ActivityRow(
+                            systemImage: "chart.bar.xaxis",
+                            title: PaceLocalization.text(de: "Statistik", en: "Statistics", ru: "Статистика"),
+                            value: PaceLocalization.text(de: "Tag · Woche · Monat", en: "Day · Week · Month", ru: "День · Неделя · Месяц"),
+                            showsChevron: true
+                        )
                     }
                     .buttonStyle(.pacePressable)
                 }
 
-                Text("Tagesziel und Serie bleiben auf deinem iPhone. Ein neues Ziel gilt ab heute.")
-                    .font(PaceFont.caption)
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                ProfileFootnote(text: PaceLocalization.text(
+                    de: "Tagesziel und Serie bleiben auf deinem iPhone. Ein neues Ziel gilt ab heute.",
+                    en: "Your daily goal and streak stay on your iPhone. A new goal applies from today.",
+                    ru: "Дневная цель и серия хранятся на iPhone. Новая цель действует с сегодняшнего дня."
+                ))
             }
         }
     }
 
+    // MARK: Region und Rankings
+
     private var regionCard: some View {
         PaceCard {
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                PaceCardHeader("Deine Region")
+                PaceCardHeader(PaceLocalization.text(de: "Deine Region", en: "Your region", ru: "Твой регион"))
                 VStack(spacing: PaceSpacing.xs) {
-                    InfoRow(systemImage: "building.2", title: "Gemeinde", value: viewModel.municipalityName ?? placeholder)
-                    InfoRow(systemImage: "map", title: "Kreis", value: viewModel.districtName ?? placeholder)
-                    InfoRow(systemImage: "flag", title: "Bundesland", value: viewModel.stateName ?? placeholder)
+                    ProfileInfoRow(
+                        systemImage: "building.2",
+                        title: PaceLocalization.text(de: "Gemeinde", en: "Municipality", ru: "Муниципалитет"),
+                        value: viewModel.municipalityName ?? ProfileTexts.placeholder
+                    )
+                    ProfileInfoRow(
+                        systemImage: "map",
+                        title: PaceLocalization.text(de: "Kreis", en: "District", ru: "Район"),
+                        value: viewModel.districtName ?? ProfileTexts.placeholder
+                    )
+                    ProfileInfoRow(
+                        systemImage: "flag",
+                        title: PaceLocalization.text(de: "Bundesland", en: "State", ru: "Земля"),
+                        value: viewModel.stateName ?? ProfileTexts.placeholder
+                    )
                 }
-                Text(viewModel.regionLoadFailed
-                    ? "Die Region konnte nicht geladen werden. Ziehe nach unten, um es erneut zu versuchen."
-                    : "Pace speichert nur deine Gemeinde, keinen Standort.")
-                    .font(PaceFont.caption)
-                    .foregroundStyle(PaceColor.textSecondary)
-                Button("Region ändern") {
+                ProfileFootnote(text: viewModel.regionLoadFailed
+                    ? PaceLocalization.text(
+                        de: "Die Region konnte nicht geladen werden. Ziehe nach unten, um es erneut zu versuchen.",
+                        en: "Your region couldn't be loaded. Pull down to try again.",
+                        ru: "Не удалось загрузить регион. Потяни вниз, чтобы попробовать снова."
+                    )
+                    : PaceLocalization.text(
+                        de: "Pace speichert nur deine Gemeinde, keinen Standort.",
+                        en: "Pace only stores your municipality, never your location.",
+                        ru: "Pace хранит только твой муниципалитет, а не местоположение."
+                    ))
+                Button(PaceLocalization.text(de: "Region ändern", en: "Change region", ru: "Изменить регион")) {
                     viewModel.beginRegionChange()
                 }
                 .buttonStyle(.paceSecondary)
@@ -165,100 +280,184 @@ struct ProfileContent: View {
     private var rankingsCard: some View {
         PaceCard {
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                PaceCardHeader("Sichtbarkeit in Rankings")
-                PaceTile(isHighlighted: viewModel.regionalLeaderboardEnabled) {
-                    Toggle(isOn: participationBinding) {
-                        Text("In regionalen Rankings erscheinen")
-                            .font(PaceFont.headline)
-                            .foregroundStyle(PaceColor.textPrimary)
-                    }
-                    .tint(PaceColor.accentStrong)
-                    .disabled(viewModel.isUpdatingParticipation)
-                    .padding(.vertical, PaceSpacing.xxs)
-                }
-                if let errorMessage = viewModel.errorMessage {
-                    Text(errorMessage)
-                        .font(PaceFont.caption)
-                        .foregroundStyle(PaceColor.danger)
-                }
-                Text(viewModel.regionalLeaderboardEnabled
-                    ? "Andere sehen in den Rankings deiner Regionen deinen Anzeigenamen, deinen Benutzernamen und deine Wettbewerbsschritte."
-                    : "Du siehst die Rankings, erscheinst selbst aber nicht darin.")
-                    .font(PaceFont.caption)
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                PaceCardHeader(ProfileTexts.rankingVisibilityTitle)
+                RankingVisibilityControl(viewModel: viewModel)
             }
         }
     }
+
+    // MARK: Darstellung
 
     private var appearanceCard: some View {
         PaceCard {
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                PaceCardHeader("Darstellung")
-                Text("App-Icon")
-                    .font(PaceFont.headline)
-                    .foregroundStyle(PaceColor.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                HStack(alignment: .top, spacing: PaceSpacing.s) {
-                    ForEach(AppIconChoice.allCases) { choice in
-                        AppIconOption(
-                            choice: choice,
-                            isSelected: viewModel.appIcon == choice,
-                            isEnabled: viewModel.supportsAppIconChange && !viewModel.isChangingAppIcon
-                        ) {
-                            Task { await viewModel.selectAppIcon(choice) }
-                        }
-                    }
+                PaceCardHeader(ProfileRoute.appearance.title)
+                AppearancePicker(viewModel: viewModel)
+                Button {
+                    onOpen(.appearance)
+                } label: {
+                    ActivityRow(
+                        systemImage: "app.badge",
+                        title: PaceLocalization.text(de: "App-Icon", en: "App icon", ru: "Значок приложения"),
+                        value: viewModel.appIcon.title,
+                        showsChevron: true
+                    )
                 }
-                if let error = viewModel.appIconError {
-                    Text(error)
-                        .font(PaceFont.caption)
-                        .foregroundStyle(PaceColor.danger)
-                }
-                Text(viewModel.supportsAppIconChange
-                    ? "„Automatisch“ folgt der Darstellung deines Home-Bildschirms (hell, dunkel oder getönt, ab iOS 18)."
-                    : "Auf diesem Gerät lässt sich das App-Icon nicht ändern.")
-                    .font(PaceFont.caption)
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                .buttonStyle(.pacePressable)
             }
         }
     }
 
-    private var dataCard: some View {
-        PaceCard {
-            VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                PaceCardHeader("Daten & Konto")
-                NoteRow(
-                    systemImage: "heart.text.square",
-                    text: "Pace überträgt nur deine Wettbewerbsschritte pro Tag. Andere Gesundheitsdaten verlassen dein iPhone nicht."
+    // MARK: Einstellungen
+
+    private var settingsSections: some View {
+        VStack(alignment: .leading, spacing: PaceSpacing.xs) {
+            ProfileSectionTitle(PaceLocalization.text(de: "Konto", en: "Account", ru: "Аккаунт"))
+            ProfileSettingsRow(
+                systemImage: "person.crop.circle",
+                title: ProfileRoute.account.title,
+                subtitle: PaceLocalization.text(
+                    de: "Name, Profilbild, Profil teilen",
+                    en: "Name, profile picture, share profile",
+                    ru: "Имя, фото профиля, ссылка на профиль"
                 )
-                NoteRow(
-                    systemImage: "checkmark.shield",
-                    text: "Manuell eingetragene Schritte zählen nicht für Rankings."
+            ) { onOpen(.account) }
+            ProfileSettingsRow(
+                systemImage: "globe",
+                title: ProfileRoute.language.title,
+                value: viewModel.languageSummary
+            ) { onOpen(.language) }
+
+            ProfileSectionTitle(PaceLocalization.text(
+                de: "Privatsphäre & Mitteilungen",
+                en: "Privacy & notifications",
+                ru: "Конфиденциальность и уведомления"
+            ))
+            ProfileSettingsRow(
+                systemImage: "hand.raised",
+                title: ProfileRoute.privacy.title,
+                subtitle: PaceLocalization.text(
+                    de: "Auffindbarkeit, blockierte Personen",
+                    en: "Discoverability, blocked people",
+                    ru: "Поиск профиля, заблокированные"
                 )
-                NoteRow(
-                    systemImage: "iphone",
-                    text: "Dein Pace-Konto ist an dieses iPhone gebunden. Eine Übertragung auf andere Geräte ist noch nicht möglich."
+            ) { onOpen(.privacy) }
+            ProfileSettingsRow(
+                systemImage: "person.2",
+                title: ProfileRoute.social.title,
+                subtitle: PaceLocalization.text(
+                    de: "Anfragen, Einladungen, Chats",
+                    en: "Requests, invitations, chats",
+                    ru: "Запросы, приглашения, чаты"
                 )
-            }
+            ) { onOpen(.social) }
+            ProfileSettingsRow(
+                systemImage: "bell",
+                title: ProfileRoute.notifications.title,
+                subtitle: PaceLocalization.text(
+                    de: "Erinnerung an dein Tagesziel",
+                    en: "Daily goal reminder",
+                    ru: "Напоминание о дневной цели"
+                ),
+                value: viewModel.notifications.reminder.isEnabled ? viewModel.notifications.reminderTimeText : ProfileTexts.off
+            ) { onOpen(.notifications) }
+
+            ProfileSectionTitle(PaceLocalization.text(de: "Daten & Hilfe", en: "Data & help", ru: "Данные и помощь"))
+            ProfileSettingsRow(
+                systemImage: "lock.shield",
+                title: ProfileRoute.dataPrivacy.title,
+                subtitle: PaceLocalization.text(
+                    de: "Datenexport, Konto löschen",
+                    en: "Data export, delete account",
+                    ru: "Экспорт данных, удаление аккаунта"
+                )
+            ) { onOpen(.dataPrivacy) }
+            ProfileSettingsRow(
+                systemImage: "questionmark.circle",
+                title: ProfileRoute.help.title,
+                subtitle: PaceLocalization.text(
+                    de: "Häufige Fragen, Problem melden",
+                    en: "FAQ, report a problem",
+                    ru: "Частые вопросы, сообщить о проблеме"
+                )
+            ) { onOpen(.help) }
+            ProfileSettingsRow(
+                systemImage: "doc.text",
+                title: ProfileRoute.legal.title,
+                subtitle: PaceLocalization.text(
+                    de: "Datenschutzerklärung, Impressum",
+                    en: "Privacy policy, legal notice",
+                    ru: "Политика конфиденциальности, выходные данные"
+                )
+            ) { onOpen(.legal) }
         }
     }
 
-    private var placeholder: String { "–" }
+    @ViewBuilder
+    private var footer: some View {
+        if !viewModel.appVersion.isEmpty {
+            Text(ProfileTexts.versionText(viewModel.appVersion))
+                .font(PaceFont.caption)
+                .foregroundStyle(PaceColor.textSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.top, PaceSpacing.s)
+        }
+    }
+}
 
-    private var participationBinding: Binding<Bool> {
-        Binding(
-            get: { viewModel.participationToggleValue },
-            set: { enabled in
+/// Schalter „In regionalen Rankings erscheinen“ mit Fehler und Erklärung (Profil und Privatsphäre).
+struct RankingVisibilityControl: View {
+    let viewModel: ProfileViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PaceSpacing.s) {
+            ProfileToggleTile(
+                title: PaceLocalization.text(
+                    de: "In regionalen Rankings erscheinen",
+                    en: "Appear in regional rankings",
+                    ru: "Показывать меня в региональных рейтингах"
+                ),
+                isOn: viewModel.participationToggleValue,
+                isHighlighted: viewModel.regionalLeaderboardEnabled,
+                isDisabled: viewModel.isUpdatingParticipation
+            ) { enabled in
                 Task { await viewModel.setRegionalLeaderboardEnabled(enabled) }
             }
+            if let errorMessage = viewModel.errorMessage {
+                ProfileFootnote(text: errorMessage, isError: true)
+            }
+            ProfileFootnote(text: viewModel.regionalLeaderboardEnabled
+                ? PaceLocalization.text(
+                    de: "Andere sehen in den Rankings deiner Regionen deinen Anzeigenamen, deinen Benutzernamen und deine Wettbewerbsschritte.",
+                    en: "Others see your display name, username and competition steps in the rankings of your regions.",
+                    ru: "В рейтингах твоих регионов другие видят твоё отображаемое имя, имя пользователя и шаги для соревнований."
+                )
+                : PaceLocalization.text(
+                    de: "Du siehst die Rankings, erscheinst selbst aber nicht darin.",
+                    en: "You can see the rankings but don't appear in them yourself.",
+                    ru: "Ты видишь рейтинги, но сам в них не отображаешься."
+                ))
+        }
+    }
+}
+
+/// Auswahl Automatisch/Hell/Dunkel – wirkt sofort auf die ganze App.
+struct AppearancePicker: View {
+    let viewModel: ProfileViewModel
+
+    var body: some View {
+        PaceSegmentedControl(
+            options: AppearancePreference.allCases.map { (value: $0, title: $0.title) },
+            selection: Binding(
+                get: { [appearance = viewModel.appearance] in appearance },
+                set: { [viewModel] appearance in viewModel.setAppearance(appearance) }
+            )
         )
     }
 }
 
 /// Antippbare Zeile mit Symbol, Bezeichnung und Wert.
-private struct ActivityRow: View {
+struct ActivityRow: View {
     let systemImage: String
     let title: String
     let value: String
@@ -274,115 +473,24 @@ private struct ActivityRow: View {
                 Text(title)
                     .font(PaceFont.callout)
                     .foregroundStyle(PaceColor.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 Spacer(minLength: PaceSpacing.xs)
                 Text(value)
                     .font(PaceFont.headline)
                     .foregroundStyle(PaceColor.textPrimary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.7)
                 if showsChevron {
                     Image(systemName: "chevron.right")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(PaceColor.textSecondary)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.vertical, PaceSpacing.xxs)
         }
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// Eine Icon-Variante zur Auswahl: Vorschau, Name, Auswahlmarkierung.
-private struct AppIconOption: View {
-    let choice: AppIconChoice
-    let isSelected: Bool
-    let isEnabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: PaceSpacing.xs) {
-                PaceAppIconPreview(variant, size: 60)
-                    .padding(3)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 17, style: .continuous)
-                            .strokeBorder(isSelected ? PaceColor.accentStrong : .clear, lineWidth: 2.5)
-                    )
-                HStack(spacing: PaceSpacing.xxs) {
-                    if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(PaceColor.accentStrong)
-                            .accessibilityHidden(true)
-                    }
-                    Text(choice.title)
-                        .foregroundStyle(PaceColor.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                .font(PaceFont.callout)
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.pacePressable)
-        .disabled(!isEnabled)
-        .opacity(isEnabled || isSelected ? 1 : 0.5)
-        .accessibilityLabel("App-Icon \(choice.title)")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    private var variant: PaceAppIconPreview.Variant {
-        switch choice {
-        case .automatic: .automatic
-        case .light: .light
-        case .dark: .dark
-        }
-    }
-}
-
-/// Zeile mit Symbol, Bezeichnung und Wert.
-private struct InfoRow: View {
-    let systemImage: String
-    let title: String
-    let value: String
-
-    var body: some View {
-        PaceTile {
-            HStack(spacing: PaceSpacing.s) {
-                Image(systemName: systemImage)
-                    .foregroundStyle(PaceColor.accent)
-                    .frame(width: 24)
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(PaceFont.callout)
-                    .foregroundStyle(PaceColor.textSecondary)
-                Spacer(minLength: PaceSpacing.xs)
-                Text(value)
-                    .font(PaceFont.headline)
-                    .foregroundStyle(PaceColor.textPrimary)
-                    .multilineTextAlignment(.trailing)
-            }
-            .padding(.vertical, PaceSpacing.xxs)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// Erklärender Hinweis mit Symbol.
-private struct NoteRow: View {
-    let systemImage: String
-    let text: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: PaceSpacing.s) {
-            Image(systemName: systemImage)
-                .foregroundStyle(PaceColor.accent)
-                .frame(width: 24)
-                .accessibilityHidden(true)
-            Text(text)
-                .font(PaceFont.callout)
-                .foregroundStyle(PaceColor.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
     }
 }
 
@@ -402,8 +510,16 @@ private struct RegionChangeSheet: View {
                             .foregroundStyle(PaceColor.danger)
                     }
                     Text(viewModel.regionalLeaderboardEnabled
-                        ? "Du trittst danach in den Rankings der neuen Region an."
-                        : "Deine Einstellung zu regionalen Rankings bleibt unverändert.")
+                        ? PaceLocalization.text(
+                            de: "Du trittst danach in den Rankings der neuen Region an.",
+                            en: "You'll then compete in the rankings of your new region.",
+                            ru: "После этого ты будешь участвовать в рейтингах нового региона."
+                        )
+                        : PaceLocalization.text(
+                            de: "Deine Einstellung zu regionalen Rankings bleibt unverändert.",
+                            en: "Your regional ranking setting stays the same.",
+                            ru: "Настройка региональных рейтингов не изменится."
+                        ))
                         .font(PaceFont.caption)
                         .foregroundStyle(PaceColor.textSecondary)
                     RegionPrivacyNotice()
@@ -412,18 +528,18 @@ private struct RegionChangeSheet: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .paceScreenBackground()
-            .navigationTitle("Region ändern")
+            .navigationTitle(PaceLocalization.text(de: "Region ändern", en: "Change region", ru: "Изменить регион"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { viewModel.cancelRegionChange() }
+                    Button(ProfileTexts.cancel) { viewModel.cancelRegionChange() }
                         .disabled(viewModel.isSavingRegion)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if viewModel.isSavingRegion {
                         ProgressView()
                     } else {
-                        Button("Sichern") {
+                        Button(ProfileTexts.save) {
                             Task { await viewModel.saveRegionChange() }
                         }
                         .disabled(!viewModel.canSaveRegion)
