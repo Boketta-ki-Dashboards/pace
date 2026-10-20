@@ -179,6 +179,37 @@ struct HomeSizeMenu: View {
     }
 }
 
+/// Symbol für „Größe auswählen“ wie im Anpassen-Design: großes Quadrat mit offener Ecke oben rechts, darüber ein
+/// kleines, versetztes Quadrat. Gezeichnet in der Vordergrundfarbe, wächst mit der Schriftgröße.
+struct HomeSizeGlyph: View {
+    @ScaledMetric(relativeTo: .footnote) private var size: CGFloat = 15
+
+    var body: some View {
+        Path { path in
+            let side = size
+            let radius = side * 0.16
+            func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+                CGPoint(x: x * side, y: y * side)
+            }
+            // Großes Quadrat, oben rechts offen.
+            path.move(to: point(0.36, 0.08))
+            path.addArc(tangent1End: point(0, 0.08), tangent2End: point(0, 1), radius: radius)
+            path.addArc(tangent1End: point(0, 1), tangent2End: point(0.92, 1), radius: radius)
+            path.addArc(tangent1End: point(0.92, 1), tangent2End: point(0.92, 0.6), radius: radius)
+            path.addLine(to: point(0.92, 0.6))
+            // Kleines Quadrat oben rechts, unten links offen.
+            path.move(to: point(0.48, 0.18))
+            path.addArc(tangent1End: point(0.48, 0), tangent2End: point(1, 0), radius: radius * 0.6)
+            path.addArc(tangent1End: point(1, 0), tangent2End: point(1, 0.48), radius: radius * 0.6)
+            path.addArc(tangent1End: point(1, 0.48), tangent2End: point(0.74, 0.48), radius: radius * 0.6)
+            path.addLine(to: point(0.74, 0.48))
+        }
+        .stroke(style: StrokeStyle(lineWidth: max(1.4, size / 10), lineCap: .round, lineJoin: .round))
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
 /// Ziel beim Umsortieren: Sobald ein gezogenes Widget über einem anderen schwebt, tauschen sie die Plätze – die
 /// Reihenfolge ist sofort sichtbar und gespeichert.
 struct HomeModuleDropDelegate: DropDelegate {

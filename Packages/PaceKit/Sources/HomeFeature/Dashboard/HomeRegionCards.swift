@@ -168,7 +168,7 @@ public enum HomeRankingTexts {
             return PaceLocalization.text(
                 de: "Du bist der Erste \(region.locative).",
                 en: "You're the first one in \(region.name).",
-                ru: "Ты первый в рейтинге: \(region.name)."
+                ru: "В рейтинге «\(region.name)» пока только ты."
             )
         }
         if neighborhood.currentUser.rank == 1 {

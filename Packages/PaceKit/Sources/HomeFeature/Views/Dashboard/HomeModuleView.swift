@@ -291,8 +291,7 @@ struct HomeEditHeader: View {
                 viewModel.toggleSizeMenu(for: module.id)
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.footnote.weight(.semibold))
+                    HomeSizeGlyph()
                     Text(HomeTexts.chooseSize)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
