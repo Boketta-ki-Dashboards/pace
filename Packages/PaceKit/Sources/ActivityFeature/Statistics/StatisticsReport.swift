@@ -20,7 +20,8 @@ public struct HourlyValues: Equatable, Sendable {
 /// Alles, was die Statistik für einen Zeitraum und eine Kennzahl anzeigt. Reine Berechnung, dadurch testbar.
 ///
 /// Grundsätze:
-/// - Nicht lesbare Kennzahlen erscheinen als „nicht verfügbar“, nie als 0. Tage ohne Samples sind dagegen 0.
+/// - Nicht lesbare Kennzahlen erscheinen als „nicht verfügbar“, nie als 0. Tage ohne Samples sind dagegen 0 – außer
+///   bei aktiven Kalorien: Dort ist ein Tag ohne Samples „nicht verfügbar“ (gemessene 0 bleibt 0).
 /// - Schritte sind immer Wettbewerbsschritte (ohne manuell eingetragene) – wie Ziel, Streak und Rankings.
 /// - Durchschnitte beziehen sich auf die bereits begonnenen Tage des Zeitraums (inklusive heute).
 /// - Zieltage nutzen das Ziel des jeweiligen Tages (Zielverlauf). Heute zählt mit, sobald das Ziel erreicht ist.
@@ -572,6 +573,9 @@ public struct StatisticsReport: Equatable, Sendable {
     }
 
     private static func unavailableNote(_ metric: StatisticsMetric) -> String {
+        if metric == .activeEnergy {
+            return ActivityTexts.activeEnergyUnavailableNote
+        }
         let title = metric.title
         return PaceLocalization.text(
             de: "Für „\(title)“ sind keine Daten lesbar. Prüfe in der Health-App, ob Pace darauf zugreifen darf.",

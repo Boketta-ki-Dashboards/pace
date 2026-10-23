@@ -130,7 +130,7 @@ struct ActivitySummaryLoaderTests {
         #expect(Set(service.recordedCalls.hasAnySamplesQueries) == [.walkingRunningDistance, .activeEnergy, .flightsClimbed, .exerciseTime])
     }
 
-    @Test func availableMetricsAreZeroOnDaysWithoutSamples() async throws {
+    @Test func availableMetricsAreZeroOnDaysWithoutSamplesExceptActiveEnergy() async throws {
         let yesterday = Fixtures.day(2026, 10, 15)
         let service = HealthServiceStub {
             $0.setSteps(500, on: today)
@@ -143,7 +143,8 @@ struct ActivitySummaryLoaderTests {
         let overview = try overview(try await makeLoader(service).load())
 
         #expect(overview.today.walkingRunningDistanceMeters == 4_200.5)
-        #expect(overview.today.activeEnergyKilocalories == 0)
+        // Aktive Kalorien: heute keine Samples → nicht verfügbar (nil), nicht 0 – auch wenn gestern Werte da sind.
+        #expect(overview.today.activeEnergyKilocalories == nil)
         #expect(overview.yesterday.activeEnergyKilocalories == 310.2)
         #expect(overview.yesterday.walkingRunningDistanceMeters == 0)
         #expect(overview.today.flightsClimbed == 7)
@@ -181,5 +182,21 @@ struct ActivitySummaryLoaderTests {
         let overview = try overview(try await makeLoader(service).load())
 
         #expect(overview.lastSevenDays.totalHealthSteps == 10)
+    }
+
+    /// Drei Zustände der aktiven Kalorien: gemessen, gemessene 0, nicht verfügbar.
+    @Test func activeEnergyKeepsMeasuredZeroApartFromMissingData() async throws {
+        let yesterday = Fixtures.day(2026, 10, 15)
+        let service = HealthServiceStub {
+            $0.setSteps(500, on: today)
+            $0.set(.activeEnergy, 0, on: yesterday)
+            $0.set(.activeEnergy, 41.5, on: Fixtures.day(2026, 10, 14))
+        }
+
+        let overview = try overview(try await makeLoader(service).load())
+
+        #expect(overview.today.activeEnergyKilocalories == nil)
+        #expect(overview.yesterday.activeEnergyKilocalories == 0)
+        #expect(overview.currentWeek.totalActiveEnergyKilocalories == 41.5)
     }
 }

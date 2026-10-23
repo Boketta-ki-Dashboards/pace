@@ -13,6 +13,8 @@ public struct AppDependencies: Sendable {
 
     public let healthAuthorization: any HealthAuthorizationProviding
     public let activityData: any ActivityDataProviding
+    /// Schnelle Schrittwerte des Bewegungssensors für die Anzeige im Vordergrund.
+    public let liveSteps: any LiveStepCounting
     public let backend: Backend
     /// Tagesziel und Aufbau des Home-Dashboards (nur auf dem Gerät).
     public let homePreferences: any HomePreferencesStoring
@@ -34,6 +36,7 @@ public struct AppDependencies: Sendable {
     public init(
         healthAuthorization: any HealthAuthorizationProviding,
         activityData: any ActivityDataProviding,
+        liveSteps: any LiveStepCounting = NoLiveStepCounting(),
         backend: Backend,
         homePreferences: any HomePreferencesStoring = UserDefaultsHomePreferencesStore(),
         stepGoals: any StepGoalStoring = UserDefaultsStepGoalStore(),
@@ -46,6 +49,7 @@ public struct AppDependencies: Sendable {
     ) {
         self.healthAuthorization = healthAuthorization
         self.activityData = activityData
+        self.liveSteps = liveSteps
         self.backend = backend
         self.homePreferences = homePreferences
         self.stepGoals = stepGoals

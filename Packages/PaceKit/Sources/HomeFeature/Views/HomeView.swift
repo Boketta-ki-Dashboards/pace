@@ -30,6 +30,7 @@ public struct HomeView: View {
                 )
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.l)
+                .paceTabRoot(isAtRoot: path.isEmpty) { path = NavigationPath() }
                 // Bezugssystem für das Umsortieren: Rahmen der Widgets im Inhalt, Inhaltsoberkante global.
                 .coordinateSpace(.named(HomeReorderController.contentSpace))
                 .onGeometryChange(for: CGFloat.self) { proxy in
@@ -93,7 +94,7 @@ public struct HomeView: View {
         .onChange(of: viewModel.streak.record) {
             viewModel.streak.saveRecordIfNeeded()
         }
-        .onChange(of: viewModel.stepsToday?.steps) {
+        .onChange(of: viewModel.healthKitStepsToday) {
             Task { await viewModel.stepsDidChange() }
         }
         .onChange(of: scenePhase) { _, newPhase in

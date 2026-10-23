@@ -22,7 +22,9 @@ public struct StepsTodaySummary: Equatable, Sendable {
     public let isGoalReached: Bool
     /// `nil`, wenn die Kennzahl nicht lesbar ist – dann wird sie nicht angezeigt (keine falsche 0).
     public let distanceText: String?
-    public let energyText: String?
+    /// Aktive Kalorien oder „Nicht verfügbar“, wenn Apple Health für heute keine hat (nie eine falsche 0).
+    public let energyText: String
+    public let isEnergyAvailable: Bool
     /// Für die großen Schrittkarten; `nil`, wenn nicht lesbar.
     public let flightsText: String?
     public let exerciseText: String?
@@ -36,13 +38,31 @@ public struct StepsTodaySummary: Equatable, Sendable {
         self.init(today: today, yesterday: nil, lastSevenDays: nil, goal: goal, formatter: formatter)
     }
 
-    public init(overview: ActivityOverview, goal: Int, formatter: ActivityFormatter) {
+    /// - Parameter liveCompetitionSteps: Schritte von heute inklusive Live-Sensorwerten (nur Anzeige); ohne Angabe der
+    ///   HealthKit-Wert.
+    public init(overview: ActivityOverview, goal: Int, formatter: ActivityFormatter, liveCompetitionSteps: Int? = nil) {
         self.init(
-            today: overview.today,
+            today: Self.today(overview.today, liveCompetitionSteps: liveCompetitionSteps),
             yesterday: overview.yesterday,
             lastSevenDays: overview.lastSevenDays,
             goal: goal,
             formatter: formatter
+        )
+    }
+
+    /// Heutige Werte mit Live-Schritten: Wettbewerbs- und Health-Schritte steigen um dieselbe Differenz (der Hinweis
+    /// auf manuelle Schritte bleibt dadurch korrekt).
+    private static func today(_ today: DailyActivitySummary, liveCompetitionSteps: Int?) -> DailyActivitySummary {
+        guard let liveCompetitionSteps, liveCompetitionSteps > today.competitionSteps else { return today }
+        let delta = liveCompetitionSteps - today.competitionSteps
+        return DailyActivitySummary(
+            date: today.date,
+            healthSteps: today.healthSteps + delta,
+            competitionSteps: liveCompetitionSteps,
+            walkingRunningDistanceMeters: today.walkingRunningDistanceMeters,
+            activeEnergyKilocalories: today.activeEnergyKilocalories,
+            flightsClimbed: today.flightsClimbed,
+            exerciseMinutes: today.exerciseMinutes
         )
     }
 
@@ -75,7 +95,8 @@ public struct StepsTodaySummary: Equatable, Sendable {
                 ru: "Ещё \(remaining) до твоей цели"
             )
         distanceText = today.walkingRunningDistanceMeters.map { formatter.distance(meters: $0) }
-        energyText = today.activeEnergyKilocalories.map { formatter.energy(kilocalories: $0) }
+        energyText = today.activeEnergyKilocalories.map { formatter.energy(kilocalories: $0) } ?? ActivityTexts.notAvailable
+        isEnergyAvailable = today.activeEnergyKilocalories != nil
         flightsText = today.flightsClimbed.map { formatter.flights($0) }
         exerciseText = today.exerciseMinutes.map { formatter.exerciseMinutes($0) }
         yesterdayText = yesterday.map { formatter.steps($0.competitionSteps) }

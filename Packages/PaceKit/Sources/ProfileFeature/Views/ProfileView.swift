@@ -19,6 +19,7 @@ public struct ProfileView: View {
                 ProfileContent(viewModel: viewModel, onOpen: { viewModel.open($0) })
                     .padding(.horizontal, PaceSpacing.m)
                     .padding(.bottom, PaceSpacing.l)
+                    .paceTabRoot(isAtRoot: viewModel.path.isEmpty) { viewModel.path.removeAll() }
             }
             .refreshable { [viewModel] in await viewModel.load() }
             .paceScreenBackground()

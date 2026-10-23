@@ -63,6 +63,7 @@ enum SocialText {
     static var topFriends: String { t("Top-Freunde", "Top friends", "Топ друзей") }
     static var seeAll: String { t("Alle ansehen", "See all", "Смотреть все") }
     static var friendRequests: String { t("Freundschaftsanfragen", "Friend requests", "Заявки в друзья") }
+    static var myGroups: String { t("Meine Gruppen", "My groups", "Мои группы") }
     static var socialSettings: String { t("Social-Einstellungen", "Social settings", "Настройки общения") }
     static var friendsAndGroups: String { t("Freunde und Gruppen", "Friends and groups", "Друзья и группы") }
     static var noFriendsYet: String {

@@ -24,6 +24,54 @@
           }
         }
       }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "comment" : "Begründung für das Mikrofon (Sprachnachrichten im Chat; Quelle: Config/Info.plist).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pace braucht das Mikrofon nur, während du eine Sprachnachricht für einen Chat aufnimmst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pace only uses the microphone while you record a voice message for a chat."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pace использует микрофон, только пока ты записываешь голосовое сообщение для чата."
+          }
+        }
+      }
+    },
+    "NSMotionUsageDescription" : {
+      "comment" : "Begründung für „Bewegung & Fitness“ (Live-Schritte im Vordergrund; Quelle: Config/Info.plist).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pace nutzt den Bewegungssensor, damit deine Schrittzahl beim Gehen sofort mitzählt, solange Pace geöffnet ist. Gespeichert und für Rankings verwendet werden weiterhin nur die Schritte aus Apple Health."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pace uses the motion sensor so your step count updates right away while you walk with Pace open. Only the steps from Apple Health are stored and used for rankings."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pace использует датчик движения, чтобы число шагов сразу обновлялось во время ходьбы, пока Pace открыт. Сохраняются и учитываются в рейтингах по-прежнему только шаги из приложения «Здоровье»."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

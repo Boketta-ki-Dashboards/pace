@@ -51,9 +51,22 @@ public final class HomeViewModel {
     /// Zuletzt erfolgreich geladene Werte (für die Detailansicht).
     private var lastLoadedOverview: ActivityOverview?
 
+    /// Abgleich der HealthKit-Werte mit den schnelleren Sensorwerten (nur für die Anzeige).
+    private var liveEstimator = LiveStepEstimator()
+
+    /// Wettbewerbsschritte von heute für die Anzeige – mit Live-Sensorwerten, solange Pace im Vordergrund ist.
+    /// Rankings, Sync, Serie und Mitteilungen verwenden weiter nur die HealthKit-Werte aus ``overview``.
+    public var liveCompetitionStepsToday: Int? {
+        guard let overview, liveEstimator.day == overview.today.date else { return overview?.today.competitionSteps }
+        return max(liveEstimator.steps, overview.today.competitionSteps)
+    }
+
     @ObservationIgnored private let loader: ActivitySummaryLoader
     @ObservationIgnored private let activityData: any ActivityDataProviding
     @ObservationIgnored private let syncing: (any ActivitySyncing)?
+    @ObservationIgnored private let liveSteps: any LiveStepCounting
+    @ObservationIgnored private let calendar: ActivityCalendar
+    @ObservationIgnored private let now: @Sendable () -> Date
     /// Der laufende Ladevorgang. Läuft unabhängig vom Aufrufer, damit ein abgebrochener Aufrufer (z. B. ein
     /// beendeter `.task`) weder die HealthKit-Abfrage abbricht noch nachgemeldete Anfragen verliert.
     @ObservationIgnored private var loadTask: Task<Void, Never>?
@@ -62,15 +75,21 @@ public final class HomeViewModel {
     /// Letzte Übergabe an den Sync. Übergaben laufen nacheinander, damit `refreshForRanking()` auf sie warten kann.
     @ObservationIgnored private var lastSubmission: Task<Void, Never>?
 
-    /// - Parameter syncing: Nimmt neue Tageswerte für das Backend entgegen. `nil`, wenn kein Backend verfügbar ist.
+    /// - Parameters:
+    ///   - syncing: Nimmt neue Tageswerte für das Backend entgegen. `nil`, wenn kein Backend verfügbar ist.
+    ///   - liveSteps: Schnelle Sensorwerte für die Anzeige im Vordergrund (Core Motion).
     public init(
         activityData: any ActivityDataProviding,
         syncing: (any ActivitySyncing)? = nil,
+        liveSteps: any LiveStepCounting = NoLiveStepCounting(),
         calendar: ActivityCalendar = ActivityCalendar(),
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.activityData = activityData
         self.syncing = syncing
+        self.liveSteps = liveSteps
+        self.calendar = calendar
+        self.now = now
         loader = ActivitySummaryLoader(provider: activityData, calendar: calendar, now: now)
     }
 
@@ -129,6 +148,17 @@ public final class HomeViewModel {
         await lastSubmission?.value
     }
 
+    /// Live-Schritte vom Bewegungssensor, solange der aufrufende Task läuft (Pace im Vordergrund). Ohne Zugriff
+    /// oder Sensor endet die Methode sofort; die Anzeige folgt dann nur HealthKit.
+    public func observeLiveSteps() async {
+        guard liveSteps.isAvailable else { return }
+        let start = calendar.startOfDay(calendar.day(containing: now()))
+        for await steps in liveSteps.steps(since: start) {
+            liveEstimator.sensor(steps, on: calendar.day(containing: now()))
+        }
+        liveEstimator.sensorStopped()
+    }
+
     /// Lädt neu, sobald HealthKit neue Bewegungsdaten meldet. Läuft, bis der aufrufende Task beendet wird.
     public func observeActivityChanges() async {
         for await _ in activityData.activityChanges() {
@@ -140,6 +170,9 @@ public final class HomeViewModel {
         do {
             switch try await loader.load() {
             case .available(let overview):
+                var estimator = liveEstimator
+                estimator.healthKit(overview.today.competitionSteps, on: overview.today.date)
+                if estimator != liveEstimator { liveEstimator = estimator }
                 // Unveränderte Werte (häufig bei der Abfrage im Vordergrund) lösen kein Neuzeichnen aus.
                 if case .loaded(let current) = state, Self.hasSameValues(current, overview) {
                     submitForSync(current, trigger: trigger)

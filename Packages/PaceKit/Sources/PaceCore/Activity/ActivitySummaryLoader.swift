@@ -81,7 +81,9 @@ public struct ActivitySummaryLoader: Sendable {
                 healthSteps: Self.integer(stepTotals[day]),
                 competitionSteps: Self.integer(competitionTotals[day]),
                 walkingRunningDistanceMeters: distanceTotals.map { $0[day] ?? 0 },
-                activeEnergyKilocalories: energyTotals.map { $0[day] ?? 0 },
+                // Aktive Kalorien: Tage ohne Samples bleiben `nil` („nicht verfügbar“), nicht 0 – das iPhone ohne Apple
+                // Watch liefert sie oft verzögert oder gar nicht, während Schritte schon da sind. Gemessene 0 bleibt 0.
+                activeEnergyKilocalories: energyTotals.flatMap { $0[day] },
                 flightsClimbed: flightTotals.map { Self.integer($0[day]) },
                 exerciseMinutes: exerciseTotals.map { Self.integer($0[day]) }
             )

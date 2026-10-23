@@ -39,6 +39,7 @@ public struct SocialView: View {
                 )
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.l)
+                .paceTabRoot(isAtRoot: path.isEmpty) { path = NavigationPath() }
             }
             .scrollDismissesKeyboard(.interactively)
             .refreshable { [viewModel] in
@@ -132,20 +133,6 @@ struct SocialContent: View {
                     searchResults
                 } else {
                     topFriends
-                    SocialNavigationRow(
-                        systemImage: "person.badge.plus",
-                        title: SocialText.friendRequests,
-                        count: viewModel.incomingRequests.count,
-                        action: { onOpen(.requests) }
-                    )
-                    .accessibilityValue(SocialText.openRequests(viewModel.incomingRequests.count))
-                    SocialNavigationRow(
-                        systemImage: "person.3",
-                        title: SocialText.groups,
-                        detail: groupsDetail,
-                        count: viewModel.invitations.count,
-                        action: { onOpen(.groups) }
-                    )
                     chats
                 }
             }
@@ -156,9 +143,10 @@ struct SocialContent: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
-            HStack(alignment: .center) {
+            HStack(alignment: .center, spacing: PaceSpacing.xs) {
                 PaceWordmark(height: 33)
                 Spacer()
+                requestsButton
                 Button {
                     onOpen(.settings)
                 } label: {
@@ -173,6 +161,26 @@ struct SocialContent: View {
                 .accessibilityAddTraits(.isHeader)
         }
         .padding(.top, PaceSpacing.xs)
+    }
+
+    /// Freundschaftsanfragen: gleicher Stil wie das Zahnrad, Zähler offener Anfragen als Badge.
+    private var requestsButton: some View {
+        Button {
+            onOpen(.requests)
+        } label: {
+            Image(systemName: "person.crop.circle.badge.plus")
+        }
+        .buttonStyle(.paceIcon)
+        .overlay(alignment: .topTrailing) {
+            if viewModel.incomingRequests.count > 0 {
+                PaceCountBadge(viewModel.incomingRequests.count)
+                    .offset(x: 6, y: -6)
+                    .allowsHitTesting(false)
+            }
+        }
+        .disabled(!viewModel.isAvailable)
+        .accessibilityLabel(SocialText.friendRequests)
+        .accessibilityValue(viewModel.incomingRequests.isEmpty ? "" : SocialText.openRequests(viewModel.incomingRequests.count))
     }
 
     private var actionButtons: some View {
@@ -246,18 +254,39 @@ struct SocialContent: View {
         }
     }
 
-    // MARK: Gruppen und Chats
+    // MARK: Chats und Gruppen
 
-    private var groupsDetail: String {
-        let groups = SocialText.groupCount(viewModel.groups.count)
-        guard !viewModel.invitations.isEmpty else { return groups }
-        return "\(groups) · \(SocialText.openInvitations(viewModel.invitations.count))"
-    }
-
+    /// Chats direkt unter den Top-Freunden; „Meine Gruppen“ (mit Einladungen) als kompakter Link daneben.
     @ViewBuilder
     private var chats: some View {
-        SocialSectionTitle(SocialText.chats)
+        SocialSectionTitle(title: SocialText.chats) {
+            Button {
+                onOpen(.groups)
+            } label: {
+                HStack(spacing: 4) {
+                    Text(SocialText.myGroups)
+                    if !viewModel.invitations.isEmpty {
+                        PaceCountBadge(viewModel.invitations.count)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .accessibilityHidden(true)
+                }
+                .font(.system(.subheadline, weight: .semibold))
+                .foregroundStyle(PaceColor.accent)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(groupsAccessibilityValue)
+        }
         ChatListSection(viewModel: viewModel.chats, onOpen: onOpenChat)
+    }
+
+    private var groupsAccessibilityValue: String {
+        let groups = SocialText.groupCount(viewModel.groups.count)
+        guard !viewModel.invitations.isEmpty else { return groups }
+        return "\(groups), \(SocialText.openInvitations(viewModel.invitations.count))"
     }
 
     // MARK: Suche
@@ -308,7 +337,7 @@ private struct TopFriendCard: View {
         Button(action: action) {
             VStack(spacing: PaceSpacing.xxs) {
                 ZStack(alignment: .topLeading) {
-                    PaceAvatar(name: entry.displayName, seed: entry.publicUserID.uuidString, size: 58)
+                    PaceAvatar(name: entry.displayName, seed: entry.publicUserID.uuidString, size: 48)
                         .frame(maxWidth: .infinity)
                     Text(verbatim: "#\(entry.rank.paceFormatted)")
                         .font(.system(.subheadline, weight: .bold))

@@ -23,6 +23,11 @@ private struct ActivityUpdatesModifier: ViewModifier {
         content
             .task { [viewModel] in await viewModel.loadIfNeeded() }
             .task { [viewModel] in await viewModel.observeActivityChanges() }
+            // Live-Schritte vom Bewegungssensor nur im Vordergrund; im Hintergrund stoppt der Sensor (Akku).
+            .task(id: scenePhase == .active) { [viewModel, scenePhase] in
+                guard scenePhase == .active else { return }
+                await viewModel.observeLiveSteps()
+            }
             .task(id: scenePhase) { [viewModel, scenePhase] in
                 guard scenePhase == .active else { return }
                 while !Task.isCancelled {

@@ -270,4 +270,52 @@ struct HomeViewModelTests {
 
         #expect(syncing.triggers.isEmpty)
     }
+
+    // MARK: Live-Schritte
+
+    @Test func liveSensorStepsSpeedUpTheDisplayButSyncStaysOnHealthKit() async throws {
+        let service = HealthServiceStub { $0.setSteps(8_432, on: today) }
+        let syncing = ActivitySyncingSpy()
+        let live = LiveStepsStub()
+        let currentDate = now
+        let viewModel = HomeViewModel(
+            activityData: service, syncing: syncing, liveSteps: live,
+            calendar: Fixtures.activityCalendar, now: { currentDate }
+        )
+        await viewModel.loadIfNeeded()
+        await viewModel.waitForPendingSync()
+
+        let observing = Task { await viewModel.observeLiveSteps() }
+        live.send(5_000)
+        live.send(5_003)
+        try await waitUntil { viewModel.liveCompetitionStepsToday == 8_435 }
+
+        // Gemessen wird ab Tagesbeginn; HealthKit-Werte und Sync bleiben unverändert.
+        #expect(live.lastStart == Fixtures.activityCalendar.startOfDay(today))
+        #expect(viewModel.overview?.today.competitionSteps == 8_432)
+        #expect(syncing.state.withLock { $0.submissions.map(\.overview.today.competitionSteps) }.allSatisfy { $0 == 8_432 })
+
+        // HealthKit holt auf: neue Basis, nichts doppelt.
+        service.update { $0.setSteps(8_435, on: today) }
+        await viewModel.refresh()
+        #expect(viewModel.liveCompetitionStepsToday == 8_435)
+        live.send(5_010)
+        try await waitUntil { viewModel.liveCompetitionStepsToday == 8_442 }
+
+        live.finish()
+        await observing.value
+        #expect(viewModel.liveCompetitionStepsToday == 8_442)
+    }
+
+    @Test func withoutMotionAccessTheDisplayFollowsHealthKit() async {
+        let service = HealthServiceStub { $0.setSteps(2_000, on: today) }
+        let currentDate = now
+        let viewModel = HomeViewModel(
+            activityData: service, liveSteps: LiveStepsStub(isAvailable: false),
+            calendar: Fixtures.activityCalendar, now: { currentDate }
+        )
+        await viewModel.loadIfNeeded()
+        await viewModel.observeLiveSteps()
+        #expect(viewModel.liveCompetitionStepsToday == 2_000)
+    }
 }

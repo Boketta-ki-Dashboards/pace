@@ -17,6 +17,7 @@ struct StepsTodayWidgetContent: View {
 
     @ScaledMetric(relativeTo: .largeTitle) private var metricSize: CGFloat = 62
     @ScaledMetric(relativeTo: .largeTitle) private var ringSize: CGFloat = 104
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         switch state {
@@ -80,6 +81,7 @@ struct StepsTodayWidgetContent: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                         PaceProgressBar(progress: summary.progress)
+                            .animation(reduceMotion ? nil : .easeOut(duration: 0.4), value: summary.progress)
                             .padding(.top, PaceSpacing.xs)
                         Text(summary.remainingText)
                             .font(.subheadline.weight(.medium))
@@ -89,6 +91,7 @@ struct StepsTodayWidgetContent: View {
                             .padding(.top, PaceSpacing.xxs)
                     }
                     PaceProgressRing(progress: summary.progress, label: summary.percentText)
+                        .animation(reduceMotion ? nil : .easeOut(duration: 0.4), value: summary.progress)
                         .frame(width: ringSize, height: ringSize)
                 }
                 .contentShape(Rectangle())
@@ -143,54 +146,39 @@ struct StepsTodayWidgetContent: View {
         }
     }
 
-    @ViewBuilder
+    /// Distanz und aktive Kalorien. Kalorien erscheinen immer – ohne Werte aus Apple Health als „Nicht verfügbar“
+    /// (Antippen öffnet die Kalorienstatistik mit Erklärung), nie als falsche 0.
     private func metricsTile(_ summary: StepsTodaySummary) -> some View {
-        if summary.distanceText != nil || summary.energyText != nil {
-            PaceTile {
-                HStack(spacing: 0) {
-                    if let distance = summary.distanceText {
-                        NavigationLink(value: StatisticsRoute(period: .week, metric: .distance)) {
-                            StepsMetricCell(systemImage: "shoeprints.fill", value: distance, caption: nil, showsChevron: true)
-                        }
-                        .buttonStyle(.pacePressable)
-                        .accessibilityLabel(PaceLocalization.text(de: "Distanz", en: "Distance", ru: "Расстояние") + ", " + distance)
-                        .accessibilityHint(PaceLocalization.text(
-                            de: "Öffnet die Distanzstatistik", en: "Opens the distance statistics", ru: "Открывает статистику расстояния"
-                        ))
+        PaceTile {
+            HStack(spacing: 0) {
+                if let distance = summary.distanceText {
+                    NavigationLink(value: StatisticsRoute(period: .week, metric: .distance)) {
+                        StepsMetricCell(systemImage: "shoeprints.fill", value: distance, caption: nil, showsChevron: true)
                     }
-                    if summary.distanceText != nil, summary.energyText != nil {
-                        Divider().frame(height: 32).padding(.horizontal, PaceSpacing.xs)
-                    }
-                    if let energy = summary.energyText {
-                        NavigationLink(value: StatisticsRoute(period: .week, metric: .activeEnergy)) {
-                            StepsMetricCell(
-                                systemImage: "flame",
-                                value: energy,
-                                caption: PaceLocalization.text(de: "Aktive Kalorien", en: "Active calories", ru: "Активные калории"),
-                                showsChevron: true
-                            )
-                        }
-                        .buttonStyle(.pacePressable)
-                        .accessibilityHint(PaceLocalization.text(
-                            de: "Öffnet die Kalorienstatistik", en: "Opens the calorie statistics", ru: "Открывает статистику калорий"
-                        ))
-                    }
+                    .buttonStyle(.pacePressable)
+                    .accessibilityLabel(PaceLocalization.text(de: "Distanz", en: "Distance", ru: "Расстояние") + ", " + distance)
+                    .accessibilityHint(PaceLocalization.text(
+                        de: "Öffnet die Distanzstatistik", en: "Opens the distance statistics", ru: "Открывает статистику расстояния"
+                    ))
                 }
-                .padding(.vertical, PaceSpacing.xxs)
-            }
-        } else {
-            NavigationLink(value: StatisticsRoute(period: .week, metric: .steps)) {
-                PaceTile {
+                if summary.distanceText != nil {
+                    Divider().frame(height: 32).padding(.horizontal, PaceSpacing.xs)
+                }
+                NavigationLink(value: StatisticsRoute(period: .week, metric: .activeEnergy)) {
                     StepsMetricCell(
-                        systemImage: "chart.bar",
-                        value: PaceLocalization.text(de: "Statistiken", en: "Statistics", ru: "Статистика"),
-                        caption: nil,
-                        showsChevron: true
+                        systemImage: "flame",
+                        value: summary.energyText,
+                        caption: PaceLocalization.text(de: "Aktive Kalorien", en: "Active calories", ru: "Активные калории"),
+                        showsChevron: true,
+                        isMuted: !summary.isEnergyAvailable
                     )
-                    .padding(.vertical, PaceSpacing.xxs)
                 }
+                .buttonStyle(.pacePressable)
+                .accessibilityHint(PaceLocalization.text(
+                    de: "Öffnet die Kalorienstatistik", en: "Opens the calorie statistics", ru: "Открывает статистику калорий"
+                ))
             }
-            .buttonStyle(.pacePressable)
+            .padding(.vertical, PaceSpacing.xxs)
         }
     }
 
@@ -216,6 +204,8 @@ private struct StepsMetricCell: View {
     let value: String
     let caption: String?
     var showsChevron = false
+    /// Gedämpft für „Nicht verfügbar“.
+    var isMuted = false
 
     var body: some View {
         HStack(spacing: PaceSpacing.xs) {
@@ -226,9 +216,9 @@ private struct StepsMetricCell: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 0) {
                 Text(value)
-                    .font(.system(.headline, weight: .bold))
+                    .font(.system(.headline, weight: isMuted ? .semibold : .bold))
                     .monospacedDigit()
-                    .foregroundStyle(PaceColor.textPrimary)
+                    .foregroundStyle(isMuted ? PaceColor.textSecondary : PaceColor.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 if let caption {

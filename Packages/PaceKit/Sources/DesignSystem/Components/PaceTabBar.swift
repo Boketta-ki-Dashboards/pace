@@ -23,53 +23,60 @@ public struct PaceTabItem<Value: Hashable>: Identifiable {
 
 /// Untere Navigation von Pace. Der aktive Tab zeigt Symbol und Beschriftung gemeinsam in einer abgerundeten
 /// Mint-Fläche (Light: zartes Mint mit dunkelgrünem Inhalt, Dark: Mint mit dunklem Inhalt).
+///
+/// Die Fläche gleitet: Mit `position` (Tab-Index mit Nachkommastellen, z. B. 1,5 beim Wischen zwischen Rankings und
+/// Social) folgt sie dem Finger. Symbol und Beschriftung erscheinen in Akzentfarbe genau dort, wo die Fläche liegt –
+/// beide bleiben so immer gemeinsam in der aktiven Fläche.
 public struct PaceTabBar<Value: Hashable>: View {
     private let items: [PaceTabItem<Value>]
     @Binding private var selection: Value
+    private let position: Double?
+    private let onReselect: ((Value) -> Void)?
 
-    public init(items: [PaceTabItem<Value>], selection: Binding<Value>) {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static var spacing: CGFloat { PaceSpacing.xxs }
+
+    /// - Parameters:
+    ///   - position: Laufende Position beim Wischen; ohne Angabe die Auswahl.
+    ///   - onReselect: Antippen des schon aktiven Tabs (z. B. nach oben scrollen).
+    public init(
+        items: [PaceTabItem<Value>],
+        selection: Binding<Value>,
+        position: Double? = nil,
+        onReselect: ((Value) -> Void)? = nil
+    ) {
         self.items = items
         _selection = selection
+        self.position = position
+        self.onReselect = onReselect
     }
 
     public var body: some View {
-        HStack(spacing: PaceSpacing.xxs) {
-            ForEach(items) { item in
-                let isSelected = item.value == selection
-                Button {
-                    selection = item.value
-                } label: {
-                    VStack(spacing: 1) {
-                        Image(systemName: isSelected ? item.selectedSystemImage : item.systemImage)
-                            .font(.system(size: 20, weight: .medium))
-                            .frame(height: 24)
-                            .overlay(alignment: .topTrailing) {
-                                if item.badge > 0 {
-                                    TabBadge(count: item.badge)
-                                        .offset(x: 12, y: -4)
-                                }
+        row(selectedStyle: false)
+            // Fläche und Akzent-Reihe liegen über der normalen Reihe; Antippen geht an die Buttons darunter.
+            .overlay(alignment: .topLeading) {
+                GeometryReader { geometry in
+                    let width = itemWidth(in: geometry.size.width)
+                    let offset = highlightOffset(itemWidth: width)
+                    ZStack(alignment: .topLeading) {
+                        highlightShape
+                            .fill(PaceColor.selectionFill)
+                            .frame(width: width, height: geometry.size.height)
+                            .offset(x: offset)
+                        row(selectedStyle: true)
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .mask(alignment: .topLeading) {
+                                highlightShape
+                                    .frame(width: width, height: geometry.size.height)
+                                    .offset(x: offset)
                             }
-                        Text(item.title)
-                            .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
                     }
-                    .foregroundStyle(isSelected ? PaceColor.onSelection : PaceColor.textPrimary)
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .background {
-                        if isSelected {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(PaceColor.selectionFill)
-                        }
-                    }
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(item.title)
-                .accessibilityValue(item.badge > 0 ? TabBadge.accessibilityText(item.badge) : "")
-                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
-        }
+            .animation(position == nil && !reduceMotion ? .snappy(duration: 0.3) : nil, value: selectedIndex)
         .padding(.horizontal, PaceSpacing.s)
         .padding(.top, 6)
         .padding(.bottom, PaceSpacing.xxs)
@@ -82,6 +89,75 @@ public struct PaceTabBar<Value: Hashable>: View {
                 }
                 .ignoresSafeArea(edges: .bottom)
         }
+    }
+
+    // MARK: Fläche
+
+    private var highlightShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+    }
+
+    private var selectedIndex: Int {
+        items.firstIndex { $0.value == selection } ?? 0
+    }
+
+    private func itemWidth(in rowWidth: CGFloat) -> CGFloat {
+        guard !items.isEmpty else { return 0 }
+        return max(0, (rowWidth - Self.spacing * CGFloat(items.count - 1)) / CGFloat(items.count))
+    }
+
+    private func highlightOffset(itemWidth: CGFloat) -> CGFloat {
+        let index = min(max(position ?? Double(selectedIndex), 0), Double(max(items.count - 1, 0)))
+        return CGFloat(index) * (itemWidth + Self.spacing)
+    }
+
+    // MARK: Einträge
+
+    /// Eine Reihe aller Einträge – unten normal (mit Buttons), oben in Akzentfarbe (nur sichtbar in der Fläche).
+    private func row(selectedStyle: Bool) -> some View {
+        HStack(spacing: Self.spacing) {
+            ForEach(items) { item in
+                if selectedStyle {
+                    label(item, selectedStyle: true)
+                } else {
+                    let isSelected = item.value == selection
+                    Button {
+                        if item.value == selection {
+                            onReselect?(item.value)
+                        } else {
+                            selection = item.value
+                        }
+                    } label: {
+                        label(item, selectedStyle: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(item.title)
+                    .accessibilityValue(item.badge > 0 ? TabBadge.accessibilityText(item.badge) : "")
+                    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+                }
+            }
+        }
+    }
+
+    private func label(_ item: PaceTabItem<Value>, selectedStyle: Bool) -> some View {
+        VStack(spacing: 1) {
+            Image(systemName: selectedStyle ? item.selectedSystemImage : item.systemImage)
+                .font(.system(size: 20, weight: .medium))
+                .frame(height: 24)
+                .overlay(alignment: .topTrailing) {
+                    if item.badge > 0 {
+                        TabBadge(count: item.badge)
+                            .offset(x: 12, y: -4)
+                    }
+                }
+            Text(item.title)
+                .font(.system(size: 13, weight: selectedStyle ? .bold : .medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .foregroundStyle(selectedStyle ? PaceColor.onSelection : PaceColor.textPrimary)
+        .frame(maxWidth: .infinity, minHeight: 48)
+        .contentShape(Rectangle())
     }
 }
 

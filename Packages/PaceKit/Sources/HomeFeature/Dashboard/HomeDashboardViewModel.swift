@@ -108,8 +108,22 @@ public final class HomeDashboardViewModel {
         return HomeTexts.greeting(first)
     }
 
+    /// Heutige Wettbewerbsschritte laut HealthKit (ohne Live-Sensorwerte) – Auslöser für Platzierungen, damit nicht
+    /// jeder einzelne Sensorschritt eine Abfrage startet.
+    public var healthKitStepsToday: Int? {
+        activity.overview?.today.competitionSteps
+    }
+
+    /// „Deine Schritte heute“ – mit Live-Schritten vom Bewegungssensor, solange Pace offen ist.
     public var stepsToday: StepsTodaySummary? {
-        activity.overview.map { StepsTodaySummary(overview: $0, goal: goals.goal(on: $0.today.date), formatter: formatter) }
+        activity.overview.map {
+            StepsTodaySummary(
+                overview: $0,
+                goal: goals.goal(on: $0.today.date),
+                formatter: formatter,
+                liveCompetitionSteps: activity.liveCompetitionStepsToday
+            )
+        }
     }
 
     public var week: WeekOverview? {

@@ -154,7 +154,7 @@ public final class AppRouter {
             cache: services.profileCache
         )
         let sync = ActivitySyncCoordinator(repository: services.activitySync, userID: profile.id)
-        let home = HomeViewModel(activityData: dependencies.activityData, syncing: sync)
+        let home = HomeViewModel(activityData: dependencies.activityData, syncing: sync, liveSteps: dependencies.liveSteps)
         let leaderboard = LeaderboardViewModel(
             store: store,
             leaderboards: services.leaderboards,

@@ -17,6 +17,8 @@ public struct LeaderboardView: View {
                 LeaderboardContent(viewModel: viewModel)
                     .padding(.horizontal, PaceSpacing.m)
                     .padding(.bottom, PaceSpacing.l)
+                    // Rankings hat keine Unterseiten: erneutes Antippen scrollt nach oben.
+                    .paceTabRoot(isAtRoot: true) {}
             }
             .refreshable { [viewModel] in await viewModel.refresh() }
             .paceScreenBackground()

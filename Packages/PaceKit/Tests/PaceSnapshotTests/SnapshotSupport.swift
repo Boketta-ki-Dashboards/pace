@@ -119,4 +119,20 @@ enum Snapshot {
         let bottom = max(-inset.top, scrollView.contentSize.height - scrollView.bounds.height + inset.bottom)
         scrollView.setContentOffset(CGPoint(x: 0, y: bottom), animated: false)
     }
+
+    /// Stellt den Haupttab-Pager auf eine Position (Tab-Index mit Nachkommastellen), als würde der Finger dort halten.
+    static func scrollPager(in view: UIView, toPosition position: Double, pageCount: Int) {
+        var pagers: [UIScrollView] = []
+        func collect(_ view: UIView) {
+            if let scrollView = view as? UIScrollView, scrollView.contentSize.width > scrollView.bounds.width + 1 {
+                pagers.append(scrollView)
+            }
+            view.subviews.forEach(collect)
+        }
+        collect(view)
+        guard let pager = pagers.max(by: { $0.contentSize.width < $1.contentSize.width }) else { return }
+        let width = pager.bounds.width
+        let visual = PaceTabPaging.advancesWithFingerMovingRight ? Double(pageCount - 1) - position : position
+        pager.setContentOffset(CGPoint(x: CGFloat(visual) * width, y: 0), animated: false)
+    }
 }

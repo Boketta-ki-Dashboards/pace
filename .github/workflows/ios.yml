@@ -56,6 +56,8 @@ jobs:
         run: |
           PLIST=build/DerivedData/Build/Products/Debug-iphonesimulator/Pace.app/Info.plist
           plutil -extract NSHealthShareUsageDescription raw "$PLIST"
+          plutil -extract NSMotionUsageDescription raw "$PLIST"
+          plutil -extract NSMicrophoneUsageDescription raw "$PLIST"
           # Supabase-Werte kommen aus Config/Pace.xcconfig; in der CI sind sie leer, die Schlüssel müssen aber existieren.
           plutil -extract PaceSupabaseURL raw "$PLIST" >/dev/null
           plutil -extract PaceSupabasePublishableKey raw "$PLIST" >/dev/null

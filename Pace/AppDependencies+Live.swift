@@ -10,6 +10,7 @@ extension AppDependencies {
         return AppDependencies(
             healthAuthorization: healthKit,
             activityData: healthKit,
+            liveSteps: PedometerLiveSteps(),
             backend: makeBackend(),
             appIcons: SystemAppIconSetting(),
             notifications: UserNotificationScheduler(),

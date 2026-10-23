@@ -32,7 +32,7 @@ struct StepsTodaySummaryTests {
         #expect(!summary.isGoalReached)
     }
 
-    @Test func goalReachedAndMissingMetricsStayHidden() {
+    @Test func goalReachedAndMissingMetricsAreNeverZero() {
         let day = DailyActivitySummary(date: today, healthSteps: 12_500, competitionSteps: 12_000)
 
         let summary = StepsTodaySummary(today: day, goal: 10_000, formatter: formatter)
@@ -41,7 +41,9 @@ struct StepsTodaySummaryTests {
         #expect(summary.remainingText == "Tagesziel erreicht!")
         #expect(summary.percentText == "120%")
         #expect(summary.distanceText == nil)
-        #expect(summary.energyText == nil)
+        // Ohne aktive Kalorien aus Apple Health: „Nicht verfügbar“, keine 0.
+        #expect(summary.energyText == "Nicht verfügbar")
+        #expect(!summary.isEnergyAvailable)
         #expect(summary.manualStepsNote == "Manuell eingetragene Schritte zählen nicht für Rankings.")
     }
 

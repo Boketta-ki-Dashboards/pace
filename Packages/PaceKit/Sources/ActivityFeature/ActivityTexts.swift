@@ -4,6 +4,20 @@ import PaceCore
 /// Gemeinsame Texte zu Bewegungsdaten – in der Sprache der App.
 public enum ActivityTexts {
     /// Hinweis, wenn Health- und Wettbewerbsschritte abweichen.
+    /// Erklärung, wenn Apple Health für einen Tag keine aktiven Kalorien hat. Pace schätzt keine Kalorien selbst.
+    public static var activeEnergyUnavailableNote: String {
+        PaceLocalization.text(
+            de: "Apple Health hat hierfür keine aktiven Kalorien. Ohne Apple Watch zeichnet das iPhone sie nur auf, wenn „Fitness-Tracking“ eingeschaltet ist und in der Health-App Angaben wie Größe und Gewicht hinterlegt sind – teils mit Verzögerung. Pace rechnet keine Kalorien aus Schritten hoch.",
+            en: "Apple Health has no active calories for this. Without an Apple Watch, the iPhone only records them if “Fitness Tracking” is on and details such as height and weight are set in the Health app – sometimes with a delay. Pace doesn't estimate calories from steps.",
+            ru: "В приложении «Здоровье» нет активных калорий за этот период. Без Apple Watch iPhone записывает их, только если включено «Отслеживание фитнеса» и в «Здоровье» указаны рост и вес, – иногда с задержкой. Pace не рассчитывает калории по шагам."
+        )
+    }
+
+    /// „Nicht verfügbar“ für fehlende Gesundheitswerte (statt einer falschen 0).
+    public static var notAvailable: String {
+        PaceLocalization.text(de: "Nicht verfügbar", en: "Not available", ru: "Нет данных")
+    }
+
     public static var manualStepsNote: String {
         PaceLocalization.text(
             de: "Manuell eingetragene Schritte zählen nicht für Rankings.",

@@ -25,6 +25,10 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSMotionUsageDescription</key>
+	<string>Pace nutzt den Bewegungssensor, damit deine Schrittzahl beim Gehen sofort mitzählt, solange Pace geöffnet ist. Gespeichert und für Rankings verwendet werden weiterhin nur die Schritte aus Apple Health.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Pace braucht das Mikrofon nur, während du eine Sprachnachricht für einen Chat aufnimmst.</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
