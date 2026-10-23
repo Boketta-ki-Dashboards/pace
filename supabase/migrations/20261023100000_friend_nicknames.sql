@@ -34,7 +34,7 @@ create table public.friend_nicknames (
     char_length(nickname) between 1 and 30
     and nickname = btrim(nickname)
     and nickname !~ '[[:cntrl:]]'
-    and nickname !~ '[\u0080-\u009F­؀-؅؜۝܏᠎​-‏‪-‮⁠-⁤⁦-⁯﻿￹-￻\U000E0001\U000E0020-\U000E007F]'
+    and nickname !~ '[\u0080-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000E0001\U000E0020-\U000E007F]'
   )
 );
 
