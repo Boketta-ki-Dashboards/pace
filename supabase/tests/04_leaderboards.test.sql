@@ -115,8 +115,9 @@ select is(
 );
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(public.leaderboard_page('XT', 'daily', (select stichtag from t_dates))->'entries'->0) k),
-  array['avatar_path', 'competition_steps', 'display_name', 'is_current_user', 'public_user_id', 'rank', 'username'],
-  'Einträge enthalten nur öffentliche Felder'
+  array['avatar_path', 'competition_steps', 'display_name', 'is_current_user', 'nickname', 'public_user_id', 'rank',
+        'username'],
+  'Einträge enthalten nur öffentliche Felder (nickname: eigener Spitzname, 20261023100000)'
 );
 select ok(
   public.leaderboard_page('XT', 'daily', (select stichtag from t_dates))::text not like '%aaaaaaaa-%',

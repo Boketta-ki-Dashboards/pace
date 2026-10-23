@@ -182,7 +182,7 @@ select is(pg_temp.names(public.social_search_profiles('ALE')), array['alexa', 'a
 select is(pg_temp.names(public.social_search_profiles('@alexa')), array['alexa', 'alexander'], 'führendes @ wird ignoriert, exakter Treffer zuerst');
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(public.social_search_profiles('alexa')->0) k),
-  array['avatar_path', 'display_name', 'public_id', 'relationship', 'request_id', 'username'],
+  array['avatar_path', 'display_name', 'nickname', 'public_id', 'relationship', 'request_id', 'username'],
   'Treffer: nur öffentliche Felder'
 );
 select ok(public.social_search_profiles('alexa')::text not like '%a9000000-%', 'keine Auth-IDs');
@@ -235,7 +235,7 @@ set local role authenticated;
 select is(pg_temp.names(public.social_blocked_users()), array['finn', 'hanna'], 'Liste der Blockierten, nach Name');
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(public.social_blocked_users()->0) k),
-  array['avatar_path', 'blocked_at', 'display_name', 'public_id', 'username'], 'Blockierte: nur öffentliche Felder'
+  array['avatar_path', 'blocked_at', 'display_name', 'nickname', 'public_id', 'username'], 'Blockierte: nur öffentliche Felder'
 );
 select is(public.social_find_profile('finn'), null, 'exakte Suche findet Blockierte nicht');
 select throws_ok(
@@ -271,7 +271,7 @@ select is(
   public.social_public_profile(pg_temp.pid(5), (now() at time zone 'utc')::date)
     - 'friends_since' - 'request_id',
   jsonb_build_object(
-    'public_id', pg_temp.pid(5), 'username', 'emil', 'display_name', 'Emil', 'avatar_path', null,
+    'public_id', pg_temp.pid(5), 'username', 'emil', 'display_name', 'Emil', 'avatar_path', null, 'nickname', null,
     'relationship', 'friend', 'steps_today', 7000, 'steps_week', 7000, 'is_blocked_by_me', false
   ),
   'Freund: Schritte heute und in der Woche'
@@ -282,7 +282,7 @@ select ok(
 );
 select is(
   public.social_public_profile(pg_temp.pid(2), (now() at time zone 'utc')::date)
-    - 'public_id' - 'username' - 'display_name' - 'avatar_path',
+    - 'public_id' - 'username' - 'display_name' - 'avatar_path' - 'nickname',
   '{"relationship": "none", "request_id": null, "friends_since": null, "steps_today": null, "steps_week": null, "is_blocked_by_me": false}'::jsonb,
   'Fremde Person: keine Schritte'
 );

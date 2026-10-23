@@ -10,9 +10,9 @@ select is(
   (select array_agg(format('%s:%s:%s:%s', b.id, b.public, b.file_size_limit, array_to_string(b.allowed_mime_types, ',')) order by b.id)
      from storage.buckets b where b.id in ('avatars', 'group-images', 'chat-media')),
   array['avatars:f:5242880:image/jpeg,image/png,image/gif,image/heic,image/webp',
-        'chat-media:f:10485760:image/jpeg,image/png,image/gif,image/heic,image/webp',
+        'chat-media:f:10485760:image/jpeg,image/png,image/gif,image/heic,image/webp,audio/mp4,audio/x-m4a,audio/aac',
         'group-images:f:5242880:image/jpeg,image/png,image/gif,image/heic,image/webp'],
-  'drei private Buckets mit Größen- und Formatgrenzen wie MediaRules'
+  'drei private Buckets mit Größen- und Formatgrenzen wie MediaRules (chat-media mit AAC-Audio, 20261023100100)'
 );
 select is(
   (select array_agg(p.polname::text || ':' || p.polcmd::text order by p.polname) from pg_policy p
@@ -34,7 +34,7 @@ select is(
            or has_function_privilege('anon', p.oid, 'execute')
            or has_function_privilege('public', p.oid, 'execute')
            or not has_function_privilege('authenticated', p.oid, 'execute')
-           or (not p.prosecdef and p.proname <> 'object_folder'))),
+           or (not p.prosecdef and p.proname not in ('object_folder', 'chat_media_folder')))),
   null, 'pace_access: security definer, leerer search_path, nur authenticated'
 );
 select ok(

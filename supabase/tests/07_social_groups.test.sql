@@ -249,7 +249,7 @@ select is(
 );
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(public.social_group_ranking(pg_temp.group_id('g1'), 'daily')->'entries'->0) k),
-  array['avatar_path', 'competition_steps', 'display_name', 'is_current_user', 'public_user_id', 'rank',
+  array['avatar_path', 'competition_steps', 'display_name', 'is_current_user', 'nickname', 'public_user_id', 'rank',
         'reached_goal_today', 'role', 'username'],
   'Ranking-Einträge: nur öffentliche Felder'
 );
@@ -308,21 +308,21 @@ select is(
 );
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(public.social_group_outgoing_invitations(pg_temp.group_id('g1'))->0) k),
-  array['avatar_path', 'created_at', 'display_name', 'invitation_id', 'public_id', 'username'], 'ausgehende Einladungen: Felder'
+  array['avatar_path', 'created_at', 'display_name', 'invitation_id', 'nickname', 'public_id', 'username'], 'ausgehende Einladungen: Felder'
 );
 
 -- sven lehnt ab, wird erneut eingeladen und nimmt an.
 set local request.jwt.claims = '{"sub":"a7000000-0000-4000-8000-000000000005","role":"authenticated"}';
 select is(
   public.social_group_invitations() #- '{0,invitation_id}' #- '{0,group_id}' #- '{0,created_at}',
-  '[{"group_name": "Lauftreff Süd", "group_kind": "friends", "group_image_path": null, "group_privacy": "code", "member_count": 3, "inviter_public_id": "b7000000-0000-4000-8000-000000000001", "inviter_username": "olga", "inviter_display_name": "Olga", "inviter_avatar_path": null}]'::jsonb,
+  '[{"group_name": "Lauftreff Süd", "group_kind": "friends", "group_image_path": null, "group_privacy": "code", "member_count": 3, "inviter_public_id": "b7000000-0000-4000-8000-000000000001", "inviter_username": "olga", "inviter_display_name": "Olga", "inviter_avatar_path": null, "inviter_nickname": null}]'::jsonb,
   'eingehende Einladung mit Gruppe und einladender Person'
 );
 select is(
   (select array_agg(k order by k) from jsonb_object_keys(public.social_group_invitations()->0) k),
   array['created_at', 'group_id', 'group_image_path', 'group_kind', 'group_name', 'group_privacy',
-        'invitation_id', 'inviter_avatar_path', 'inviter_display_name', 'inviter_public_id', 'inviter_username',
-        'member_count'],
+        'invitation_id', 'inviter_avatar_path', 'inviter_display_name', 'inviter_nickname', 'inviter_public_id',
+        'inviter_username', 'member_count'],
   'eingehende Einladungen: Felder'
 );
 select is(

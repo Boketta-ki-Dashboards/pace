@@ -28,8 +28,9 @@ select is(
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p
     where p.pronamespace = 'public'::regnamespace and p.proname like 'chat\_%'),
-  array['chat_conversations', 'chat_delete_message', 'chat_group_conversation', 'chat_mark_read', 'chat_messages',
-        'chat_open_direct', 'chat_send'],
+  array['chat_conversations', 'chat_delete_message', 'chat_edit_message', 'chat_favorites', 'chat_group_conversation',
+        'chat_mark_read', 'chat_messages', 'chat_open_direct', 'chat_pins', 'chat_send', 'chat_set_favorite',
+        'chat_set_pinned'],
   'alle Chat-RPCs vorhanden'
 );
 select is(
@@ -111,9 +112,10 @@ select is(
   pg_temp.result('direct') - 'id' - 'updated_at',
   jsonb_build_object(
     'kind', 'direct', 'title', 'Nils',
-    'peer', jsonb_build_object('public_id', pg_temp.pid(2), 'username', 'nils', 'display_name', 'Nils', 'avatar_path', null),
+    'peer', jsonb_build_object('public_id', pg_temp.pid(2), 'username', 'nils', 'display_name', 'Nils', 'avatar_path', null,
+                               'nickname', null),
     'group_id', null, 'group_image_path', null, 'member_count', 2, 'last_message', null, 'unread_count', 0,
-    'can_send', true
+    'can_send', true, 'can_pin', true
   ),
   'Privatchat mit einem Freund: Form wie ConversationSummary'
 );
@@ -135,8 +137,10 @@ select is(
   pg_temp.result('m1') - 'id' - 'created_at',
   jsonb_build_object(
     'conversation_id', pg_temp.cid('direct'), 'client_id', 'db000000-0000-4000-8000-000000000001',
-    'sender', jsonb_build_object('public_id', pg_temp.pid(1), 'username', 'mara', 'display_name', 'Mara', 'avatar_path', null),
-    'is_own', true, 'kind', 'text', 'body', 'Hallo Nils!', 'media_path', null, 'shared_profile', null
+    'sender', jsonb_build_object('public_id', pg_temp.pid(1), 'username', 'mara', 'display_name', 'Mara', 'avatar_path', null,
+                                 'nickname', null),
+    'is_own', true, 'kind', 'text', 'body', 'Hallo Nils!', 'media_path', null, 'shared_profile', null,
+    'media_duration_ms', null, 'reply_to', null, 'edited_at', null, 'is_favorite', false, 'is_pinned', false
   ),
   'Text gesendet (getrimmt), Form wie ChatMessage'
 );
@@ -209,12 +213,12 @@ select pg_temp.as_user(2);
 select is(
   (select e - 'id' - 'updated_at' - 'last_message' - 'peer' from jsonb_array_elements(public.chat_conversations()) e where e->>'kind' = 'direct'),
   jsonb_build_object('kind', 'direct', 'title', 'Mara', 'group_id', null, 'group_image_path', null, 'member_count', 2,
-                     'unread_count', 6, 'can_send', true),
+                     'unread_count', 6, 'can_send', true, 'can_pin', true),
   'Empfänger: Privatchat erscheint mit Ungelesen-Zähler'
 );
 select is(
   (select (e->'last_message') - 'sent_at' from jsonb_array_elements(public.chat_conversations()) e where e->>'kind' = 'direct'),
-  '{"kind": "profile", "text": null, "sender_name": "Mara", "is_own": false}'::jsonb,
+  '{"kind": "profile", "text": null, "sender_name": "Mara", "sender_nickname": null, "media_duration_ms": null, "is_own": false}'::jsonb,
   'letzte Nachricht mit Absendername'
 );
 insert into t_results select 'verlauf', public.chat_messages(pg_temp.cid('direct'));
@@ -291,8 +295,9 @@ insert into t_results select 'gruppe', public.chat_group_conversation('cb000000-
 select is(
   pg_temp.result('gruppe') - 'id' - 'updated_at',
   jsonb_build_object('kind', 'group', 'title', 'Laufgruppe', 'peer', null, 'group_id', 'cb000000-0000-4000-8000-000000000001',
-                     'group_image_path', null, 'member_count', 4, 'last_message', null, 'unread_count', 0, 'can_send', true),
-  'Gruppenchat: Form wie ConversationSummary'
+                     'group_image_path', null, 'member_count', 4, 'last_message', null, 'unread_count', 0, 'can_send', true,
+                     'can_pin', false),
+  'Gruppenchat: Form wie ConversationSummary (Mitglied ohne Owner-Rolle: can_pin false)'
 );
 select lives_ok(format('select public.chat_send(%L, gen_random_uuid(), %L, %L)', pg_temp.cid('gruppe'), 'text', 'Wer läuft heute?'), 'Mitglied sendet');
 select pg_temp.as_user(1);
