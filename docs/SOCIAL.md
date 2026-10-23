@@ -272,6 +272,36 @@ Eine Exception würde aber die ganze Transaktion samt gezähltem Versuch zurück
 `raise exception`; supabase-swift wirft einen `PostgrestError` mit dieser `message`), der Versuch bleibt aber
 gespeichert. Nur wer die Funktion direkt in SQL aufruft (pgTAP), sieht ein normales Ergebnis.
 
+### Spitznamen (Migration 20261023100000)
+
+| Funktion | Antwort | Fehler |
+|---|---|---|
+| `social_set_friend_nickname(p_public_id uuid, p_nickname text)` | Profil (`public_id`, `username`, `display_name`, `avatar_path`, `nickname`); leer/`null` entfernt | `not_found` (kein aktueller Freund, ich selbst), `invalid_nickname`, `rate_limited` (30 je 10 min) |
+
+Spitznamen sind privat je Person: Gespeichert in `friend_nicknames` (RLS ohne Policies), ausgegeben nur an die
+Person, die sie vergeben hat (`nickname` in allen Profilausgaben, Rankings und Einladungen, siehe
+[BACKEND.md](BACKEND.md)). Sie enden mit der Freundschaft (Entfernen, Blockieren, Konto löschen). App:
+`SocialRepository.setFriendNickname(publicID:nickname:)`, `NicknameRules`, `SocialProfile.shownName`,
+`LeaderboardEntry.shownName`, `GroupInvitation.inviterShownName`.
+
+### Gruppenkalender (Migration 20261023100200)
+
+| Funktion | Antwort | Fehler |
+|---|---|---|
+| `social_group_calendar(p_group_id uuid, p_first_day date, p_last_day date)` | `{"group_id","time_zone","group_today","first_group_day","days":[{"day","daily_goal","member_count","required_count","reached_count","secured","has_data","is_today","ranking":[{Profil…,"rank","competition_steps","reached","is_current_user"}]}]}`, Tage aufsteigend | `not_found` (kein aktuelles Mitglied), `invalid_date` (fehlend, Ende vor Anfang, mehr als 42 Tage) |
+
+- Der Zeitraum wird auf Gründungstag … heute (Gruppenzeitzone) begrenzt; davor/danach fehlen Tage. Die App leitet
+  daraus ehrliche Zustände ab: `GroupCalendar.state(of:)` → `beforeGroup`, `future`, `notLoaded`, `noData`,
+  `secured`, `open` (heute, noch nicht gesichert), `missed`.
+- Kennzahlen kommen unverändert aus `private.group_day_stats` – dieselbe Berechnung wie Streak, `social_group` und
+  `social_group_days` (Mitglieder laut Mitgliedschaftsperioden zum Tagesende, historisches Ziel, ⌈n/3⌉).
+- Die Tagesrangliste enthält alle Mitglieder dieses Tages (auch später Ausgetretene, auch Blockierte wie im
+  Gruppenranking) mit den Wettbewerbsschritten des Tages; Reihenfolge wie alle Social-Rankings
+  (`private.social_step_ranking`: Schritte, wer zuerst, `public_id` – Plätze eindeutig). `best` = Platz 1 mit mehr
+  als 0 Schritten (Indikator in der Kalenderzelle).
+- App: `SocialRepository.groupCalendar(groupID:from:to:)` → `GroupCalendar`; Monatsansicht mit Montag als
+  Wochenbeginn über `GroupCalendarRules.monthGrid(containing:calendar:)` (4–6 Wochen, passt in einen Abruf).
+
 ## Fehler
 
 Fehler sind stabile Tokens als Meldung; die App prüft `message.contains(token)`. errcode ist `P0001`, nur
@@ -291,6 +321,7 @@ Fehler sind stabile Tokens als Meldung; die App prüft `message.contains(token)`
 | `cooldown` | erneute Anfrage innerhalb von 7 Tagen nach Ablehnung |
 | `limit_reached` | Mengenlimit erreicht (siehe unten) |
 | `invalid_invite_code` | unbekannter Einladungscode (HTTP 400, siehe oben) |
+| `invalid_nickname` | Spitzname zu lang (über 30 Zeichen) oder mit Steuer-/Formatzeichen |
 
 Ohne Anmeldung (nur Publishable Key, Rolle `anon`) antwortet PostgREST mit `42501 permission denied for function`.
 
@@ -363,6 +394,10 @@ supabase test db   # u. a. 06_social_friends, 07_social_groups, 08_social_group_
   Versuchslimit), Nichtmitglieder (`not_found`), Mitglieder (`not_allowed`), Ändern, Ziel, Code, Ranking,
   Einladungen (auch Rückzug bei Austritt bzw. Entfernen der einladenden Person), Eigentümerwechsel, Entfernen,
   letzte Person, Profillöschung, Löschen, alle Gruppen-Limits.
+- **14** – Spitznamen: Rechte, Validierung, Ausgabe an allen Stellen, Privatsphäre (fremde Spitznamen nie
+  sichtbar), Rate Limit, Aufräumen bei Ende der Freundschaft, Blockieren und Kontolöschung.
+- **16** – Gruppenkalender: Rechte, Zeitraumgrenzen (42 Tage, Gründung … heute), historische Mitglieder und Ziele,
+  ⌈n/3⌉, Gleichstände, leere Tage, Spitznamen, Blockierte, Übereinstimmung mit `social_group_days`.
 - **08** – Rundung 1/2/3/4/6/10/12/20, laufender Tag, Lücke, `best_streak`, Zieländerung ab morgen,
   Beitritt/Austritt an einem Tag, überlappende Perioden, verspätete Synchronisation, Tage ohne Mitglieder,
   Zeitzonen (Kiritimati/Pago Pago) und Sommer-/Winterzeit (29.03.2026, 26.10.2025).

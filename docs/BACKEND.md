@@ -409,6 +409,112 @@ Die Sichtung ist bewusst nicht in der App: Es gibt keine Admin-Rolle im Client.
 - **Unit-Tests** (`Packages/PaceKit/Tests/PaceBackendTests`): Anfrageform und Fehlerabbildung jeder Methode über
   `StubURLProtocol`.
 
+## Spitznamen, Nachrichtenaktionen, Sprachnachrichten, Gruppenkalender (Migrationen ab 20261023100000)
+
+Drei weitere Migrationen (Auftrag 3), wieder **rein additiv und rückwärtskompatibel**: neue Tabellen, neue
+nullable Spalten, erweiterte Prüfregeln (Obermengen der alten), neue RPCs, ersetzte Funktionen mit gleicher
+Signatur. Einzige Signaturänderung: `chat_send` bekommt zwei Parameter **mit Standardwert** – die alte Fassung wird
+entfernt, damit PostgREST nicht zwischen zwei Überladungen wählen muss; Aufrufe älterer App-Versionen (bisherige
+sechs Parameter) funktionieren unverändert. Neue Felder in den Antworten ignorieren ältere Versionen. Rollout:
+[SUPABASE_ROLLOUT.md](SUPABASE_ROLLOUT.md), Abschnitt „Auftrag 3“ (**nicht ausgeführt, Freigabe nötig**).
+
+| Migration | Inhalt |
+|---|---|
+| `20261023100000_friend_nicknames.sql` | `friend_nicknames`, `social_set_friend_nickname`, `nickname` in `profile_json`, Rankings (Freunde, Gruppe, Region) und Einladungen; `account_export` mit eigenen Spitznamen |
+| `20261023100100_chat_message_actions.sql` | `chat_messages.reply_to_id`/`edited_at`/`media_duration_ms`, Art `voice`; `chat_send` (Antwort, Sprachnachricht), `chat_edit_message`, `chat_set_favorite`/`chat_favorites`, `chat_set_pinned`/`chat_pins`; `chat_message_favorites`, `chat_message_pins`; Bucket `chat-media` mit AAC-Audio; Echtzeit `message_updated`, `pins_changed` |
+| `20261023100200_group_calendar.sql` | `social_group_calendar` |
+
+### Tabellen und Spalten
+
+| Tabelle | Zweck | Clientzugriff |
+|---|---|---|
+| `friend_nicknames` | `owner_id`, `target_id`, `nickname` (1–30 Zeichen wie Anzeigenamen, getrimmt, keine Steuer-/Formatzeichen), `updated_at`; PK `(owner_id, target_id)`, kein Spitzname für sich selbst | keiner (nur RPCs) |
+| `chat_messages` (+3 Spalten) | `reply_to_id` (→ `chat_messages`, `on delete set null`), `edited_at`, `media_duration_ms` (1–300 000, nur `voice`); `kind` zusätzlich `voice`; `media_path` auch `.m4a`/`.aac` | keiner |
+| `chat_message_favorites` | `user_id`, `message_id`, `created_at`; privat je Person, höchstens 1000 | keiner |
+| `chat_message_pins` | `conversation_id`, `message_id`, `pinned_by` (`on delete set null`), `pinned_at`; höchstens 5 je Unterhaltung | keiner |
+
+RLS ohne Policies, keine Tabellenrechte für `anon`/`authenticated`. Trigger: Endet eine Freundschaft (Entfernen,
+Blockieren, Konto löschen) oder entsteht eine Blockierung, werden die Spitznamen beider Seiten gelöscht. Wird eine
+Nachricht gelöscht (`chat_delete_message`), verliert sie Pins, Favoriten und die Dauer (ein entfernter Pin meldet
+`pins_changed`).
+
+### Ausgabe von Spitznamen
+
+`private.profile_json` liefert zusätzlich `nickname` – ausschließlich den Spitznamen, den **der Aufrufer**
+(`auth.uid()`) vergeben hat, sonst `null`. Damit tragen alle Profile anderer Personen ihn: Freundesliste, Anfragen,
+Suche, öffentliches Profil, Freundesprofil, ausgehende Einladungen, Chat-Absender, Gegenüber in der Chatliste,
+geteilte Profile, Antwort-Vorschau, Pins, Gruppenkalender, Auskunft. Rankings bauen ihre Einträge selbst und
+ergänzen `nickname` ausdrücklich (`social_friend_ranking`, `social_group_ranking`, `leaderboard_page`,
+`leaderboard_neighborhood`); `social_group_invitations` liefert `inviter_nickname`, `chat_conversations`
+`last_message.sender_nickname`. `title` bzw. `display_name`/`sender_name` bleiben der echte Anzeigename (ältere
+App-Versionen); die App zeigt `shownName`/`shownTitle`/`shownSenderName`. Fremde Spitznamen gibt der Server nie aus.
+Hinweis: Der Schnappschuss einer Meldung (`reports.target_snapshot`, nur für das Moderationsteam) enthält über
+`profile_json` ggf. den eigenen Spitznamen der meldenden Person.
+
+### RPCs
+
+| Funktion | Zweck |
+|---|---|
+| `social_set_friend_nickname(p_public_id, p_nickname)` | eigenen Spitznamen für einen **aktuellen Freund** setzen (Leerraum zusammengefasst), leer/`null` entfernt; Antwort = Profil mit `nickname`. `not_found` ohne Freundschaft, `invalid_nickname`, 30 je 10 min |
+| `chat_send(…, p_reply_to_id = null, p_media_duration_ms = null)` | zusätzlich Antworten (nur auf sichtbare, nicht gelöschte Nachricht **derselben** Unterhaltung, sonst `not_found`) und `voice` (eigene, hochgeladene Datei im Ordner der Unterhaltung mit `audio/mp4`, `audio/x-m4a` oder `audio/aac`, Dauer 1–300 000 ms, sonst `invalid_input`). Bilder müssen jetzt `image/*`, GIFs `image/gif` sein. Eine Dauer bei anderen Arten → `invalid_input` |
+| `chat_edit_message(p_message_id, p_text)` | eigene, nicht gelöschte **Textnachricht** bearbeiten (Regeln wie Senden, `invalid_message`); andere Arten `invalid_input`, fremde/gelöschte `not_found`, ohne Schreibrecht `read_only`; gleicher Text ändert nichts; setzt `edited_at`; 30 je Minute; Echtzeit `message_updated` |
+| `chat_set_favorite(p_message_id, p_favorite)` | privaten Favoriten setzen (nur sichtbare Nachrichten lesbarer Unterhaltungen, sonst `not_found`; max. 1000 → `limit_reached`; 60 je Minute) bzw. entfernen (immer, idempotent) |
+| `chat_favorites(p_conversation_id)` | eigene Favoriten einer lesbaren Unterhaltung (Form wie `chat_messages`), neueste zuerst, max. 500 |
+| `chat_set_pinned(p_message_id, p_pinned)` | anpinnen/lösen (idempotent), Antwort = alle Pins. Gruppenchat nur Owner (`not_allowed`), Privatchat beide mit Schreibrecht (`read_only`); max. 5 (`pin_limit_reached`); 30 Änderungen je Minute; Lösen auch für verborgene Nachrichten; Echtzeit `pins_changed` |
+| `chat_pins(p_conversation_id)` | `[{message, pinned_by, pinned_at}]`, zuletzt angepinnte zuerst; ohne gelöschte und ohne Nachrichten von Personen, die ich blockiert habe |
+| `social_group_calendar(p_group_id, p_first_day, p_last_day)` | nur aktuelle Mitglieder (`not_found`); höchstens 42 Tage (`invalid_date`); begrenzt auf Gründung … heute (Gruppenzeitzone). Antwort `{group_id, time_zone, group_today, first_group_day, days:[{day, daily_goal, member_count, required_count, reached_count, secured, has_data, is_today, ranking:[Profil + rank, competition_steps, reached, is_current_user]}]}` – Kennzahlen aus `private.group_day_stats` (identisch mit Streak und `social_group_days`), Rangliste über `private.social_step_ranking` |
+
+Neue JSON-Felder in bestehenden Antworten: Nachricht (`chat_messages`, `chat_send`, …) `media_duration_ms`,
+`reply_to` (`{id, sender, kind, text ≤ 200 Zeichen, media_duration_ms, is_deleted}`; gelöschtes oder verborgenes
+Original nur mit `id`, `kind`, `is_deleted: true`), `edited_at`, `is_favorite` (nur für den Aufrufer), `is_pinned`;
+Unterhaltung `can_pin`, `last_message.sender_nickname`, `last_message.media_duration_ms`; Profile `nickname`;
+Ranking-Einträge `nickname`; Einladungen `inviter_nickname`; Auskunft `friend_nicknames`, `chat_message_favorites`,
+`chat_message_pins`, Nachrichten mit `reply_to_id`, `edited_at`, `media_duration_ms`.
+
+Neue Fehler-Tokens: `invalid_nickname` → `SocialError.invalidNickname`, `pin_limit_reached` →
+`SocialError.pinLimitReached` (vor `limit_reached` geprüft).
+
+### Sprachnachrichten (Speicher)
+
+- Bucket `chat-media`: `allowed_mime_types` zusätzlich `audio/mp4`, `audio/x-m4a`, `audio/aac`; Grenze bleibt
+  10 MB (5 Minuten AAC liegen weit darunter), die Dauer begrenzt der Server auf 5 Minuten.
+- Pfade `<conversation_id>/<UUID>.m4a` (bzw. `.aac`). `pace_access.chat_media_folder` akzeptiert dafür zusätzlich
+  die Audio-Endungen; `can_read_chat_media`/`can_write_chat_media` nutzen sie – gleiche Regeln wie für Bilder
+  (lesen: wer die Unterhaltung lesen darf; schreiben: wer senden darf; löschen: wer hochgeladen hat). Profil- und
+  Gruppenbilder bleiben bei Bildendungen.
+- Beweissicherung wie bei Chat-Bildern: Eine gemeldete Sprachnachricht hält ihre Datei über
+  `reports.evidence_path` (= `media_path` im Schnappschuss); `chat_delete_message` gibt sie dann nicht zur Löschung
+  frei, die Delete-Policy sperrt sie.
+- App: Upload über `MediaUploadTarget.chat(conversationID:)` mit `MediaRules.voiceContentType` (`audio/mp4`), dann
+  `ChatMessageDraft.voice(mediaPath:duration:)`. Löschen der Nachricht entfernt auch die Datei.
+
+### Echtzeit
+
+Zusätzlich zu `message` an `chat:<conversation_id>`: `message_updated` (Bearbeitung; außerdem `conversation` an
+`user:<public_id>`, weil sich die Vorschau ändern kann) und `pins_changed` (nur `chat:`-Topic). Weiterhin ohne
+Inhalt (`{conversation_id, event}`). Die App hört über `ChatRepository.conversationActivity(in:)` auf alle drei
+Ereignisse in **einem** Kanal (`RealtimeEvents.stream(topic:events:)`); `messageEvents(in:)` bleibt unverändert
+(nur `message`).
+
+### Rate Limits (neu)
+
+| Aktion | Limit |
+|---|---|
+| Spitznamen setzen/entfernen | 30 je 10 Minuten |
+| Nachricht bearbeiten | 30 je Minute |
+| Favorit setzen | 60 je Minute (höchstens 1000 Favoriten) |
+| Pin setzen/lösen | 30 je Minute (höchstens 5 Pins je Unterhaltung) |
+
+### Tests (Auftrag 3)
+
+- **pgTAP:** `14_friend_nicknames` (59), `15_chat_message_actions` (111), `16_group_calendar` (33); bestehende
+  Tests 04, 06, 07, 09, 11, 12, 13 an die neuen Felder angepasst – zusammen 16 Dateien, 908 Prüfungen.
+- **Realtime-Skript:** prüft zusätzlich `message_updated` und `pins_changed` (ohne Inhalt, nicht für Fremde).
+- **Swift:** `PaceBackendTests/MessageActionsNicknameCalendarTests.swift` (Request-Körper, Dekodierung mit und ohne
+  neue Felder, Fehler-Tokens, Audio-Upload), `PaceBackendIntegrationTests/…/MessageActionsIntegrationTests.swift`
+  (Spitzname privat, Antworten/Bearbeiten/Favoriten/Pins, Audio nur für Teilnehmer, Gruppenkalender gegen
+  `groupDays`), `PaceCoreTests/SocialChatContractTests.swift`, `SocialFeatureTests/ChatVoiceFormattingTests.swift`.
+
 ## Regionsdaten: Quelle und Aktualisierung
 
 - **Quelle:** Statistisches Bundesamt (Destatis), Gemeindeverzeichnis **GV100AD**, Quartalsausgabe

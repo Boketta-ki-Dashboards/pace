@@ -119,6 +119,37 @@ anderen trotzdem gesendet und danach `ProfileShareError` (gesendet an n Chats, n
 - `ChatListViewModel(repository:media:social:calendar:now:pollInterval:sleep:)` – `social` liefert Gruppenkopf,
   blockierte Personen, Blockieren und Melden; ohne Angabe fehlen nur diese Teile.
 
+## Nachrichtenaktionen und Sprachnachrichten (Verträge, Migration 20261023100100)
+
+Server und Verträge sind fertig; die Oberfläche (Kontextmenü, Antwort-Leiste, Pin-Hinweis, Aufnahme und
+Wiedergabe) baut der Hauptstrang darauf auf. Bis dahin zeigt der Verlauf Sprachnachrichten als Hinweis mit Dauer.
+
+- **Antworten:** `ChatMessageDraft.text(_:replyTo:)` bzw. `ChatMessageDraft(…, replyToID:)`. Der Server nimmt nur
+  sichtbare, nicht gelöschte Nachrichten derselben Unterhaltung (`notFound`). Jede Nachricht trägt
+  `replyPreview: ChatReplyPreview?` (`id` zum Springen, `sender` mit Spitzname, `kind`, `text` ≤ 200 Zeichen,
+  `mediaDuration`, `isDeleted` für gelöschte bzw. verborgene Originale) – auch für Sprachnachricht, Bild und Profil.
+- **Bearbeiten:** `editMessage(_:text:)` nur für eigene Textnachrichten (`ChatMessage.canEdit`); Antwort mit
+  `editedAt` („Bearbeitet“, `isEdited`). Andere Teilnehmer bekommen `ChatConversationEvent.messageUpdated`.
+- **Favoriten:** `setFavorite(_:isFavorite:)`, `favorites(conversationID:)` (Übersicht in den Chat-Einstellungen);
+  `ChatMessage.isFavorite` gilt nur für mich. `withFavorite(_:)` für sofortiges Umschalten.
+- **Anpinnen:** `ConversationSummary.canPin` (Gruppe: Owner; Privatchat: beide mit Schreibrecht),
+  `setPinned(_:isPinned:)` → alle Pins, `pins(conversationID:)` → `[ChatPin]` (zuletzt angepinnte zuerst),
+  `ChatMessage.isPinned`; höchstens `ChatRules.maximumPinnedMessages` (5, sonst `pinLimitReached`), Nicht-Owner
+  `notAllowed`. Änderungen kommen als `ChatConversationEvent.pinsChanged`.
+- **Echtzeit:** `conversationActivity(in:)` liefert `.message`, `.messageUpdated`, `.pinsChanged` über einen Kanal
+  (endet sofort ohne Realtime → Polling wie bisher). `messageEvents(in:)` bleibt für neue/gelöschte Nachrichten.
+- **Sprachnachrichten:** Aufnahme als AAC in `.m4a`, Upload `media.upload(data, contentType:
+  MediaRules.voiceContentType, to: .chat(conversationID:))` (privat im Bucket `chat-media`, nur Teilnehmer),
+  danach `ChatMessageDraft.voice(mediaPath:duration:replyTo:)`. Dauer 1 ms bis `ChatRules.maximumVoiceDuration`
+  (5 min, `ChatRules.validVoiceMilliseconds`), Datei ≤ 10 MB. Am besten erst nach der Vorschau beim Senden
+  hochladen; wurde schon hochgeladen und dann verworfen, die Datei mit `media.delete(_:)` entfernen (kein
+  Upload-Rest). Löschen der Nachricht entfernt die Datei wie bei Bildern.
+  `ChatMessage.mediaDuration`, Chatliste `ChatMessagePreview.mediaDuration` → `ChatFormatting.content(kind:text:duration:)`
+  („Sprachnachricht · 0:18“).
+- **Spitznamen:** Absender, Gegenüber und Antwort-Vorschau tragen den eigenen Spitznamen
+  (`SocialProfile.shownName`, `ConversationSummary.shownTitle`, `ChatMessagePreview.shownSenderName`); die
+  Gruppen-Vorschau der Chatliste nutzt ihn bereits.
+
 ## Tests
 
 - `Tests/SocialFeatureTests/ChatListViewModelTests.swift`, `ChatViewModelTests.swift`, `ChatFormattingTests.swift`
