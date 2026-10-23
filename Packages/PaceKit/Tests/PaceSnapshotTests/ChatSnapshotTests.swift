@@ -85,7 +85,7 @@ struct ChatSnapshotTests {
 }
 
 /// Beispieldaten im Stil der Referenzbilder 5 und 9 (nur für Bilder).
-private enum ChatSnapshotData {
+enum ChatSnapshotData {
     static let groupID = UUID(uuidString: "61000000-0000-4000-8000-000000000001")!
     static let groupConversationID = UUID(uuidString: "61000000-0000-4000-8000-000000000002")!
     static let directConversationID = UUID(uuidString: "61000000-0000-4000-8000-000000000003")!
