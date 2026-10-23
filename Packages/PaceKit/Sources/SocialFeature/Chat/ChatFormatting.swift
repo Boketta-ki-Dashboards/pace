@@ -79,19 +79,21 @@ public enum ChatFormatting {
                 ? PaceLocalization.text(de: "Noch keine Nachrichten in der Gruppe", en: "No messages in the group yet", ru: "В группе пока нет сообщений")
                 : PaceLocalization.text(de: "Noch keine Nachrichten", en: "No messages yet", ru: "Сообщений пока нет")
         }
-        let body = content(kind: last.kind, text: last.text)
+        let body = content(kind: last.kind, text: last.text, duration: last.mediaDuration)
         if last.isOwn {
             return ownPrefix + ": " + body
         }
         if conversation.kind == .group {
-            let sender = last.senderName ?? deletedAccount
+            // Eigener Spitzname für den Absender, sonst sein Anzeigename.
+            let sender = last.shownSenderName ?? deletedAccount
             return sender + ": " + body
         }
         return body
     }
 
-    /// Inhalt einer Nachricht in einer Zeile (Zeilenumbrüche werden zu Leerzeichen).
-    public static func content(kind: ChatMessageKind, text: String?) -> String {
+    /// Inhalt einer Nachricht in einer Zeile (Zeilenumbrüche werden zu Leerzeichen); Sprachnachrichten mit Dauer
+    /// („Sprachnachricht · 0:18“).
+    public static func content(kind: ChatMessageKind, text: String?, duration: Duration? = nil) -> String {
         switch kind {
         case .text:
             let words = (text ?? "").split(whereSeparator: { $0.isWhitespace || $0.isNewline })
@@ -102,7 +104,21 @@ public enum ChatFormatting {
             return "GIF"
         case .profile:
             return PaceLocalization.text(de: "Profil geteilt", en: "Shared a profile", ru: "Поделился профилем")
+        case .voice:
+            guard let duration else { return voiceMessage }
+            return voiceMessage + " · " + voiceDuration(duration)
         }
+    }
+
+    public static var voiceMessage: String {
+        PaceLocalization.text(de: "Sprachnachricht", en: "Voice message", ru: "Голосовое сообщение")
+    }
+
+    /// Dauer einer Sprachnachricht als „m:ss“ (auf ganze Sekunden gerundet, mindestens 0:01).
+    public static func voiceDuration(_ duration: Duration) -> String {
+        let milliseconds = ChatRules.milliseconds(of: duration)
+        let seconds = max(1, (milliseconds + 500) / 1_000)
+        return "\(seconds / 60):" + String(format: "%02d", seconds % 60)
     }
 
     public static var photo: String {

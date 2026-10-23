@@ -215,6 +215,13 @@ struct ChatMessageContent: View {
                 } else {
                     ChatTextBubble(text: ChatUIText.profileUnavailable, isOwn: message.isOwn, isPlaceholder: true)
                 }
+            case .voice:
+                // Vorläufig als Hinweis mit Dauer; die Wiedergabe-Blase folgt mit der Sprachnachrichten-Oberfläche.
+                ChatTextBubble(
+                    text: ChatFormatting.content(kind: .voice, text: nil, duration: message.mediaDuration),
+                    isOwn: message.isOwn,
+                    isPlaceholder: true
+                )
             }
         }
         .opacity(viewModel.busyMessageIDs.contains(message.id) ? 0.5 : 1)
@@ -250,6 +257,8 @@ struct ChatMessageContent: View {
         case .profile:
             description = message.sharedProfile.map { ChatUIText.sharedProfileAccessibility(name: $0.displayName, username: $0.username) }
                 ?? ChatUIText.profileUnavailable
+        case .voice:
+            description = ChatFormatting.content(kind: .voice, text: nil, duration: message.mediaDuration)
         }
         return ChatUIText.messageAccessibility(sender: sender, content: description, time: viewModel.time(of: message.sentAt))
     }
@@ -412,7 +421,7 @@ struct ChatPendingContent: View {
                     accessibilityText: pending.kind == .gif ? ChatUIText.gif(from: nil) : ChatUIText.photo(from: nil),
                     isUploading: pending.status == .uploading
                 )
-            case .text, .profile:
+            case .text, .profile, .voice:
                 ChatTextBubble(text: pending.text ?? "", isOwn: true)
             }
         }

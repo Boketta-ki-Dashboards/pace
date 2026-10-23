@@ -37,14 +37,33 @@ public enum MediaUploadTarget: Equatable, Sendable {
     case avatar
     /// Bild einer Gruppe (nur wer die Gruppe verwaltet).
     case groupImage(groupID: UUID)
-    /// Anhang in einer Unterhaltung (nur Teilnehmer).
+    /// Anhang in einer Unterhaltung (nur Teilnehmer): Bild, GIF oder Sprachnachricht.
     case chat(conversationID: UUID)
 }
 
-/// Erlaubte Bildformate und Größen für Uploads (gleiche Grenzen wie die Buckets auf dem Server).
+/// Erlaubte Formate und Größen für Uploads (gleiche Grenzen wie die Buckets auf dem Server).
 public enum MediaRules {
+    /// Bildformate (alle Buckets).
     public static let allowedContentTypes: Set<String> = ["image/jpeg", "image/png", "image/gif", "image/heic", "image/webp"]
-    /// 10 MB für Chat-Bilder und GIFs, 5 MB für Profil- und Gruppenbilder.
+    /// Audioformate für Sprachnachrichten (nur `chat-media`, Migration 20261023100100): AAC in MP4/M4A bzw. roh.
+    public static let allowedAudioContentTypes: Set<String> = ["audio/mp4", "audio/x-m4a", "audio/aac"]
+    /// Inhaltstyp, mit dem die App Sprachnachrichten hochlädt (Aufnahme als AAC in .m4a).
+    public static let voiceContentType = "audio/mp4"
+
+    /// Erlaubte Inhaltstypen je Ziel: Bilder überall, Audio zusätzlich in Unterhaltungen.
+    public static func allowedContentTypes(for target: MediaUploadTarget) -> Set<String> {
+        switch target {
+        case .chat: allowedContentTypes.union(allowedAudioContentTypes)
+        case .avatar, .groupImage: allowedContentTypes
+        }
+    }
+
+    public static func isAudio(_ contentType: String) -> Bool {
+        allowedAudioContentTypes.contains(contentType.lowercased())
+    }
+
+    /// 10 MB für Chat-Bilder, GIFs und Sprachnachrichten (5 Minuten AAC liegen weit darunter), 5 MB für Profil- und
+    /// Gruppenbilder.
     public static func maximumBytes(for target: MediaUploadTarget) -> Int {
         switch target {
         case .chat: 10 * 1024 * 1024
@@ -63,7 +82,7 @@ public enum MediaError: Error, Equatable, Sendable {
     case unexpected(String)
 }
 
-/// Hochladen und Laden von Bildern (Supabase Storage, private Buckets).
+/// Hochladen und Laden von Bildern und Sprachnachrichten (Supabase Storage, private Buckets).
 public protocol MediaRepository: Sendable {
     /// Lädt Daten hoch und gibt den Verweis zurück. Prüft Format und Größe vorab.
     func upload(_ data: Data, contentType: String, to target: MediaUploadTarget) async throws -> MediaReference

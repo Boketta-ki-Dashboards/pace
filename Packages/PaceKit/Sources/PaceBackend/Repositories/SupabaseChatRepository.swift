@@ -3,11 +3,12 @@ import PaceCore
 import PostgREST
 import Storage
 
-/// Privat- und Gruppenchats per RPC (Migration 20261019100200). Zugriff, Validierung, Idempotenz und Rate Limits
-/// prüft der Server; Fehler kommen als `SocialError` (z. B. `.readOnly`, `.invalidMessage`, `.blocked`).
+/// Privat- und Gruppenchats per RPC (Migrationen 20261019100200 und 20261023100100: Antworten, Bearbeiten, Favoriten,
+/// Pins, Sprachnachrichten). Zugriff, Validierung, Idempotenz und Rate Limits prüft der Server; Fehler kommen als
+/// `SocialError` (z. B. `.readOnly`, `.invalidMessage`, `.blocked`, `.notAllowed`, `.pinLimitReached`).
 ///
-/// Echtzeit: `messageEvents` und `conversationEvents` melden Hinweise des Servers über private Realtime-Kanäle. Ist
-/// Realtime nicht erreichbar, enden die Streams sofort und die App aktualisiert regelmäßig.
+/// Echtzeit: `messageEvents`, `conversationActivity` und `conversationEvents` melden Hinweise des Servers über private
+/// Realtime-Kanäle. Ist Realtime nicht erreichbar, enden die Streams sofort und die App aktualisiert regelmäßig.
 struct SupabaseChatRepository: ChatRepository {
     let client: PostgrestClient
     let storage: SupabaseStorageClient
@@ -54,13 +55,26 @@ struct SupabaseChatRepository: ChatRepository {
             guard let valid = ChatRules.validText(draft.text ?? "") else { throw SocialError.invalidMessage }
             text = valid
         }
+        var durationMilliseconds: Int?
+        if draft.kind == .voice {
+            // Sprachnachrichten brauchen Datei und Dauer (1 ms bis 5 min), wie auf dem Server.
+            guard draft.mediaPath != nil, let duration = draft.mediaDuration,
+                  let milliseconds = ChatRules.validVoiceMilliseconds(duration) else {
+                throw SocialError.invalidInput
+            }
+            durationMilliseconds = milliseconds
+        }
+        // Nur gesetzte Werte werden gesendet: Ohne Antwort und Dauer passt der Aufruf auch zu Servern vor Migration
+        // 20261023100100.
         let params = SendParams(
             conversationID: conversationID,
             clientID: draft.clientID,
             kind: draft.kind.rawValue,
             body: text,
             mediaPath: draft.mediaPath,
-            sharedProfileID: draft.sharedProfileID
+            sharedProfileID: draft.sharedProfileID,
+            replyToID: draft.replyToID,
+            mediaDurationMilliseconds: durationMilliseconds
         )
         let row: ChatMessageRow = try await mapped {
             try await client.rpc("chat_send", params: params).execute().value
@@ -89,7 +103,65 @@ struct SupabaseChatRepository: ChatRepository {
     }
 
     func messageEvents(in conversationID: UUID) -> AsyncStream<Void> {
-        realtime.stream(topic: "chat:\(conversationID.uuidString.lowercased())", event: "message")
+        realtime.stream(topic: Self.chatTopic(conversationID), event: ChatConversationEvent.message.rawValue)
+    }
+
+    // MARK: Nachrichtenaktionen
+
+    func editMessage(_ messageID: UUID, text: String) async throws -> ChatMessage {
+        guard let valid = ChatRules.validText(text) else { throw SocialError.invalidMessage }
+        let row: ChatMessageRow = try await mapped {
+            try await client.rpc("chat_edit_message", params: EditParams(messageID: messageID, text: valid)).execute().value
+        }
+        return row.message
+    }
+
+    func setFavorite(_ messageID: UUID, isFavorite: Bool) async throws {
+        try await mapped {
+            try await client.rpc("chat_set_favorite", params: FavoriteParams(messageID: messageID, favorite: isFavorite)).execute()
+        }
+    }
+
+    func favorites(conversationID: UUID) async throws -> [ChatMessage] {
+        let rows: [ChatMessageRow] = try await mapped {
+            try await client.rpc("chat_favorites", params: ["p_conversation_id": conversationID]).execute().value
+        }
+        return rows.map(\.message)
+    }
+
+    @discardableResult
+    func setPinned(_ messageID: UUID, isPinned: Bool) async throws -> [ChatPin] {
+        let rows: [ChatPinRow] = try await mapped {
+            try await client.rpc("chat_set_pinned", params: PinParams(messageID: messageID, pinned: isPinned)).execute().value
+        }
+        return rows.map(\.pin)
+    }
+
+    func pins(conversationID: UUID) async throws -> [ChatPin] {
+        let rows: [ChatPinRow] = try await mapped {
+            try await client.rpc("chat_pins", params: ["p_conversation_id": conversationID]).execute().value
+        }
+        return rows.map(\.pin)
+    }
+
+    /// Ein Kanal je Unterhaltung für alle drei Hinweise; unbekannte Ereignisse werden übergangen.
+    func conversationActivity(in conversationID: UUID) -> AsyncStream<ChatConversationEvent> {
+        let events = realtime.stream(topic: Self.chatTopic(conversationID), events: ChatConversationEvent.allCases.map(\.rawValue))
+        return AsyncStream { continuation in
+            let task = Task {
+                for await name in events {
+                    if let event = ChatConversationEvent(rawValue: name) {
+                        continuation.yield(event)
+                    }
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private static func chatTopic(_ conversationID: UUID) -> String {
+        "chat:\(conversationID.uuidString.lowercased())"
     }
 
     func conversationEvents() -> AsyncStream<Void> {
@@ -131,6 +203,8 @@ private struct SendParams: Encodable {
     let body: String?
     let mediaPath: String?
     let sharedProfileID: UUID?
+    let replyToID: UUID?
+    let mediaDurationMilliseconds: Int?
 
     enum CodingKeys: String, CodingKey {
         case conversationID = "p_conversation_id"
@@ -139,6 +213,38 @@ private struct SendParams: Encodable {
         case body = "p_body"
         case mediaPath = "p_media_path"
         case sharedProfileID = "p_shared_profile_id"
+        case replyToID = "p_reply_to_id"
+        case mediaDurationMilliseconds = "p_media_duration_ms"
+    }
+}
+
+private struct EditParams: Encodable {
+    let messageID: UUID
+    let text: String
+
+    enum CodingKeys: String, CodingKey {
+        case messageID = "p_message_id"
+        case text = "p_text"
+    }
+}
+
+private struct FavoriteParams: Encodable {
+    let messageID: UUID
+    let favorite: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case messageID = "p_message_id"
+        case favorite = "p_favorite"
+    }
+}
+
+private struct PinParams: Encodable {
+    let messageID: UUID
+    let pinned: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case messageID = "p_message_id"
+        case pinned = "p_pinned"
     }
 }
 

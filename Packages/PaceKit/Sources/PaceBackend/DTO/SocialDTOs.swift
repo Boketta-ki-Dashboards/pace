@@ -10,16 +10,19 @@ struct SocialProfileRow: Decodable {
     let displayName: String
     /// Fehlt bei Servern ohne Migration 20261019100000.
     let avatarPath: String?
+    /// Eigener Spitzname des Aufrufers; fehlt bei Servern ohne Migration 20261023100000.
+    let nickname: String?
 
     enum CodingKeys: String, CodingKey {
         case publicID = "public_id"
         case username
         case displayName = "display_name"
         case avatarPath = "avatar_path"
+        case nickname
     }
 
     var profile: SocialProfile {
-        SocialProfile(publicID: publicID, username: username, displayName: displayName, avatarPath: avatarPath)
+        SocialProfile(publicID: publicID, username: username, displayName: displayName, avatarPath: avatarPath, nickname: nickname)
     }
 }
 
@@ -246,6 +249,7 @@ struct GroupRankingRow: Decodable {
     let role: String
     let reachedGoalToday: Bool
     let avatarPath: String?
+    let nickname: String?
 
     enum CodingKeys: String, CodingKey {
         case rank
@@ -257,12 +261,19 @@ struct GroupRankingRow: Decodable {
         case role
         case reachedGoalToday = "reached_goal_today"
         case avatarPath = "avatar_path"
+        case nickname
     }
 
     var entry: GroupRankingEntry {
         GroupRankingEntry(
             rank: rank,
-            profile: SocialProfile(publicID: publicUserID, username: username, displayName: displayName, avatarPath: avatarPath),
+            profile: SocialProfile(
+                publicID: publicUserID,
+                username: username,
+                displayName: displayName,
+                avatarPath: avatarPath,
+                nickname: nickname
+            ),
             competitionSteps: competitionSteps,
             isCurrentUser: isCurrentUser,
             role: role == "owner" ? .owner : .member,
@@ -313,6 +324,7 @@ struct GroupInvitationRow: Decodable {
     let inviterDisplayName: String
     let createdAt: Date
     let groupImagePath: String?
+    let inviterNickname: String?
 
     enum CodingKeys: String, CodingKey {
         case id = "invitation_id"
@@ -324,6 +336,7 @@ struct GroupInvitationRow: Decodable {
         case inviterDisplayName = "inviter_display_name"
         case createdAt = "created_at"
         case groupImagePath = "group_image_path"
+        case inviterNickname = "inviter_nickname"
     }
 
     init(from decoder: Decoder) throws {
@@ -337,6 +350,7 @@ struct GroupInvitationRow: Decodable {
         inviterDisplayName = try container.decode(String.self, forKey: .inviterDisplayName)
         createdAt = try container.decodeTimestamp(forKey: .createdAt)
         groupImagePath = try container.decodeIfPresent(String.self, forKey: .groupImagePath)
+        inviterNickname = try container.decodeIfPresent(String.self, forKey: .inviterNickname)
     }
 
     var invitation: GroupInvitation {
@@ -349,7 +363,8 @@ struct GroupInvitationRow: Decodable {
             inviterUsername: inviterUsername,
             inviterDisplayName: inviterDisplayName,
             createdAt: createdAt,
-            groupImagePath: groupImagePath
+            groupImagePath: groupImagePath,
+            inviterNickname: inviterNickname
         )
     }
 }
@@ -424,6 +439,108 @@ struct PublicProfileRow: Decodable {
             stepsToday: stepsToday,
             stepsWeek: stepsWeek,
             isBlockedByMe: isBlockedByMe
+        )
+    }
+}
+
+// MARK: - Gruppenkalender (Migration 20261023100200)
+
+/// Antwort von `social_group_calendar`.
+struct GroupCalendarResponse: Decodable {
+    let groupID: UUID
+    let timeZone: String
+    let groupToday: LocalDate
+    let firstGroupDay: LocalDate
+    let days: [GroupCalendarDayRow]
+
+    enum CodingKeys: String, CodingKey {
+        case groupID = "group_id"
+        case timeZone = "time_zone"
+        case groupToday = "group_today"
+        case firstGroupDay = "first_group_day"
+        case days
+    }
+
+    var calendar: GroupCalendar {
+        GroupCalendar(
+            groupID: groupID,
+            timeZone: timeZone,
+            groupToday: groupToday,
+            firstGroupDay: firstGroupDay,
+            days: days.map(\.day).sorted { $0.day < $1.day }
+        )
+    }
+}
+
+struct GroupCalendarDayRow: Decodable {
+    let date: LocalDate
+    let dailyGoal: Int?
+    let memberCount: Int
+    let requiredCount: Int
+    let reachedCount: Int
+    let secured: Bool
+    let hasData: Bool
+    let isToday: Bool
+    let ranking: [GroupCalendarEntryRow]
+
+    enum CodingKeys: String, CodingKey {
+        case date = "day"
+        case dailyGoal = "daily_goal"
+        case memberCount = "member_count"
+        case requiredCount = "required_count"
+        case reachedCount = "reached_count"
+        case secured
+        case hasData = "has_data"
+        case isToday = "is_today"
+        case ranking
+    }
+
+    var day: GroupCalendarDay {
+        GroupCalendarDay(
+            day: date,
+            dailyGoal: dailyGoal,
+            memberCount: memberCount,
+            requiredCount: requiredCount,
+            reachedCount: reachedCount,
+            secured: secured,
+            hasData: hasData,
+            isToday: isToday,
+            ranking: ranking.map(\.entry).sorted { $0.rank < $1.rank }
+        )
+    }
+}
+
+/// Zeile der Tagesrangliste: Profilfelder (wie `SocialProfileRow`) plus Platz, Schritte, erreicht.
+struct GroupCalendarEntryRow: Decodable {
+    let profile: SocialProfileRow
+    let rank: Int
+    let competitionSteps: Int
+    let reached: Bool
+    let isCurrentUser: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case rank
+        case competitionSteps = "competition_steps"
+        case reached
+        case isCurrentUser = "is_current_user"
+    }
+
+    init(from decoder: Decoder) throws {
+        profile = try SocialProfileRow(from: decoder)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rank = try container.decode(Int.self, forKey: .rank)
+        competitionSteps = try container.decode(Int.self, forKey: .competitionSteps)
+        reached = try container.decode(Bool.self, forKey: .reached)
+        isCurrentUser = try container.decode(Bool.self, forKey: .isCurrentUser)
+    }
+
+    var entry: GroupCalendarEntry {
+        GroupCalendarEntry(
+            rank: rank,
+            profile: profile.profile,
+            competitionSteps: competitionSteps,
+            reached: reached,
+            isCurrentUser: isCurrentUser
         )
     }
 }

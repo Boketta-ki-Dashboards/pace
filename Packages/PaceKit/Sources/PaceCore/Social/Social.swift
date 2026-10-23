@@ -9,17 +9,60 @@ public struct SocialProfile: Equatable, Hashable, Sendable, Identifiable {
     public let displayName: String
     /// Profilbild im Bucket `avatars`; `nil` zeigt Initialen.
     public let avatarPath: String?
+    /// Eigener, privater Spitzname für diese Person (nur Freunde; andere sehen ihn nie). `nil` ohne Spitznamen oder
+    /// bei Servern ohne Migration 20261023100000.
+    public let nickname: String?
 
-    public init(publicID: UUID, username: String, displayName: String, avatarPath: String? = nil) {
+    public init(publicID: UUID, username: String, displayName: String, avatarPath: String? = nil, nickname: String? = nil) {
         self.publicID = publicID
         self.username = username
         self.displayName = displayName
         self.avatarPath = avatarPath
+        self.nickname = nickname
     }
 
     public var id: UUID { publicID }
 
     public var avatar: MediaReference? { .avatar(avatarPath) }
+
+    /// Angezeigter Name: eigener Spitzname, sonst Anzeigename.
+    public var shownName: String { NicknameRules.shownName(nickname: nickname, displayName: displayName) }
+
+    /// Gleiche Person mit anderem Spitznamen (z. B. sofort nach dem Ändern, ohne neu zu laden).
+    public func withNickname(_ nickname: String?) -> SocialProfile {
+        SocialProfile(publicID: publicID, username: username, displayName: displayName, avatarPath: avatarPath, nickname: nickname)
+    }
+}
+
+/// Regeln für Spitznamen – dieselben wie für Anzeigenamen (1–30 Zeichen, keine Steuerzeichen), wie auf dem Server
+/// (`friend_nicknames_nickname_valid`). Unsichtbare Formatzeichen (z. B. in Emoji-Sequenzen mit Verbinder) lehnt der
+/// Server ab (`invalid_nickname`).
+public enum NicknameRules {
+    public static let maxLength = DisplayNameRules.maxLength
+
+    /// Entfernt Leerraum am Rand und fasst mehrfachen Leerraum zusammen.
+    public static func normalized(_ nickname: String) -> String {
+        DisplayNameRules.normalized(nickname)
+    }
+
+    /// Normalisierter Spitzname zum Speichern; `nil` bedeutet „entfernen“ (leere Eingabe).
+    public static func storedValue(_ input: String) -> String? {
+        let value = normalized(input)
+        return value.isEmpty ? nil : value
+    }
+
+    /// `nil`, wenn die Eingabe gespeichert werden kann (leer = entfernen).
+    public static func violation(for input: String) -> DisplayNameRules.Violation? {
+        let value = normalized(input)
+        guard !value.isEmpty else { return nil }
+        return DisplayNameRules.violation(for: value)
+    }
+
+    /// Spitzname, falls vorhanden und nicht leer, sonst der Anzeigename.
+    public static func shownName(nickname: String?, displayName: String) -> String {
+        if let nickname, !nickname.isEmpty { return nickname }
+        return displayName
+    }
 }
 
 /// Beziehung zur gefundenen Person.
@@ -404,6 +447,8 @@ public struct GroupInvitation: Equatable, Sendable, Identifiable {
     public let inviterDisplayName: String
     public let createdAt: Date
     public let groupImagePath: String?
+    /// Eigener Spitzname für die einladende Person (Einladungen kommen nur von Freunden).
+    public let inviterNickname: String?
 
     public init(
         id: UUID,
@@ -414,7 +459,8 @@ public struct GroupInvitation: Equatable, Sendable, Identifiable {
         inviterUsername: String,
         inviterDisplayName: String,
         createdAt: Date,
-        groupImagePath: String? = nil
+        groupImagePath: String? = nil,
+        inviterNickname: String? = nil
     ) {
         self.id = id
         self.groupID = groupID
@@ -425,6 +471,156 @@ public struct GroupInvitation: Equatable, Sendable, Identifiable {
         self.inviterDisplayName = inviterDisplayName
         self.createdAt = createdAt
         self.groupImagePath = groupImagePath
+        self.inviterNickname = inviterNickname
+    }
+
+    /// Angezeigter Name der einladenden Person: eigener Spitzname, sonst Anzeigename.
+    public var inviterShownName: String {
+        NicknameRules.shownName(nickname: inviterNickname, displayName: inviterDisplayName)
+    }
+}
+
+// MARK: - Gruppenkalender
+
+/// Platz einer Person in der Tagesrangliste eines Gruppentags.
+public struct GroupCalendarEntry: Equatable, Sendable, Identifiable {
+    public let rank: Int
+    /// Mit eigenem Spitznamen (`profile.shownName`).
+    public let profile: SocialProfile
+    /// Gültige Wettbewerbsschritte dieses Tages (ohne manuelle Einträge, wie synchronisiert).
+    public let competitionSteps: Int
+    /// Gruppenziel des Tages erreicht.
+    public let reached: Bool
+    public let isCurrentUser: Bool
+
+    public init(rank: Int, profile: SocialProfile, competitionSteps: Int, reached: Bool, isCurrentUser: Bool) {
+        self.rank = rank
+        self.profile = profile
+        self.competitionSteps = competitionSteps
+        self.reached = reached
+        self.isCurrentUser = isCurrentUser
+    }
+
+    public var id: UUID { profile.publicID }
+}
+
+/// Ein Gruppentag im Kalender – historisch korrekt: Mitglieder und Ziel so, wie sie an diesem Tag galten
+/// (gleiche Berechnung wie Streak und `groupDays`).
+public struct GroupCalendarDay: Equatable, Sendable, Identifiable {
+    public let day: LocalDate
+    /// Tagesziel je Mitglied an diesem Tag (`nil` nur ohne Zielhistorie).
+    public let dailyGoal: Int?
+    /// Mitglieder an diesem Tag (laut Mitgliedschaftsperioden, zum Tagesende).
+    public let memberCount: Int
+    /// Benötigt: ⌈n/3⌉ (`GroupStreakRules.requiredMembers`).
+    public let requiredCount: Int
+    /// Mitglieder, die das Ziel erreicht haben.
+    public let reachedCount: Int
+    /// Flamme gesichert (mindestens `requiredCount` haben das Ziel erreicht).
+    public let secured: Bool
+    /// Mindestens ein Mitglied hat für diesen Tag Schritte synchronisiert.
+    public let hasData: Bool
+    /// Der laufende Gruppentag (Werte können sich noch ändern).
+    public let isToday: Bool
+    /// Alle Mitglieder des Tages, Platz 1 zuerst (Gleichstände wie in allen Rankings: wer den Wert zuerst hatte).
+    public let ranking: [GroupCalendarEntry]
+
+    public init(
+        day: LocalDate,
+        dailyGoal: Int?,
+        memberCount: Int,
+        requiredCount: Int,
+        reachedCount: Int,
+        secured: Bool,
+        hasData: Bool,
+        isToday: Bool,
+        ranking: [GroupCalendarEntry]
+    ) {
+        self.day = day
+        self.dailyGoal = dailyGoal
+        self.memberCount = memberCount
+        self.requiredCount = requiredCount
+        self.reachedCount = reachedCount
+        self.secured = secured
+        self.hasData = hasData
+        self.isToday = isToday
+        self.ranking = ranking
+    }
+
+    public var id: LocalDate { day }
+
+    /// Tagesbeste(r) für den Indikator in der Kalenderzelle: Platz 1, sofern mehr als 0 Schritte.
+    public var best: GroupCalendarEntry? {
+        guard let first = ranking.first, first.competitionSteps > 0 else { return nil }
+        return first
+    }
+
+    /// Eigene Zeile (zum Hervorheben).
+    public var currentUserEntry: GroupCalendarEntry? { ranking.first(where: \.isCurrentUser) }
+}
+
+/// Anzeigezustand eines Kalendertags – ehrlich auch für Tage ohne Werte.
+public enum GroupCalendarDayState: Equatable, Sendable {
+    /// Vor der Gründung der Gruppe.
+    case beforeGroup
+    /// Nach dem heutigen Gruppentag.
+    case future
+    /// Im Zeitraum der Gruppe, aber (noch) nicht geladen.
+    case notLoaded
+    /// Niemand hat für diesen Tag Schritte synchronisiert.
+    case noData
+    /// Flamme gesichert.
+    case secured
+    /// Heute, noch nicht gesichert.
+    case open
+    /// Vergangen und nicht gesichert.
+    case missed
+}
+
+/// Gruppenkalender für einen Zeitraum (höchstens `GroupCalendarRules.maximumDays` Tage).
+public struct GroupCalendar: Equatable, Sendable {
+    public let groupID: UUID
+    /// Zeitzone des Gruppentags.
+    public let timeZone: String
+    /// Heutiger Gruppentag.
+    public let groupToday: LocalDate
+    /// Gründungstag der Gruppe (erster Gruppentag).
+    public let firstGroupDay: LocalDate
+    /// Tage im angefragten Zeitraum, begrenzt auf Gründung … heute, aufsteigend.
+    public let days: [GroupCalendarDay]
+
+    public init(groupID: UUID, timeZone: String, groupToday: LocalDate, firstGroupDay: LocalDate, days: [GroupCalendarDay]) {
+        self.groupID = groupID
+        self.timeZone = timeZone
+        self.groupToday = groupToday
+        self.firstGroupDay = firstGroupDay
+        self.days = days
+    }
+
+    public func day(_ day: LocalDate) -> GroupCalendarDay? {
+        days.first { $0.day == day }
+    }
+
+    public func state(of day: LocalDate) -> GroupCalendarDayState {
+        if day < firstGroupDay { return .beforeGroup }
+        if day > groupToday { return .future }
+        guard let entry = self.day(day) else { return .notLoaded }
+        if entry.secured { return .secured }
+        if entry.isToday { return .open }
+        return entry.hasData ? .missed : .noData
+    }
+}
+
+public enum GroupCalendarRules {
+    /// Höchstens so viele Tage je Abruf (6 Wochen – ein Monatsraster mit Montag als Wochenbeginn).
+    public static let maximumDays = 42
+
+    /// Monatsraster von Montag vor dem Monatsersten bis Sonntag nach dem Monatsletzten (4–6 Wochen, höchstens
+    /// `maximumDays` Tage) – passt in einen Abruf von `SocialRepository.groupCalendar`.
+    public static func monthGrid(containing day: LocalDate, calendar: ActivityCalendar) -> ClosedRange<LocalDate> {
+        let first = calendar.startOfWeek(containing: calendar.startOfMonth(containing: day))
+        let last = calendar.endOfWeek(containing: calendar.endOfMonth(containing: day))
+        return first...last
     }
 }
 
@@ -511,6 +707,10 @@ public enum SocialError: Error, Equatable, Sendable {
     case blocked
     /// Nachricht zu lang oder leer.
     case invalidMessage
+    /// Spitzname zu lang oder mit unzulässigen Zeichen.
+    case invalidNickname
+    /// Es sind bereits so viele Nachrichten angepinnt wie erlaubt (`ChatRules.maximumPinnedMessages`).
+    case pinLimitReached
     /// In dieser Unterhaltung kann man nicht mehr schreiben (z. B. nach Ende der Freundschaft).
     case readOnly
     /// Die Social-Funktionen sind auf dem Server (noch) nicht eingerichtet.
@@ -586,6 +786,18 @@ public enum SocialError: Error, Equatable, Sendable {
                 en: "The message is empty or too long (at most 2,000 characters).",
                 ru: "Сообщение пустое или слишком длинное (не более 2 000 символов)."
             )
+        case .invalidNickname:
+            PaceLocalization.text(
+                de: "Der Spitzname darf höchstens 30 Zeichen lang sein und keine Steuer- oder unsichtbaren Zeichen enthalten.",
+                en: "The nickname can be at most 30 characters long and can't contain control or invisible characters.",
+                ru: "Прозвище может содержать не более 30 символов и не должно содержать управляющих или невидимых символов."
+            )
+        case .pinLimitReached:
+            PaceLocalization.text(
+                de: "Es sind bereits 5 Nachrichten angepinnt. Löse zuerst eine davon.",
+                en: "5 messages are already pinned. Unpin one of them first.",
+                ru: "Уже закреплено 5 сообщений. Сначала открепи одно из них."
+            )
         case .readOnly:
             PaceLocalization.text(
                 de: "In dieser Unterhaltung kannst du keine Nachrichten mehr senden.",
@@ -657,4 +869,26 @@ public protocol SocialRepository: Sendable {
     func blockedUsers() async throws -> [SocialProfile]
     /// Meldung an das Pace-Team (gespeichert, Bearbeitung außerhalb der App).
     func report(_ target: ReportTarget, reason: ReportReason, details: String?) async throws
+
+    // MARK: Spitznamen und Gruppenkalender (Migrationen 20261023100000/100200)
+
+    /// Setzt den eigenen, privaten Spitznamen für einen aktuellen Freund; `nil` oder leer entfernt ihn. Liefert das
+    /// Profil mit dem gespeicherten Spitznamen. `notFound` ohne Freundschaft, `invalidNickname` bei ungültiger Eingabe.
+    @discardableResult
+    func setFriendNickname(publicID: UUID, nickname: String?) async throws -> SocialProfile
+    /// Gruppenkalender von `from` bis `to` (höchstens `GroupCalendarRules.maximumDays` Tage, nur für Mitglieder).
+    /// Tage vor der Gründung und nach heute fehlen in `days` (siehe `GroupCalendar.state(of:)`).
+    func groupCalendar(groupID: UUID, from: LocalDate, to: LocalDate) async throws -> GroupCalendar
+}
+
+public extension SocialRepository {
+    /// Standard für Implementierungen ohne Unterstützung (z. B. ältere Test-Doubles): nicht eingerichtet.
+    @discardableResult
+    func setFriendNickname(publicID: UUID, nickname: String?) async throws -> SocialProfile {
+        throw SocialError.unavailable
+    }
+
+    func groupCalendar(groupID: UUID, from: LocalDate, to: LocalDate) async throws -> GroupCalendar {
+        throw SocialError.unavailable
+    }
 }

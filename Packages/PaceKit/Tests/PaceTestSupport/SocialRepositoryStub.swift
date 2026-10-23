@@ -26,6 +26,10 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
         public var searchableProfiles: [SocialProfile] = []
         public var blocked: [SocialProfile] = []
         public var reports: [(ReportTarget, ReportReason, String?)] = []
+        /// Gruppenkalender je Gruppe (Tage außerhalb von `from…to` werden beim Abruf herausgefiltert).
+        public var calendars: [UUID: GroupCalendar] = [:]
+        /// Abgefragte Kalender-Zeiträume (Gruppe, von, bis).
+        public var calendarRequests: [(UUID, LocalDate, LocalDate)] = []
         /// Fehler für alle Aufrufe.
         public var error: SocialError?
         /// Fehler nur für Schreibaktionen.
@@ -345,6 +349,42 @@ public final class SocialRepositoryStub: SocialRepository, Sendable {
         try write("report") { state in
             state.reports.append((target, reason, details))
         }
+    }
+
+    /// Wie der Server: nur aktuelle Freunde, leer entfernt, gleiche Längenregel; aktualisiert Freundesliste und
+    /// Freundesranking im Speicher.
+    @discardableResult
+    public func setFriendNickname(publicID: UUID, nickname: String?) async throws -> SocialProfile {
+        try write("setFriendNickname") { state in
+            guard let index = state.friends.firstIndex(where: { $0.profile.publicID == publicID }) else { throw SocialError.notFound }
+            let value = nickname.flatMap(NicknameRules.storedValue)
+            if let value, NicknameRules.violation(for: value) != nil { throw SocialError.invalidNickname }
+            let friend = state.friends[index]
+            let profile = friend.profile.withNickname(value)
+            state.friends[index] = Friend(profile: profile, friendsSince: friend.friendsSince)
+            state.ranking = state.ranking.map { entry in
+                guard entry.publicUserID == publicID else { return entry }
+                return LeaderboardEntry(
+                    rank: entry.rank, publicUserID: entry.publicUserID, username: entry.username, displayName: entry.displayName,
+                    competitionSteps: entry.competitionSteps, isCurrentUser: entry.isCurrentUser, avatarPath: entry.avatarPath,
+                    nickname: value
+                )
+            }
+            return profile
+        }
+    }
+
+    public func groupCalendar(groupID: UUID, from: LocalDate, to: LocalDate) async throws -> GroupCalendar {
+        state.withLock { $0.calendarRequests.append((groupID, from, to)) }
+        let calendar = try read("groupCalendar") { $0.calendars[groupID] }
+        guard let calendar else { throw SocialError.notFound }
+        return GroupCalendar(
+            groupID: calendar.groupID,
+            timeZone: calendar.timeZone,
+            groupToday: calendar.groupToday,
+            firstGroupDay: calendar.firstGroupDay,
+            days: calendar.days.filter { $0.day >= from && $0.day <= to }
+        )
     }
 
     /// Beispielgruppe für Tests.
