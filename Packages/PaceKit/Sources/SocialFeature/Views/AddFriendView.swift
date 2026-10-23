@@ -38,7 +38,7 @@ struct AddFriendView: View {
         .socialSubpageScroll()
         .task { [model] in await model.refreshResults() }
         .confirmationDialog(
-            blockCandidate.map { SocialText.blockTitle($0.profile.displayName) } ?? SocialText.blockUser,
+            blockCandidate.map { SocialText.blockTitle($0.profile.shownName) } ?? SocialText.blockUser,
             isPresented: $showsBlockDialog,
             titleVisibility: .visible,
             presenting: blockCandidate
@@ -175,6 +175,6 @@ struct AddFriendContent: View {
         } label: {
             SocialMoreLabel()
         }
-        .accessibilityLabel(SocialText.moreActions(for: result.profile.displayName))
+        .accessibilityLabel(SocialText.moreActions(for: result.profile.shownName))
     }
 }

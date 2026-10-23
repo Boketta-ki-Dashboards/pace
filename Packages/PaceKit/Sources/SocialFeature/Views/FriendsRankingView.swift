@@ -78,7 +78,7 @@ struct FriendsRankingContent: View {
     private func row(_ entry: LeaderboardEntry) -> some View {
         let rankingRow = PaceRankingRow(
             rank: entry.rank,
-            name: entry.isCurrentUser ? SocialText.you : entry.displayName,
+            name: entry.isCurrentUser ? SocialText.you : entry.shownName,
             steps: entry.competitionSteps,
             seed: entry.publicUserID.uuidString,
             isCurrentUser: entry.isCurrentUser,
@@ -89,7 +89,7 @@ struct FriendsRankingContent: View {
             rankingRow
         } else {
             Button {
-                onOpen(.profile(SocialProfile(publicID: entry.publicUserID, username: entry.username, displayName: entry.displayName)))
+                onOpen(.profile(entry.socialProfile))
             } label: {
                 rankingRow
             }

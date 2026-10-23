@@ -88,7 +88,7 @@ public struct HomeNotificationItem: Equatable, Sendable, Identifiable {
                 ru: "\(name) хочет добавить тебя в друзья."
             )
         case .groupInvitation(let invitation):
-            let name = invitation.inviterDisplayName
+            let name = invitation.inviterShownName
             let group = invitation.groupName
             return PaceLocalization.text(
                 de: "\(name) hat dich in „\(group)“ eingeladen.",

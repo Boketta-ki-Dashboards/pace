@@ -232,7 +232,7 @@ public struct ChatView: View {
     private var dialogTitle: String {
         switch dialog {
         case .delete: ChatUIText.deleteTitle
-        case .block(let profile): SocialText.blockTitle(profile.displayName)
+        case .block(let profile): SocialText.blockTitle(profile.shownName)
         case .report: SocialText.reportReasonPrompt
         case nil: ""
         }

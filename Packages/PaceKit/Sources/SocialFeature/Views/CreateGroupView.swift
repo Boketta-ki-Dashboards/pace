@@ -210,7 +210,7 @@ struct CreateGroupContent: View {
         let invitees = model.invitees
         HStack(spacing: PaceSpacing.xs) {
             ForEach(invitees.prefix(4)) { profile in
-                PaceAvatar(name: profile.displayName, seed: profile.publicID.uuidString, size: 40, image: profile.avatar)
+                PaceAvatar(name: profile.shownName, seed: profile.publicID.uuidString, size: 40, image: profile.avatar)
             }
             if invitees.count > 4 {
                 Text(verbatim: "+\(invitees.count - 4)")
@@ -428,12 +428,12 @@ struct CreateGroupInvitePage: View {
                 ForEach(model.friends) { friend in
                     let isInvited = model.isInvited(friend.profile.publicID)
                     SocialSelectableRow(
-                        title: friend.profile.displayName,
+                        title: friend.profile.shownName,
                         subtitle: "@\(friend.profile.username)",
                         isSelected: isInvited,
                         action: { model.toggleInvitee(friend.profile.publicID) }
                     ) {
-                        PaceAvatar(name: friend.profile.displayName, seed: friend.profile.publicID.uuidString, size: 40, image: friend.profile.avatar)
+                        PaceAvatar(name: friend.profile.shownName, seed: friend.profile.publicID.uuidString, size: 40, image: friend.profile.avatar)
                     }
                     .disabled(!isInvited && !model.canInviteMore)
                 }

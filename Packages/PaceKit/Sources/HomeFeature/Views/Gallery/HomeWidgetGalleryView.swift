@@ -265,7 +265,7 @@ struct HomeWidgetGalleryContent: View {
         return LazyVGrid(columns: columns, alignment: .leading, spacing: PaceSpacing.xs) {
             ForEach(chips) { profile in
                 HomeGalleryChip(
-                    title: profile.displayName,
+                    title: profile.shownName,
                     avatar: profile,
                     isSelected: gallery.isSelected(friend: profile.publicID)
                 ) {
@@ -384,7 +384,7 @@ private struct HomeGalleryChip: View {
         Button(action: action) {
             HStack(spacing: PaceSpacing.xs) {
                 if let avatar {
-                    PaceAvatar(name: avatar.displayName, seed: avatar.publicID.uuidString, size: 32, image: avatar.avatar)
+                    PaceAvatar(name: avatar.shownName, seed: avatar.publicID.uuidString, size: 32, image: avatar.avatar)
                 } else if let systemImage {
                     Image(systemName: systemImage)
                         .font(.body)

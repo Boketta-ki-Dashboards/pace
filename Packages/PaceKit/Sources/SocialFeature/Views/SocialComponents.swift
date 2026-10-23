@@ -275,9 +275,9 @@ struct SocialPersonCard<Actions: View>: View {
 
     private var identity: some View {
         HStack(spacing: PaceSpacing.s) {
-            PaceAvatar(name: profile.displayName, seed: profile.publicID.uuidString, size: avatarSize, image: profile.avatar)
+            PaceAvatar(name: profile.shownName, seed: profile.publicID.uuidString, size: avatarSize, image: profile.avatar)
             VStack(alignment: .leading, spacing: 2) {
-                Text(profile.displayName)
+                Text(profile.shownName)
                     .font(.system(compact ? Font.TextStyle.subheadline : Font.TextStyle.headline, weight: .semibold))
                     .foregroundStyle(PaceColor.textPrimary)
                     .lineLimit(2)

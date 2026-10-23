@@ -849,6 +849,49 @@ enum SocialText {
         )
     }
 
+    // MARK: Spitznamen
+
+    static var nickname: String { PaceLocalization.text(de: "Spitzname", en: "Nickname", ru: "Прозвище") }
+    static var addNickname: String {
+        PaceLocalization.text(de: "Spitzname vergeben", en: "Add nickname", ru: "Задать прозвище")
+    }
+    static var editNickname: String {
+        PaceLocalization.text(de: "Spitzname ändern", en: "Change nickname", ru: "Изменить прозвище")
+    }
+    static var removeNickname: String {
+        PaceLocalization.text(de: "Spitzname entfernen", en: "Remove nickname", ru: "Удалить прозвище")
+    }
+    static var nicknamePlaceholder: String {
+        PaceLocalization.text(de: "z. B. Laufpartner", en: "e.g. Running buddy", ru: "напр. Напарник")
+    }
+    static var nicknamePrivacyNote: String {
+        PaceLocalization.text(
+            de: "Nur du siehst den Spitznamen – überall in Pace statt des Anzeigenamens. Leer lassen entfernt ihn.",
+            en: "Only you can see the nickname – everywhere in Pace instead of the display name. Leave it empty to remove it.",
+            ru: "Прозвище видишь только ты – везде в Pace вместо отображаемого имени. Оставь поле пустым, чтобы удалить его."
+        )
+    }
+    /// Zweite Zeile im Profil, wenn ein Spitzname gesetzt ist: der echte Anzeigename.
+    static func displayNameLine(_ name: String) -> String {
+        PaceLocalization.text(de: "Anzeigename: \(name)", en: "Display name: \(name)", ru: "Отображаемое имя: \(name)")
+    }
+    static func nicknameProblem(_ violation: DisplayNameRules.Violation) -> String {
+        switch violation {
+        case .tooLong:
+            PaceLocalization.text(
+                de: "Höchstens \(NicknameRules.maxLength) Zeichen.",
+                en: "At most \(NicknameRules.maxLength) characters.",
+                ru: "Не более \(NicknameRules.maxLength) символов."
+            )
+        case .invalidCharacters, .empty:
+            PaceLocalization.text(
+                de: "Bitte ohne Steuer- oder unsichtbare Zeichen.",
+                en: "Please don't use control or invisible characters.",
+                ru: "Без управляющих и невидимых символов."
+            )
+        }
+    }
+
     // MARK: Fehler
 
     /// Text für einen Fehler beim Laden.

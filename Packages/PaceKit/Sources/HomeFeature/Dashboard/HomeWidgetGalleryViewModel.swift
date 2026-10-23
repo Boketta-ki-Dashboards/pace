@@ -132,7 +132,7 @@ public final class HomeWidgetGalleryViewModel {
             case let (left?, right?): left < right
             case (.some, nil): true
             case (nil, .some): false
-            case (nil, nil): lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+            case (nil, nil): lhs.shownName.localizedCaseInsensitiveCompare(rhs.shownName) == .orderedAscending
             }
         }
     }

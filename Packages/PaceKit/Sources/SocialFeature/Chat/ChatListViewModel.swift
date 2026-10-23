@@ -13,7 +13,7 @@ public enum ChatTarget: Hashable, Sendable {
     public var title: String {
         switch self {
         case .conversation(_, _, let title): title
-        case .direct(let profile): profile.displayName
+        case .direct(let profile): profile.shownName
         case .group(_, let name): name
         }
     }
@@ -28,7 +28,7 @@ public enum ChatTarget: Hashable, Sendable {
 
     /// Ziel für eine Zeile der Chatliste.
     public init(_ conversation: ConversationSummary) {
-        self = .conversation(id: conversation.id, kind: conversation.kind, title: conversation.title)
+        self = .conversation(id: conversation.id, kind: conversation.kind, title: conversation.shownTitle)
     }
 }
 
@@ -150,6 +150,7 @@ public final class ChatListViewModel {
             guard let peer = conversation.peer, !username.isEmpty else { return false }
             return peer.username.range(of: username, options: options) != nil
                 || peer.displayName.range(of: trimmed, options: options) != nil
+                || peer.nickname?.range(of: trimmed, options: options) != nil
         }
     }
 
@@ -160,7 +161,7 @@ public final class ChatListViewModel {
 
     /// VoiceOver-Text einer Zeile: Name, letzte Nachricht, Zeit und ungelesene Nachrichten.
     public func accessibilityLabel(for conversation: ConversationSummary) -> String {
-        var parts = [conversation.title, ChatFormatting.preview(for: conversation), timestamp(for: conversation)]
+        var parts = [conversation.shownTitle, ChatFormatting.preview(for: conversation), timestamp(for: conversation)]
         if conversation.unreadCount > 0 {
             parts.append(ChatFormatting.unread(conversation.unreadCount))
         }
@@ -292,6 +293,15 @@ public final class ChatListViewModel {
         guard let index = conversations.firstIndex(where: { $0.id == conversationID }) else { return }
         guard conversations[index].unreadCount != 0 else { return }
         conversations[index] = conversations[index].replacing(unreadCount: 0)
+    }
+
+    /// Ein Name hat sich geändert (z. B. eigener Spitzname für einen Freund): Liste und offene Chats neu laden.
+    func profileDidChange() async {
+        guard repository != nil else { return }
+        await load()
+        for chat in chats where chat.isVisible {
+            await chat.refresh()
+        }
     }
 
     /// In einem Chat hat sich etwas geändert (gesendet, gelöscht, blockiert): Liste im Hintergrund neu laden.

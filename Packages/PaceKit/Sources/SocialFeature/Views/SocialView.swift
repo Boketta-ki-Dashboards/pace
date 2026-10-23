@@ -241,9 +241,7 @@ struct SocialContent: View {
             HStack(alignment: .top, spacing: PaceSpacing.xs) {
                 ForEach(viewModel.topFriends) { entry in
                     TopFriendCard(entry: entry) {
-                        onOpen(.profile(SocialProfile(
-                            publicID: entry.publicUserID, username: entry.username, displayName: entry.displayName
-                        )))
+                        onOpen(.profile(entry.socialProfile))
                     }
                 }
                 // Gleiche Breite wie bei drei Freunden, auch wenn es weniger sind.
@@ -321,7 +319,7 @@ struct SocialContent: View {
             SocialSectionTitle(SocialText.chats)
             ForEach(conversations) { conversation in
                 ConversationMatchRow(conversation: conversation) {
-                    onOpenChat(.conversation(id: conversation.id, kind: conversation.kind, title: conversation.title))
+                    onOpenChat(.conversation(id: conversation.id, kind: conversation.kind, title: conversation.shownTitle))
                 }
             }
         }
@@ -337,14 +335,14 @@ private struct TopFriendCard: View {
         Button(action: action) {
             VStack(spacing: PaceSpacing.xxs) {
                 ZStack(alignment: .topLeading) {
-                    PaceAvatar(name: entry.displayName, seed: entry.publicUserID.uuidString, size: 48)
+                    PaceAvatar(name: entry.shownName, seed: entry.publicUserID.uuidString, size: 48, image: entry.avatar)
                         .frame(maxWidth: .infinity)
                     Text(verbatim: "#\(entry.rank.paceFormatted)")
                         .font(.system(.subheadline, weight: .bold))
                         .monospacedDigit()
                         .foregroundStyle(PaceColor.textPrimary)
                 }
-                Text(entry.displayName)
+                Text(entry.shownName)
                     .font(PaceFont.headline)
                     .foregroundStyle(PaceColor.textPrimary)
                     .lineLimit(1)
@@ -369,9 +367,9 @@ private struct TopFriendCard: View {
         .buttonStyle(.pacePressable)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(PaceLocalization.text(
-            de: "Platz \(entry.rank.paceFormatted), \(entry.displayName)",
-            en: "Rank \(entry.rank.paceFormatted), \(entry.displayName)",
-            ru: "Место \(entry.rank.paceFormatted), \(entry.displayName)"
+            de: "Platz \(entry.rank.paceFormatted), \(entry.shownName)",
+            en: "Rank \(entry.rank.paceFormatted), \(entry.shownName)",
+            ru: "Место \(entry.rank.paceFormatted), \(entry.shownName)"
         ) + ", " + PaceLocalization.steps(entry.competitionSteps))
         .accessibilityAddTraits(.isButton)
     }
@@ -386,12 +384,12 @@ private struct ConversationMatchRow: View {
         Button(action: action) {
             HStack(spacing: PaceSpacing.s) {
                 if let peer = conversation.peer {
-                    PaceAvatar(name: peer.displayName, seed: peer.publicID.uuidString, size: 48, image: peer.avatar)
+                    PaceAvatar(name: peer.shownName, seed: peer.publicID.uuidString, size: 48, image: peer.avatar)
                 } else {
-                    GroupAvatar(name: conversation.title, kind: .friends, image: MediaReference.groupImage(conversation.groupImagePath), size: 48)
+                    GroupAvatar(name: conversation.shownTitle, kind: .friends, image: MediaReference.groupImage(conversation.groupImagePath), size: 48)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(conversation.title)
+                    Text(conversation.shownTitle)
                         .font(PaceFont.headline)
                         .foregroundStyle(PaceColor.textPrimary)
                         .lineLimit(1)

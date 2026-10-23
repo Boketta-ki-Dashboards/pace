@@ -259,7 +259,7 @@ struct GroupDetailContent: View {
     private func rankingRow(_ entry: GroupRankingEntry) -> some View {
         let row = PaceRankingRow(
             rank: entry.rank,
-            name: entry.profile.displayName,
+            name: entry.profile.shownName,
             steps: entry.competitionSteps,
             seed: entry.profile.publicID.uuidString,
             image: entry.profile.avatar,

@@ -67,7 +67,7 @@ struct GroupsContent: View {
                             .font(PaceFont.headline)
                             .foregroundStyle(PaceColor.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text(SocialText.invitedBy(invitation.inviterDisplayName, memberCount: invitation.memberCount))
+                        Text(SocialText.invitedBy(invitation.inviterShownName, memberCount: invitation.memberCount))
                             .font(PaceFont.caption)
                             .foregroundStyle(PaceColor.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)

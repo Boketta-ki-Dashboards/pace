@@ -160,11 +160,14 @@ public final class SocialViewModel {
         !normalizedFilter.isEmpty
     }
 
-    /// Freunde, deren Anzeige- oder Benutzername den Suchtext enthält.
+    /// Freunde, deren Spitzname, Anzeige- oder Benutzername den Suchtext enthält.
     public var matchingFriends: [Friend] {
         let query = normalizedFilter
         guard !query.isEmpty else { return [] }
-        return friends.filter { Self.matches($0.profile.displayName, query) || Self.matches($0.profile.username, query) }
+        return friends.filter {
+            Self.matches($0.profile.shownName, query) || Self.matches($0.profile.displayName, query)
+                || Self.matches($0.profile.username, query)
+        }
     }
 
     /// Chats, deren Name (bzw. Benutzername des Gegenübers) den Suchtext enthält.
@@ -326,8 +329,8 @@ public final class SocialViewModel {
             let result = try await repository.sendFriendRequest(to: profile.publicID)
             outcome = result
             switch result {
-            case .requested: return SocialText.requestSent(to: profile.displayName)
-            case .accepted: return SocialText.nowFriends(with: profile.displayName)
+            case .requested: return SocialText.requestSent(to: profile.shownName)
+            case .accepted: return SocialText.nowFriends(with: profile.shownName)
             case .alreadyFriends: return SocialText.alreadyFriendsNotice
             case .alreadyRequested: return SocialText.alreadyRequestedNotice
             }
@@ -345,7 +348,7 @@ public final class SocialViewModel {
     public func respondToRequest(_ requestID: UUID, from profile: SocialProfile, accept: Bool) async -> Bool {
         await perform(on: requestID, also: profile.publicID) { repository in
             try await repository.respondToFriendRequest(requestID, accept: accept)
-            return accept ? SocialText.nowFriends(with: profile.displayName) : SocialText.requestDeclined
+            return accept ? SocialText.nowFriends(with: profile.shownName) : SocialText.requestDeclined
         }
     }
 
@@ -366,7 +369,7 @@ public final class SocialViewModel {
     public func removeFriend(_ profile: SocialProfile) async -> Bool {
         await perform(on: profile.publicID) { repository in
             try await repository.removeFriend(profile.publicID)
-            return SocialText.friendRemoved(profile.displayName)
+            return SocialText.friendRemoved(profile.shownName)
         }
     }
 
@@ -377,7 +380,7 @@ public final class SocialViewModel {
     public func block(_ profile: SocialProfile) async -> Bool {
         await perform(on: profile.publicID) { repository in
             try await repository.block(profile.publicID)
-            return SocialText.blocked(profile.displayName)
+            return SocialText.blocked(profile.shownName)
         }
     }
 
@@ -385,7 +388,7 @@ public final class SocialViewModel {
     public func unblock(_ profile: SocialProfile) async -> Bool {
         await perform(on: profile.publicID) { repository in
             try await repository.unblock(profile.publicID)
-            return SocialText.unblocked(profile.displayName)
+            return SocialText.unblocked(profile.shownName)
         }
     }
 
@@ -524,6 +527,19 @@ public final class SocialViewModel {
         } catch {
             return nil
         }
+    }
+
+    /// Ein Spitzname wurde gespeichert: sofort in Freunden, Ranking (Top-Freunde, Home) und Chats übernehmen; die
+    /// Chatliste gleicht sich im Hintergrund mit dem Server ab (Titel, Absendernamen).
+    func nicknameDidChange(_ profile: SocialProfile) {
+        friends = friends.map { friend in
+            guard friend.profile.publicID == profile.publicID else { return friend }
+            return Friend(profile: friend.profile.withNickname(profile.nickname), friendsSince: friend.friendsSince)
+        }
+        ranking = ranking.map { entry in
+            entry.publicUserID == profile.publicID ? entry.withNickname(profile.nickname) : entry
+        }
+        Task { [chats] in await chats.profileDidChange() }
     }
 
     public func dismissNotice() {

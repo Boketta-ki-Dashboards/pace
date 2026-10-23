@@ -61,6 +61,25 @@ public struct LeaderboardEntry: Equatable, Hashable, Sendable, Identifiable {
 
     /// Angezeigter Name: eigener Spitzname, sonst Anzeigename.
     public var shownName: String { NicknameRules.shownName(nickname: nickname, displayName: displayName) }
+
+    /// Gleicher Eintrag mit anderem Spitznamen (sofort nach dem Ändern, ohne neu zu laden).
+    public func withNickname(_ nickname: String?) -> LeaderboardEntry {
+        LeaderboardEntry(
+            rank: rank,
+            publicUserID: publicUserID,
+            username: username,
+            displayName: displayName,
+            competitionSteps: competitionSteps,
+            isCurrentUser: isCurrentUser,
+            avatarPath: avatarPath,
+            nickname: nickname
+        )
+    }
+
+    /// Die Person als Social-Profil (z. B. zum Öffnen ihres Profils) – mit Profilbild und eigenem Spitznamen.
+    public var socialProfile: SocialProfile {
+        SocialProfile(publicID: publicUserID, username: username, displayName: displayName, avatarPath: avatarPath, nickname: nickname)
+    }
 }
 
 /// Ein Ausschnitt des Rankings (serverseitig sortiert und paginiert).

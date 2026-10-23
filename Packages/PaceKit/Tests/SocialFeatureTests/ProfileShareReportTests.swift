@@ -21,6 +21,76 @@ struct UserProfileViewModelTests {
         return (social, repository)
     }
 
+    // MARK: Spitznamen
+
+    @Test func aNicknameIsSavedAndShownEverywhereRightAway() async throws {
+        let entry = LeaderboardEntry(rank: 1, publicUserID: mia.publicID, username: "mia", displayName: "Mia", competitionSteps: 9_000, isCurrentUser: false)
+        let (social, repository) = await make { state in
+            state.friends = [Friend(profile: self.mia, friendsSince: .distantPast)]
+            state.ranking = [entry]
+        }
+        let profile = try #require(social.userProfile(for: mia))
+        await profile.load()
+        #expect(profile.canEditNickname)
+        #expect(profile.canSaveNickname("  Laufpartnerin  "))
+        #expect(!profile.canSaveNickname(""))
+
+        #expect(await profile.saveNickname("  Laufpartnerin  "))
+
+        #expect(repository.state.withLock { $0.calls }.contains("setFriendNickname"))
+        #expect(profile.profile.nickname == "Laufpartnerin")
+        #expect(profile.profile.shownName == "Laufpartnerin")
+        #expect(profile.loaded?.profile.nickname == "Laufpartnerin")
+        // Sofort in Freundesliste, Ranking und Top-Freunden – ohne neu zu laden.
+        #expect(social.friends.first?.profile.shownName == "Laufpartnerin")
+        #expect(social.ranking.first?.shownName == "Laufpartnerin")
+        #expect(social.topFriends.first?.shownName == "Laufpartnerin")
+        #expect(social.ranking.first?.socialProfile.nickname == "Laufpartnerin")
+        // Suche findet den Spitznamen.
+        social.filterText = "lauf"
+        #expect(social.matchingFriends.map(\.id) == [mia.publicID])
+
+        // Leere Eingabe entfernt ihn wieder.
+        #expect(await profile.saveNickname(" "))
+        #expect(profile.profile.nickname == nil)
+        #expect(social.friends.first?.profile.shownName == "Mia")
+    }
+
+    @Test func invalidNicknamesAreRejectedBeforeSaving() async throws {
+        let (social, repository) = await make { $0.friends = [Friend(profile: self.mia, friendsSince: .distantPast)] }
+        let profile = try #require(social.userProfile(for: mia))
+        await profile.load()
+        let tooLong = String(repeating: "a", count: NicknameRules.maxLength + 1)
+
+        #expect(profile.nicknameProblem(for: tooLong) != nil)
+        #expect(!profile.canSaveNickname(tooLong))
+        #expect(await !profile.saveNickname(tooLong))
+        #expect(profile.nicknameError != nil)
+        #expect(!repository.state.withLock { $0.calls }.contains("setFriendNickname"))
+    }
+
+    @Test func onlyFriendsCanGetANickname() async {
+        let (social, _) = await make { $0.searchableProfiles = [self.ben] }
+        let profile = social.userProfile(for: ben)!
+        await profile.load()
+
+        #expect(!profile.canEditNickname)
+        #expect(await !profile.saveNickname("Ben der Große"))
+    }
+
+    @Test func savingErrorsAreShownAndKeepTheOldName() async throws {
+        let (social, repository) = await make { $0.friends = [Friend(profile: self.mia, friendsSince: .distantPast)] }
+        let profile = try #require(social.userProfile(for: mia))
+        await profile.load()
+        repository.state.withLock { $0.error = .network }
+
+        #expect(await !profile.saveNickname("Mimi"))
+
+        #expect(profile.nicknameError == SocialError.network.message)
+        #expect(profile.profile.nickname == nil)
+        #expect(social.friends.first?.profile.shownName == "Mia")
+    }
+
     @Test func aStrangerCanBeAddedAndTheRequestWithdrawn() async throws {
         let (social, repository) = await make { $0.searchableProfiles = [self.mia] }
         let profile = social.userProfile(for: mia)!

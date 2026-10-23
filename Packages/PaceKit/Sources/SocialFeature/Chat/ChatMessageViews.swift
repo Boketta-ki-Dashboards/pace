@@ -137,7 +137,7 @@ struct ChatEntryRow: View {
     }
 
     private var senderName: String {
-        entry.sender?.displayName ?? ChatFormatting.deletedAccount
+        entry.sender?.shownName ?? ChatFormatting.deletedAccount
     }
 
     @ViewBuilder
@@ -146,10 +146,10 @@ struct ChatEntryRow: View {
             Button {
                 actions.openProfile(sender)
             } label: {
-                PaceAvatar(name: sender.displayName, seed: sender.publicID.uuidString, size: Self.avatarSize, image: sender.avatar)
+                PaceAvatar(name: sender.shownName, seed: sender.publicID.uuidString, size: Self.avatarSize, image: sender.avatar)
             }
             .buttonStyle(.pacePressable)
-            .accessibilityLabel(sender.displayName)
+            .accessibilityLabel(sender.shownName)
             .accessibilityHint(ChatUIText.viewProfile)
         } else if entry.showsSender {
             PaceAvatar(name: senderName, seed: senderName, size: Self.avatarSize)
@@ -234,7 +234,7 @@ struct ChatMessageContent: View {
     @ViewBuilder
     private var media: some View {
         let isGIF = message.kind == .gif
-        let label = isGIF ? ChatUIText.gif(from: message.isOwn ? nil : message.sender?.displayName) : ChatUIText.photo(from: message.isOwn ? nil : message.sender?.displayName)
+        let label = isGIF ? ChatUIText.gif(from: message.isOwn ? nil : message.sender?.shownName) : ChatUIText.photo(from: message.isOwn ? nil : message.sender?.shownName)
         ChatMediaBubble(
             reference: message.media,
             localData: message.media.flatMap { viewModel.uploadedData(for: $0) },
@@ -247,7 +247,7 @@ struct ChatMessageContent: View {
     }
 
     private var accessibilityText: String {
-        let sender = message.isOwn ? nil : (message.sender?.displayName ?? ChatFormatting.deletedAccount)
+        let sender = message.isOwn ? nil : (message.sender?.shownName ?? ChatFormatting.deletedAccount)
         let description: String
         switch message.kind {
         case .text:
@@ -255,7 +255,7 @@ struct ChatMessageContent: View {
         case .image, .gif:
             description = ChatFormatting.content(kind: message.kind, text: nil) + (message.text.map { ", " + $0 } ?? "")
         case .profile:
-            description = message.sharedProfile.map { ChatUIText.sharedProfileAccessibility(name: $0.displayName, username: $0.username) }
+            description = message.sharedProfile.map { ChatUIText.sharedProfileAccessibility(name: $0.shownName, username: $0.username) }
                 ?? ChatUIText.profileUnavailable
         case .voice:
             description = ChatFormatting.content(kind: .voice, text: nil, duration: message.mediaDuration)
@@ -350,12 +350,12 @@ struct ChatProfileCard: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: PaceSpacing.s) {
-                PaceAvatar(name: profile.displayName, seed: profile.publicID.uuidString, size: 44, image: profile.avatar)
+                PaceAvatar(name: profile.shownName, seed: profile.publicID.uuidString, size: 44, image: profile.avatar)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(ChatUIText.sharedProfile)
                         .font(PaceFont.micro)
                         .foregroundStyle(PaceColor.textSecondary)
-                    Text(profile.displayName)
+                    Text(profile.shownName)
                         .font(PaceFont.headline)
                         .foregroundStyle(PaceColor.textPrimary)
                         .lineLimit(1)

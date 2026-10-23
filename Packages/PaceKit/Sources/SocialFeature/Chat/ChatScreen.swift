@@ -182,7 +182,7 @@ struct ChatInfoHeader: View {
                         ChatRouteLink(route: .groupMembers(groupID), openRoute: actions.openRoute) {
                             HStack(spacing: -4) {
                                 ForEach(viewModel.memberPreview) { member in
-                                    PaceAvatar(name: member.displayName, seed: member.publicID.uuidString, size: 44, image: member.avatar)
+                                    PaceAvatar(name: member.shownName, seed: member.publicID.uuidString, size: 44, image: member.avatar)
                                         .padding(2)
                                         .background(Circle().fill(PaceColor.background))
                                 }
@@ -314,7 +314,7 @@ struct ChatPeerCard: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: PaceSpacing.s) {
-                PaceAvatar(name: profile.displayName, seed: profile.publicID.uuidString, size: 44, image: profile.avatar)
+                PaceAvatar(name: profile.shownName, seed: profile.publicID.uuidString, size: 44, image: profile.avatar)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: "@\(profile.username)")
                         .font(PaceFont.headline)
@@ -336,7 +336,7 @@ struct ChatPeerCard: View {
         }
         .buttonStyle(.pacePressable)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(profile.displayName + ", @" + profile.username)
+        .accessibilityLabel(profile.shownName + ", @" + profile.username)
         .accessibilityHint(ChatUIText.viewProfile)
         .accessibilityAddTraits(.isButton)
     }

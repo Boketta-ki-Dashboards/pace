@@ -84,7 +84,7 @@ struct ChatListRow: View {
                 ChatConversationAvatar(conversation: conversation, size: Self.avatarSize)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(alignment: .firstTextBaseline, spacing: PaceSpacing.xs) {
-                        Text(conversation.title)
+                        Text(conversation.shownTitle)
                             .font(PaceFont.headline)
                             .foregroundStyle(PaceColor.textPrimary)
                             .lineLimit(1)
@@ -134,13 +134,13 @@ struct ChatConversationAvatar: View {
         switch conversation.kind {
         case .direct:
             if let peer = conversation.peer {
-                PaceAvatar(name: peer.displayName, seed: peer.publicID.uuidString, size: size, image: peer.avatar)
+                PaceAvatar(name: peer.shownName, seed: peer.publicID.uuidString, size: size, image: peer.avatar)
             } else {
-                PaceAvatar(name: conversation.title, seed: conversation.id.uuidString, size: size)
+                PaceAvatar(name: conversation.shownTitle, seed: conversation.id.uuidString, size: size)
             }
         case .group:
             if let image = conversation.image {
-                PaceAvatar(name: conversation.title, seed: conversation.id.uuidString, size: size, image: image)
+                PaceAvatar(name: conversation.shownTitle, seed: conversation.id.uuidString, size: size, image: image)
             } else {
                 Image(systemName: "person.3.fill")
                     .font(.system(size: size * 0.34, weight: .semibold))

@@ -114,7 +114,7 @@ public final class GroupDetailViewModel: Identifiable {
     public var members: [GroupRankingEntry] {
         (ranking?.entries ?? []).sorted { lhs, rhs in
             if lhs.role != rhs.role { return lhs.role == .owner }
-            return lhs.profile.displayName.localizedStandardCompare(rhs.profile.displayName) == .orderedAscending
+            return lhs.profile.shownName.localizedStandardCompare(rhs.profile.shownName) == .orderedAscending
         }
     }
 
@@ -224,9 +224,9 @@ public final class GroupDetailViewModel: Identifiable {
     public func invite(_ friend: Friend) async -> Bool {
         await perform(busy: friend.profile.publicID) {
             switch try await self.repository.invite(friend.profile.publicID, to: self.groupID) {
-            case .invited: SocialText.invitedNotice(friend.profile.displayName)
-            case .alreadyMember: SocialText.alreadyMember(friend.profile.displayName)
-            case .alreadyInvited: SocialText.alreadyInvited(friend.profile.displayName)
+            case .invited: SocialText.invitedNotice(friend.profile.shownName)
+            case .alreadyMember: SocialText.alreadyMember(friend.profile.shownName)
+            case .alreadyInvited: SocialText.alreadyInvited(friend.profile.shownName)
             }
         }
     }
@@ -325,7 +325,7 @@ public final class GroupDetailViewModel: Identifiable {
     public func remove(_ member: GroupRankingEntry) async -> Bool {
         let removed = await perform(busy: member.profile.publicID) {
             try await self.repository.removeMember(member.profile.publicID, from: self.groupID)
-            return SocialText.memberRemoved(member.profile.displayName)
+            return SocialText.memberRemoved(member.profile.shownName)
         }
         if removed { await social?.load() }
         return removed

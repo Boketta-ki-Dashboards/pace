@@ -474,7 +474,7 @@ private struct RankingRow: View {
     var body: some View {
         PaceRankingRow(
             rank: entry.rank,
-            name: entry.isCurrentUser ? LeaderboardTexts.you : entry.displayName,
+            name: entry.isCurrentUser ? LeaderboardTexts.you : entry.shownName,
             steps: entry.competitionSteps,
             seed: entry.publicUserID.uuidString,
             image: entry.avatar,
@@ -514,7 +514,7 @@ private struct GroupStandingCard: View {
                             }
                             PaceRankingRow(
                                 rank: entry.rank,
-                                name: entry.isCurrentUser ? LeaderboardTexts.you : entry.profile.displayName,
+                                name: entry.isCurrentUser ? LeaderboardTexts.you : entry.profile.shownName,
                                 steps: entry.competitionSteps,
                                 seed: entry.profile.publicID.uuidString,
                                 image: entry.profile.avatar,

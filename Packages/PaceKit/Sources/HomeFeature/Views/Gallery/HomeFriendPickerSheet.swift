@@ -59,9 +59,9 @@ struct HomeFriendPickerContent: View {
                             gallery.toggleFriend(profile.publicID)
                         } label: {
                             HStack(spacing: PaceSpacing.s) {
-                                PaceAvatar(name: profile.displayName, seed: profile.publicID.uuidString, size: 40, image: profile.avatar)
+                                PaceAvatar(name: profile.shownName, seed: profile.publicID.uuidString, size: 40, image: profile.avatar)
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(profile.displayName)
+                                    Text(profile.shownName)
                                         .font(PaceFont.headline)
                                         .foregroundStyle(PaceColor.textPrimary)
                                         .lineLimit(1)

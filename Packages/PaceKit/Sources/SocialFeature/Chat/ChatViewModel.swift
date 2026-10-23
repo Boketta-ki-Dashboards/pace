@@ -109,7 +109,7 @@ public final class ChatViewModel {
     /// Gruppenname bzw. Name des Freundes.
     public var title: String {
         if let group { return group.name }
-        if let conversation { return conversation.title }
+        if let conversation { return conversation.shownTitle }
         return target.title
     }
 
@@ -152,7 +152,7 @@ public final class ChatViewModel {
     public var readOnlyMessage: String? {
         guard state == .loaded, conversation != nil, !canSend else { return nil }
         let blockedByMe = peer.map { blockedUserIDs.contains($0.publicID) } ?? false
-        return ChatTexts.readOnly(kind: kind, peerName: peer?.displayName, blockedByMe: blockedByMe)
+        return ChatTexts.readOnly(kind: kind, peerName: peer?.shownName, blockedByMe: blockedByMe)
     }
 
     /// Senden-Knopf aktiv: Text vorhanden und nicht zu lang.
@@ -676,7 +676,7 @@ public final class ChatViewModel {
             if kind == .direct, let conversation, conversation.peer?.publicID == profile.publicID {
                 self.conversation = conversation.replacing(canSend: false)
             }
-            notice = ChatNotice(text: ChatTexts.blocked(profile.displayName), isError: false)
+            notice = ChatNotice(text: ChatTexts.blocked(profile.shownName), isError: false)
             list?.conversationDidChange()
         } catch {
             notice = ChatNotice(text: ChatTexts.message(for: error), isError: true)

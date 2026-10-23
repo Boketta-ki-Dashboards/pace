@@ -26,7 +26,7 @@ public final class ShareProfileViewModel {
 
         public var title: String {
             switch kind {
-            case .friend(let profile): profile.displayName
+            case .friend(let profile): profile.shownName
             case .group(_, let name, _, _): name
             }
         }
@@ -57,7 +57,7 @@ public final class ShareProfileViewModel {
     public var friendRecipients: [Recipient] {
         (social?.friends ?? [])
             .filter { $0.profile.publicID != profile.publicID }
-            .sorted { $0.profile.displayName.localizedStandardCompare($1.profile.displayName) == .orderedAscending }
+            .sorted { $0.profile.shownName.localizedStandardCompare($1.profile.shownName) == .orderedAscending }
             .map { Recipient(kind: .friend($0.profile)) }
     }
 

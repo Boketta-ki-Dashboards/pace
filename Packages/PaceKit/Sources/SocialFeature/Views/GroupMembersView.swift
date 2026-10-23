@@ -30,7 +30,7 @@ struct GroupMembersView: View {
             if viewModel.state != .loaded { await viewModel.load() }
         }
         .confirmationDialog(
-            memberToRemove.map { SocialText.removeMemberTitle($0.profile.displayName) } ?? SocialText.removeFromGroup,
+            memberToRemove.map { SocialText.removeMemberTitle($0.profile.shownName) } ?? SocialText.removeFromGroup,
             isPresented: $showsRemoveDialog,
             titleVisibility: .visible,
             presenting: memberToRemove
@@ -95,10 +95,10 @@ struct GroupMembersContent: View {
                 if !member.isCurrentUser { onOpenProfile(member.profile) }
             } label: {
                 HStack(spacing: PaceSpacing.s) {
-                    PaceAvatar(name: member.profile.displayName, seed: member.profile.publicID.uuidString, size: 44, image: member.profile.avatar)
+                    PaceAvatar(name: member.profile.shownName, seed: member.profile.publicID.uuidString, size: 44, image: member.profile.avatar)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: PaceSpacing.xs) {
-                            Text(member.isCurrentUser ? SocialText.youName(member.profile.displayName) : member.profile.displayName)
+                            Text(member.isCurrentUser ? SocialText.youName(member.profile.shownName) : member.profile.shownName)
                                 .font(PaceFont.headline)
                                 .foregroundStyle(member.isCurrentUser ? PaceColor.accent : PaceColor.textPrimary)
                                 .lineLimit(1)
@@ -139,7 +139,7 @@ struct GroupMembersContent: View {
                     SocialMoreLabel()
                 }
                 .disabled(viewModel.busyIDs.contains(member.profile.publicID))
-                .accessibilityLabel(SocialText.moreActions(for: member.profile.displayName))
+                .accessibilityLabel(SocialText.moreActions(for: member.profile.shownName))
             }
         }
         .padding(.horizontal, PaceSpacing.s)

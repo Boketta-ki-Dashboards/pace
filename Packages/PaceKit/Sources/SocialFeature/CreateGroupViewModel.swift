@@ -36,7 +36,7 @@ public final class CreateGroupViewModel {
     /// Freunde, die eingeladen werden können (alphabetisch).
     public var friends: [Friend] {
         (social?.friends ?? []).sorted {
-            $0.profile.displayName.localizedStandardCompare($1.profile.displayName) == .orderedAscending
+            $0.profile.shownName.localizedStandardCompare($1.profile.shownName) == .orderedAscending
         }
     }
 

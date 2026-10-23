@@ -47,14 +47,14 @@ struct FriendsWidgetContent: View {
             Button(action: onOpenSocial) {
                 HStack(spacing: PaceSpacing.s) {
                     PaceAvatar(
-                        name: first.entry.displayName,
+                        name: first.entry.shownName,
                         seed: first.entry.publicUserID.uuidString,
                         size: 44,
                         isHighlighted: first.entry.isCurrentUser,
                         image: first.entry.avatar
                     )
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(first.entry.isCurrentUser ? HomeTexts.you : first.entry.displayName)
+                        Text(first.entry.isCurrentUser ? HomeTexts.you : first.entry.shownName)
                             .font(PaceFont.headline)
                             .foregroundStyle(PaceColor.textPrimary)
                             .lineLimit(1)
@@ -83,7 +83,7 @@ struct FriendsWidgetContent: View {
                 Button(action: onOpenSocial) {
                     PaceRankingRow(
                         rank: row.rank,
-                        name: row.entry.isCurrentUser ? HomeTexts.you : row.entry.displayName,
+                        name: row.entry.isCurrentUser ? HomeTexts.you : row.entry.shownName,
                         steps: row.entry.competitionSteps,
                         seed: row.entry.publicUserID.uuidString,
                         image: row.entry.avatar,
@@ -134,7 +134,7 @@ struct FriendsWidgetContent: View {
         return rows.map { row in
             HomeBarChart.Bar(
                 id: row.id.uuidString,
-                label: row.entry.isCurrentUser ? HomeTexts.you : row.entry.displayName,
+                label: row.entry.isCurrentUser ? HomeTexts.you : row.entry.shownName,
                 level: Double(row.entry.competitionSteps) / maximum,
                 valueText: row.entry.competitionSteps.paceFormatted,
                 isHighlighted: row.entry.isCurrentUser
@@ -145,7 +145,7 @@ struct FriendsWidgetContent: View {
     private func rowLabel(_ row: HomeFriendsWidget.Row) -> String {
         let rank = row.rank.paceFormatted
         let place = PaceLocalization.text(de: "Platz \(rank)", en: "Rank \(rank)", ru: "Место \(rank)")
-        let name = row.entry.isCurrentUser ? HomeTexts.you : row.entry.displayName
+        let name = row.entry.isCurrentUser ? HomeTexts.you : row.entry.shownName
         return [place, name, PaceLocalization.steps(row.entry.competitionSteps)].joined(separator: ", ")
     }
 }

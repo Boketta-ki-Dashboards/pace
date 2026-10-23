@@ -78,7 +78,7 @@ struct NeighborhoodWidgetContent: View {
                     } label: {
                         PaceRankingRow(
                             rank: entry.rank,
-                            name: entry.isCurrentUser ? HomeTexts.you : entry.displayName,
+                            name: entry.isCurrentUser ? HomeTexts.you : entry.shownName,
                             steps: entry.competitionSteps,
                             seed: entry.publicUserID.uuidString,
                             image: entry.avatar,
@@ -108,7 +108,7 @@ struct NeighborhoodWidgetContent: View {
         return neighborhood.entries.map { entry in
             HomeBarChart.Bar(
                 id: entry.publicUserID.uuidString,
-                label: entry.isCurrentUser ? HomeTexts.you : entry.displayName,
+                label: entry.isCurrentUser ? HomeTexts.you : entry.shownName,
                 level: Double(entry.competitionSteps) / maximum,
                 valueText: entry.competitionSteps.paceFormatted,
                 isHighlighted: entry.isCurrentUser
@@ -121,7 +121,7 @@ struct NeighborhoodWidgetContent: View {
         neighborhood.entries.map { entry -> String in
             let rank = entry.rank.paceFormatted
             let place = PaceLocalization.text(de: "Platz \(rank)", en: "Rank \(rank)", ru: "Место \(rank)")
-            let name = entry.isCurrentUser ? HomeTexts.you : entry.displayName
+            let name = entry.isCurrentUser ? HomeTexts.you : entry.shownName
             return [place, name, PaceLocalization.steps(entry.competitionSteps)].joined(separator: ", ")
         }
         .joined(separator: "; ")

@@ -10,6 +10,7 @@ struct UserProfileView: View {
     private let onOpenChat: (ChatTarget) -> Void
     @State private var confirmation: Confirmation?
     @State private var showsConfirmation = false
+    @State private var showsNicknameEditor = false
 
     private enum Confirmation: String, Identifiable {
         case removeFriend
@@ -38,9 +39,13 @@ struct UserProfileView: View {
             onShare: { onOpen(.shareProfile(model.profile)) },
             onReport: { onOpen(.report(.user(model.profile))) },
             onRemoveFriend: { confirm(.removeFriend) },
-            onBlock: { confirm(.block) }
+            onBlock: { confirm(.block) },
+            onEditNickname: { showsNicknameEditor = true }
         )
         .socialSubpageScroll()
+        .sheet(isPresented: $showsNicknameEditor) {
+            NicknameEditSheet(model: model)
+        }
         .refreshable { [model] in await model.load() }
         .task { [model] in await model.load() }
         .confirmationDialog(
@@ -75,8 +80,8 @@ struct UserProfileView: View {
 
     private var confirmationTitle: String {
         switch confirmation {
-        case .removeFriend: SocialText.removeFriendTitle(model.profile.displayName)
-        case .block: SocialText.blockTitle(model.profile.displayName)
+        case .removeFriend: SocialText.removeFriendTitle(model.profile.shownName)
+        case .block: SocialText.blockTitle(model.profile.shownName)
         case nil: ""
         }
     }
@@ -91,6 +96,7 @@ struct UserProfileContent: View {
     var onReport: () -> Void = {}
     var onRemoveFriend: () -> Void = {}
     var onBlock: () -> Void = {}
+    var onEditNickname: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
@@ -120,12 +126,18 @@ struct UserProfileContent: View {
 
     private var identity: some View {
         HStack(spacing: PaceSpacing.m) {
-            PaceAvatar(name: model.profile.displayName, seed: model.profile.publicID.uuidString, size: 76, image: model.profile.avatar)
+            PaceAvatar(name: model.profile.shownName, seed: model.profile.publicID.uuidString, size: 76, image: model.profile.avatar)
             VStack(alignment: .leading, spacing: 2) {
-                Text(model.profile.displayName)
+                Text(model.profile.shownName)
                     .font(.system(.title2, weight: .bold))
                     .foregroundStyle(PaceColor.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
+                if model.profile.nickname?.isEmpty == false {
+                    Text(SocialText.displayNameLine(model.profile.displayName))
+                        .font(PaceFont.callout)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Text(verbatim: "@\(model.profile.username)")
                     .font(PaceFont.body)
                     .foregroundStyle(PaceColor.textSecondary)
@@ -265,6 +277,14 @@ struct UserProfileContent: View {
     private func moreActions(_ details: PublicProfile) -> some View {
         if details.relationship != .me {
             VStack(spacing: 0) {
+                if model.canEditNickname {
+                    actionRow(
+                        model.profile.nickname == nil ? SocialText.addNickname : SocialText.editNickname,
+                        systemImage: "character.cursor.ibeam",
+                        action: onEditNickname
+                    )
+                    Divider().padding(.leading, 52)
+                }
                 actionRow(SocialText.shareProfile, systemImage: "square.and.arrow.up", action: onShare)
                 if details.relationship == .friend {
                     Divider().padding(.leading, 52)
@@ -306,5 +326,97 @@ struct UserProfileContent: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.pacePressable)
+    }
+}
+
+/// Eigenen, privaten Spitznamen für einen Freund vergeben, ändern oder entfernen.
+struct NicknameEditSheet: View {
+    let model: UserProfileViewModel
+    @State private var input: String
+    @FocusState private var isFocused: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    init(model: UserProfileViewModel) {
+        self.model = model
+        _input = State(initialValue: model.profile.nickname ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                    Text(SocialText.nickname)
+                        .font(PaceFont.caption.weight(.semibold))
+                        .foregroundStyle(PaceColor.textSecondary)
+                    TextField(SocialText.nicknamePlaceholder, text: $input)
+                        .textContentType(.nickname)
+                        .submitLabel(.done)
+                        .focused($isFocused)
+                        .onSubmit(save)
+                        .font(PaceFont.body)
+                        .padding(.horizontal, PaceSpacing.m)
+                        .frame(minHeight: 48)
+                        .background(PaceColor.fieldBackground, in: RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous))
+                    if let problem = model.nicknameProblem(for: input) ?? model.nicknameError {
+                        Text(problem)
+                            .font(PaceFont.caption)
+                            .foregroundStyle(PaceColor.danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(SocialText.nicknamePrivacyNote)
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(SocialText.displayNameLine(model.profile.displayName) + " · @" + model.profile.username)
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if model.profile.nickname != nil {
+                        Button(role: .destructive) {
+                            input = ""
+                            save()
+                        } label: {
+                            Label(SocialText.removeNickname, systemImage: "xmark.circle")
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.paceOutline)
+                        .disabled(model.isSavingNickname)
+                        .padding(.top, PaceSpacing.xs)
+                    }
+                }
+                .padding(PaceSpacing.l)
+            }
+            .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            .paceScreenBackground()
+            .navigationTitle(model.profile.nickname == nil ? SocialText.addNickname : SocialText.editNickname)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(SocialText.cancel) { dismiss() }
+                        .disabled(model.isSavingNickname)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if model.isSavingNickname {
+                        ProgressView()
+                    } else {
+                        Button(SocialText.save, action: save)
+                            .disabled(!model.canSaveNickname(input))
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .interactiveDismissDisabled(model.isSavingNickname)
+        .onAppear { isFocused = true }
+        .onDisappear { model.clearNicknameError() }
+    }
+
+    private func save() {
+        Task {
+            if await model.saveNickname(input) {
+                dismiss()
+            }
+        }
     }
 }

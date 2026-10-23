@@ -130,6 +130,75 @@ public final class UserProfileViewModel {
         return done
     }
 
+    // MARK: Spitzname
+
+    /// Einen privaten Spitznamen gibt es nur für Freunde; nur du siehst ihn.
+    public var canEditNickname: Bool {
+        guard let loaded else { return false }
+        return loaded.relationship == .friend && !loaded.isBlockedByMe
+    }
+
+    public private(set) var isSavingNickname = false
+    /// Fehler beim letzten Speichern (z. B. keine Verbindung).
+    public private(set) var nicknameError: String?
+
+    /// Prüfung beim Tippen; `nil`, wenn die Eingabe gespeichert werden kann (leer = Spitzname entfernen).
+    public func nicknameProblem(for input: String) -> String? {
+        NicknameRules.violation(for: input).map(SocialText.nicknameProblem)
+    }
+
+    /// Ob die Eingabe etwas ändert und gültig ist.
+    public func canSaveNickname(_ input: String) -> Bool {
+        canEditNickname && !isSavingNickname && nicknameProblem(for: input) == nil
+            && NicknameRules.storedValue(input) != profile.nickname
+    }
+
+    /// Speichert den Spitznamen auf dem Server (leere Eingabe entfernt ihn) und übernimmt ihn sofort überall.
+    /// - Returns: `true`, wenn gespeichert (oder unverändert).
+    @discardableResult
+    public func saveNickname(_ input: String) async -> Bool {
+        guard canEditNickname, !isSavingNickname else { return false }
+        if let problem = nicknameProblem(for: input) {
+            nicknameError = problem
+            return false
+        }
+        let value = NicknameRules.storedValue(input)
+        guard value != profile.nickname else {
+            nicknameError = nil
+            return true
+        }
+        isSavingNickname = true
+        defer { isSavingNickname = false }
+        do {
+            let saved = try await repository.setFriendNickname(publicID: profile.publicID, nickname: value)
+            profile = profile.withNickname(saved.nickname)
+            if let details = loaded {
+                state = .loaded(PublicProfile(
+                    profile: profile,
+                    relationship: details.relationship,
+                    requestID: details.requestID,
+                    friendsSince: details.friendsSince,
+                    stepsToday: details.stepsToday,
+                    stepsWeek: details.stepsWeek,
+                    isBlockedByMe: details.isBlockedByMe
+                ))
+            }
+            nicknameError = nil
+            social?.nicknameDidChange(profile)
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            nicknameError = SocialText.actionMessage(for: error)
+            return false
+        }
+    }
+
+    /// Fehlerhinweis zurücksetzen (z. B. beim Schließen der Eingabe).
+    public func clearNicknameError() {
+        nicknameError = nil
+    }
+
     /// Link und Text zum Teilen außerhalb von Pace.
     public var shareURL: URL {
         PaceLink.profile(username: profile.username).url

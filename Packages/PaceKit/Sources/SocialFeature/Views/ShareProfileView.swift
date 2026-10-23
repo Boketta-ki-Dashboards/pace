@@ -76,9 +76,9 @@ struct ShareProfileContent: View {
 
     private var sharedProfile: some View {
         HStack(spacing: PaceSpacing.s) {
-            PaceAvatar(name: model.profile.displayName, seed: model.profile.publicID.uuidString, size: 52, image: model.profile.avatar)
+            PaceAvatar(name: model.profile.shownName, seed: model.profile.publicID.uuidString, size: 52, image: model.profile.avatar)
             VStack(alignment: .leading, spacing: 2) {
-                Text(model.profile.displayName)
+                Text(model.profile.shownName)
                     .font(PaceFont.headline)
                     .foregroundStyle(PaceColor.textPrimary)
                 Text(verbatim: "@\(model.profile.username)")
@@ -123,7 +123,7 @@ struct ShareProfileContent: View {
     private func avatar(for recipient: ShareProfileViewModel.Recipient) -> some View {
         switch recipient.kind {
         case .friend(let profile):
-            PaceAvatar(name: profile.displayName, seed: profile.publicID.uuidString, size: 40, image: profile.avatar)
+            PaceAvatar(name: profile.shownName, seed: profile.publicID.uuidString, size: 40, image: profile.avatar)
         case .group(_, let name, let imagePath, _):
             GroupAvatar(name: name, kind: .friends, image: MediaReference.groupImage(imagePath), size: 40)
         }
