@@ -3,8 +3,9 @@ import PaceCore
 import SwiftUI
 import UIKit
 
-/// Mitteilungen: Erlaubnis von iOS und die lokale Erinnerung an das Tagesziel. Push-Mitteilungen werden ehrlich als
-/// „folgt“ erklärt, nicht als Schalter angeboten.
+/// Mitteilungen: Erlaubnis von iOS, die lokalen Erinnerungen an das Tagesziel und Hinweise auf neue Chatnachrichten
+/// (solange Pace geöffnet ist). Push-Mitteilungen bei geschlossener App werden ehrlich als nicht eingerichtet erklärt,
+/// nicht als Schalter angeboten.
 struct NotificationsPage: View {
     let viewModel: NotificationSettingsViewModel
     let backTitle: String
@@ -43,6 +44,7 @@ struct NotificationsPageContent: View {
             if viewModel.isAvailable {
                 permissionCard
                 reminderCard
+                chatCard
             } else {
                 PaceCard {
                     ProfileNoteRow(systemImage: "bell.slash", text: PaceLocalization.text(
@@ -147,6 +149,25 @@ struct NotificationsPageContent: View {
                     ProfileFootnote(text: NotificationSettingsViewModel.deniedMessage, isError: true)
                 }
                 ProfileFootnote(text: viewModel.reminderExplanation)
+            }
+        }
+    }
+
+    private var chatCard: some View {
+        PaceCard {
+            VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                PaceCardHeader(PaceLocalization.text(de: "Chatnachrichten", en: "Chat messages", ru: "Сообщения в чатах"))
+                ProfileToggleTile(
+                    title: PaceLocalization.text(
+                        de: "Hinweis bei neuen Nachrichten", en: "Alert for new messages", ru: "Сообщать о новых сообщениях"
+                    ),
+                    isOn: viewModel.chatMessageHints,
+                    isHighlighted: viewModel.chatMessageHints,
+                    isDisabled: viewModel.isUpdating
+                ) { enabled in
+                    Task { await viewModel.setChatMessageHints(enabled) }
+                }
+                ProfileFootnote(text: viewModel.chatHintExplanation)
             }
         }
     }

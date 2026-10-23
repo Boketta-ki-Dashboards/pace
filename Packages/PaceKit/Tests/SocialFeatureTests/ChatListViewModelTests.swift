@@ -316,3 +316,139 @@ struct ChatListViewModelTests {
         #expect(repository.state.withLock { $0.sentDrafts.isEmpty })
     }
 }
+
+/// Hinweise auf neue Nachrichten, solange Pace läuft: nur echte neue Nachrichten anderer, nicht im offenen Chat.
+@MainActor
+struct ChatIncomingHintTests {
+    private let base = Fixtures.date(2026, 10, 16, 12)
+
+    private func makeList(_ repository: ChatRepositoryStub, clock: Locked<Date>) -> ChatListViewModel {
+        ChatListViewModel(
+            repository: repository,
+            media: nil,
+            calendar: Fixtures.activityCalendar,
+            now: { clock.withLock { $0 } },
+            pollInterval: .seconds(25),
+            sleep: { try await ManualTicker().sleep($0) }
+        )
+    }
+
+    private func preview(_ text: String, from sender: String?, own: Bool = false, at date: Date) -> ChatMessagePreview {
+        ChatMessagePreview(kind: .text, text: text, senderName: sender, isOwn: own, sentAt: date)
+    }
+
+    @Test func newMessageOfAnotherPersonIsAnnouncedOnce() async {
+        let id = UUID()
+        let repository = ChatRepositoryStub {
+            $0.conversations = [ChatFixtures.direct(id: id, last: preview("Hi", from: "Mia", at: base), unread: 1)]
+        }
+        let clock = Locked(base)
+        let list = makeList(repository, clock: clock)
+        var announced: [ConversationSummary] = []
+        list.onIncomingMessage = { announced.append($0) }
+
+        // Erstes Laden: schon vorhandene ungelesene Nachrichten lösen keinen Hinweis aus.
+        await list.load()
+        #expect(announced.isEmpty)
+
+        let later = base.addingTimeInterval(30)
+        repository.state.withLock {
+            $0.conversations = [ChatFixtures.direct(id: id, last: preview("Läufst du mit?", from: "Mia", at: later), unread: 2)]
+        }
+        clock.withLock { $0 = later }
+        await list.load()
+        // Gleicher Stand noch einmal (z. B. regelmäßige Abfrage): kein zweiter Hinweis.
+        await list.load()
+
+        #expect(announced.map(\.id) == [id])
+        let hint = PaceLocalization.$languageOverride.withValue(.german) {
+            ChatFormatting.incomingNotification(for: announced[0])
+        }
+        #expect(hint.title == "Mia")
+        #expect(hint.body == "Läufst du mit?")
+        #expect(hint.identifier == "pace.chat." + id.uuidString.lowercased())
+    }
+
+    @Test func groupHintNamesTheSender() {
+        let group = ChatFixtures.group(title: "Smoking red", last: preview("Morgen 7 Uhr?", from: "Leon", at: base), unread: 1)
+        let hint = PaceLocalization.$languageOverride.withValue(.german) {
+            ChatFormatting.incomingNotification(for: group)
+        }
+        #expect(hint.title == "Smoking red")
+        #expect(hint.body == "Leon: Morgen 7 Uhr?")
+    }
+
+    @Test func ownMessagesReadChatsAndNewChatsAreHandled() async {
+        let direct = UUID()
+        let group = UUID()
+        let repository = ChatRepositoryStub {
+            $0.conversations = [ChatFixtures.direct(id: direct, last: preview("Hi", from: "Mia", at: base), unread: 0)]
+        }
+        let clock = Locked(base)
+        let list = makeList(repository, clock: clock)
+        var announced: [UUID] = []
+        list.onIncomingMessage = { announced.append($0.id) }
+        await list.load()
+
+        let later = base.addingTimeInterval(20)
+        repository.state.withLock {
+            $0.conversations = [
+                // Eigene Nachricht (z. B. von einem anderen Gerät): kein Hinweis.
+                ChatFixtures.direct(id: direct, last: preview("Bin dabei", from: nil, own: true, at: later), unread: 0),
+                // Neue Gruppe mit einer ungelesenen Nachricht: Hinweis.
+                ChatFixtures.group(id: group, last: preview("Willkommen!", from: "Leon", at: later), unread: 1),
+            ]
+        }
+        clock.withLock { $0 = later }
+        await list.load()
+
+        #expect(announced == [group])
+    }
+
+    @Test func theOpenChatIsNotAnnounced() async throws {
+        let conversation = ChatFixtures.direct(last: preview("Hi", from: "Mia", at: base))
+        let repository = ChatRepositoryStub { $0.conversations = [conversation] }
+        let clock = Locked(base)
+        let list = makeList(repository, clock: clock)
+        var announced: [UUID] = []
+        list.onIncomingMessage = { announced.append($0.id) }
+        await list.load()
+        let chat = list.chat(for: ChatTarget(conversation))
+        let observing = Task { await chat.observe() }
+        try await waitUntil { chat.isVisible && repository.subscriberCount(conversationID: conversation.id) == 1 }
+
+        let later = base.addingTimeInterval(10)
+        repository.state.withLock {
+            $0.conversations = [ChatFixtures.direct(id: conversation.id, last: preview("Jetzt?", from: "Mia", at: later), unread: 1)]
+        }
+        clock.withLock { $0 = later }
+        await list.load()
+
+        #expect(announced.isEmpty)
+        observing.cancel()
+        await observing.value
+    }
+
+    @Test func messagesFromWhilePaceWasInTheBackgroundAreNotAnnounced() async {
+        let id = UUID()
+        let repository = ChatRepositoryStub {
+            $0.conversations = [ChatFixtures.direct(id: id, last: preview("Hi", from: "Mia", at: base), unread: 0)]
+        }
+        let clock = Locked(base)
+        let list = makeList(repository, clock: clock)
+        var announced: [UUID] = []
+        list.onIncomingMessage = { announced.append($0.id) }
+        await list.load()
+
+        // Eine Stunde später zurück in der App: Die Nachrichten stehen in der Liste, ohne nachträgliche Hinweise.
+        let later = base.addingTimeInterval(3_600)
+        repository.state.withLock {
+            $0.conversations = [ChatFixtures.direct(id: id, last: preview("Noch wach?", from: "Mia", at: later), unread: 3)]
+        }
+        clock.withLock { $0 = later }
+        await list.load()
+
+        #expect(announced.isEmpty)
+        #expect(list.unreadCount == 3)
+    }
+}

@@ -125,6 +125,8 @@ struct AccountDataTests {
         #expect(preferences.appearance == .automatic)
         #expect(preferences.language == .system)
         #expect(preferences.streakReminder == StreakReminderSettings(isEnabled: true, hour: 7, minute: 5))
+        // Ältere Versionen kannten keine Chat-Hinweise: eingeschaltet.
+        #expect(preferences.chatMessageHints)
     }
 }
 

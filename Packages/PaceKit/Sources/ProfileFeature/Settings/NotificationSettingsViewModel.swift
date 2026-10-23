@@ -291,6 +291,43 @@ public final class NotificationSettingsViewModel {
         }
     }
 
+    // MARK: Chat
+
+    /// Hinweis auf neue Chatnachrichten, solange Pace geöffnet ist (kein Push bei geschlossener App).
+    public var chatMessageHints: Bool { settings.chatMessageHints }
+
+    /// Schaltet die Hinweise ein oder aus. Beim Einschalten wird – falls noch nicht geschehen – nach der Erlaubnis
+    /// gefragt.
+    public func setChatMessageHints(_ enabled: Bool) async {
+        guard let notifications, !isUpdating, enabled != chatMessageHints else { return }
+        settings.chatMessageHints = enabled
+        guard enabled else { return }
+        isUpdating = true
+        defer { isUpdating = false }
+        var status = await notifications.authorization()
+        if status == .notDetermined {
+            _ = await notifications.requestAuthorization()
+            status = await notifications.authorization()
+        }
+        authorization = status
+        message = status == .authorized ? nil : Self.deniedMessage
+    }
+
+    public var chatHintExplanation: String {
+        PaceLocalization.text(
+            de: "Solange Pace geöffnet ist, erscheint bei einer neuen Nachricht ein Hinweis – außer im gerade offenen Chat.",
+            en: "While Pace is open, a new message shows an alert – except in the chat you're viewing.",
+            ru: "Пока Pace открыт, о новом сообщении появится уведомление – кроме открытого сейчас чата."
+        )
+    }
+
+    /// Zeigt den Hinweis auf eine neue Nachricht – nur, wenn eingeschaltet und von iOS erlaubt.
+    public func announceIncomingMessage(_ notification: PlannedNotification) async {
+        guard chatMessageHints, let notifications else { return }
+        guard await notifications.authorization() == .authorized else { return }
+        await notifications.deliver(notification)
+    }
+
     /// Entfernt geplante Erinnerungen (z. B. nach dem Löschen des Kontos).
     public func cancelAll() async {
         lastPlan = []
@@ -308,9 +345,9 @@ public final class NotificationSettingsViewModel {
 
     public var pushNotice: String {
         PaceLocalization.text(
-            de: "Mitteilungen zu Freundschaftsanfragen, Gruppeneinladungen und neuen Chatnachrichten folgen, sobald der Push-Versand auf dem Server eingerichtet ist. Bis dahin siehst du sie direkt im Social-Tab.",
-            en: "Notifications for friend requests, group invitations and new chat messages will follow once push delivery is set up on the server. Until then you'll see them directly in the Social tab.",
-            ru: "Уведомления о запросах в друзья, приглашениях в группы и новых сообщениях появятся, когда на сервере будет настроена push-рассылка. До тех пор ты увидишь их во вкладке «Друзья»."
+            de: "Bei geschlossener App bräuchte Pace Push-Mitteilungen über Apple (APNs) und einen Versand vom Server – das ist noch nicht eingerichtet. Freundschaftsanfragen, Gruppeneinladungen und neue Nachrichten siehst du bis dahin im Social-Tab.",
+            en: "When the app is closed, Pace would need push notifications via Apple (APNs) and delivery from the server – this isn't set up yet. Until then you'll see friend requests, group invitations and new messages in the Social tab.",
+            ru: "Когда приложение закрыто, Pace нужны push-уведомления через Apple (APNs) и отправка с сервера – это пока не настроено. До тех пор запросы в друзья, приглашения в группы и новые сообщения видны во вкладке «Друзья»."
         )
     }
 }

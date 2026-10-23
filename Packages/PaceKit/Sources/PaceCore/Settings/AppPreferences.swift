@@ -132,21 +132,25 @@ public struct AppPreferences: Codable, Equatable, Sendable {
     public var streakReminder: StreakReminderSettings
     /// Tag, an dem zuletzt „Geschafft!“ gemeldet wurde (höchstens einmal am Tag).
     public var goalReachedNotifiedOn: LocalDate?
+    /// Hinweis auf neue Chatnachrichten, solange Pace läuft (kein Push bei geschlossener App).
+    public var chatMessageHints: Bool
 
     public init(
         appearance: AppearancePreference = .automatic,
         language: LanguagePreference = .system,
         streakReminder: StreakReminderSettings = StreakReminderSettings(),
-        goalReachedNotifiedOn: LocalDate? = nil
+        goalReachedNotifiedOn: LocalDate? = nil,
+        chatMessageHints: Bool = true
     ) {
         self.appearance = appearance
         self.language = language
         self.streakReminder = streakReminder
         self.goalReachedNotifiedOn = goalReachedNotifiedOn
+        self.chatMessageHints = chatMessageHints
     }
 
     private enum CodingKeys: String, CodingKey {
-        case appearance, language, streakReminder, goalReachedNotifiedOn
+        case appearance, language, streakReminder, goalReachedNotifiedOn, chatMessageHints
     }
 
     // Unbekannte oder fehlende Werte (z. B. aus einer neueren Version) fallen auf den Standard zurück.
@@ -156,6 +160,7 @@ public struct AppPreferences: Codable, Equatable, Sendable {
         language = (try? container.decodeIfPresent(LanguagePreference.self, forKey: .language)) ?? .system
         streakReminder = (try? container.decodeIfPresent(StreakReminderSettings.self, forKey: .streakReminder)) ?? StreakReminderSettings()
         goalReachedNotifiedOn = try? container.decodeIfPresent(LocalDate.self, forKey: .goalReachedNotifiedOn)
+        chatMessageHints = (try? container.decodeIfPresent(Bool.self, forKey: .chatMessageHints)) ?? true
     }
 }
 
@@ -256,6 +261,11 @@ public final class AppSettings {
     public var goalReachedNotifiedOn: LocalDate? {
         get { preferences.goalReachedNotifiedOn }
         set { update { $0.goalReachedNotifiedOn = newValue } }
+    }
+
+    public var chatMessageHints: Bool {
+        get { preferences.chatMessageHints }
+        set { update { $0.chatMessageHints = newValue } }
     }
 
     /// Die tatsächlich verwendete Sprache (bei „Automatisch“ die passende Gerätesprache).

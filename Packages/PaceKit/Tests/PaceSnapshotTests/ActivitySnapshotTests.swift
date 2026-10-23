@@ -35,6 +35,10 @@ struct ActivitySnapshotTests {
         await viewModel.loadIfNeeded()
         try Snapshot.render(page(CalendarSnapshotHost(viewModel: viewModel)), name: "calendar", languages: Self.languages)
 
+        // Ausgewählt und erreicht: Der Auswahlrahmen muss auch um ein gefülltes Feld sichtbar sein.
+        viewModel.select(Fixtures.day(2026, 10, 14))
+        try Snapshot.render(page(CalendarSnapshotHost(viewModel: viewModel)), name: "calendar-selected-reached")
+
         viewModel.showPrevious()
         try Snapshot.render(page(CalendarSnapshotHost(viewModel: viewModel)), name: "calendar-september")
     }

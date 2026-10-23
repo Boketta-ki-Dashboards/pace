@@ -68,6 +68,7 @@ public final class NotificationSchedulerStub: LocalNotificationScheduling, Senda
         /// Sofort gezeigte Mitteilungen (z. B. „Geschafft!“).
         public var delivered: [PlannedNotification] = []
         public var cancelCalls = 0
+        public var requestCount = 0
     }
 
     public let state: Locked<State>
@@ -84,6 +85,7 @@ public final class NotificationSchedulerStub: LocalNotificationScheduling, Senda
 
     public func requestAuthorization() async -> Bool {
         state.withLock { state in
+            state.requestCount += 1
             state.authorization = state.grantsOnRequest ? .authorized : .denied
             return state.grantsOnRequest
         }

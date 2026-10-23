@@ -220,6 +220,11 @@ public final class AppRouter {
             )
         )
         profile.openSocial = { [navigation] in navigation.openSocial() }
+        // Neue Chatnachricht, während Pace geöffnet ist: lokaler Hinweis (kein Push – dafür fehlt APNs).
+        social.chats.onIncomingMessage = { [notifications = profile.notifications] conversation in
+            let hint = ChatFormatting.incomingNotification(for: conversation)
+            Task { await notifications.announceIncomingMessage(hint) }
+        }
         let main = MainViewModel(
             dashboard: dashboard,
             leaderboard: leaderboard,

@@ -242,10 +242,17 @@ private struct CalendarGrid: View {
 }
 
 /// Ein Tagesfeld: Ring mit Tageszahl und Schritten (nicht erreicht), volle grüne Fläche (erreicht), neutral (Zukunft),
-/// gestrichelter Ring (keine Daten). Auswahl = Umrandung, heute = kleiner Punkt.
+/// gestrichelter Ring (keine Daten). Heute = kleiner Punkt.
+///
+/// Die Auswahl ist ein eigener Zustand: ein Akzentrahmen mit Abstand außen um das Feld. Er verändert das Feld selbst
+/// nicht – ein ausgewählter Tag sieht also nie wie „Ziel erreicht“ aus – und bleibt durch den Abstand auch um ein
+/// mintgrün gefülltes Feld und im Dark Mode klar sichtbar.
 private struct CalendarDayCell: View {
     static let height: CGFloat = 60
     static let cornerRadius: CGFloat = 10
+    /// Abstand und Strichstärke des Auswahlrahmens (zusammen kleiner als der Rasterabstand von 6 pt).
+    static let selectionGap: CGFloat = 2
+    static let selectionLineWidth: CGFloat = 2
 
     let day: CalendarDay
     let onTap: () -> Void
@@ -266,7 +273,15 @@ private struct CalendarDayCell: View {
             .frame(maxWidth: .infinity)
             .frame(height: Self.height)
             .background(background, in: shape)
-            .overlay(shape.strokeBorder(borderColor, lineWidth: day.isSelected ? 2 : 1))
+            .overlay(shape.strokeBorder(borderColor, lineWidth: 1))
+            .overlay {
+                if day.isSelected {
+                    RoundedRectangle(cornerRadius: Self.cornerRadius + Self.selectionGap, style: .continuous)
+                        .strokeBorder(PaceColor.accent, lineWidth: Self.selectionLineWidth)
+                        .padding(-(Self.selectionGap + Self.selectionLineWidth))
+                        .accessibilityHidden(true)
+                }
+            }
             .overlay(alignment: .topTrailing) {
                 if day.isToday {
                     Circle()
@@ -327,8 +342,7 @@ private struct CalendarDayCell: View {
     }
 
     private var borderColor: Color {
-        if day.isSelected { return PaceColor.accentStrong }
-        return day.status == .reached ? Color.clear : PaceColor.border
+        day.status == .reached ? Color.clear : PaceColor.border
     }
 
     private var stepsColor: Color {

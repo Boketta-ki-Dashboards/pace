@@ -90,6 +90,19 @@ public enum ChatFormatting {
         return body
     }
 
+    /// Hinweis auf eine neue Nachricht (lokale Mitteilung, solange Pace läuft): Name des Chats als Titel, Vorschau wie in
+    /// der Chatliste. Je Unterhaltung dieselbe Kennung, damit ein neuer Hinweis den vorigen ersetzt statt zu stapeln.
+    public static func incomingNotification(for conversation: ConversationSummary) -> PlannedNotification {
+        PlannedNotification(
+            identifier: incomingNotificationPrefix + conversation.id.uuidString.lowercased(),
+            dateComponents: DateComponents(),
+            title: conversation.title,
+            body: String(preview(for: conversation).prefix(160))
+        )
+    }
+
+    public static let incomingNotificationPrefix = "pace.chat."
+
     /// Inhalt einer Nachricht in einer Zeile (Zeilenumbrüche werden zu Leerzeichen).
     public static func content(kind: ChatMessageKind, text: String?) -> String {
         switch kind {

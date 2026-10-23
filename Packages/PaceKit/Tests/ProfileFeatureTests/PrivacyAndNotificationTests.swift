@@ -320,6 +320,43 @@ struct PrivacyAndNotificationTests {
         #expect(Calendar.current.component(.minute, from: date) == 15)
     }
 
+    // MARK: Chat-Hinweise
+
+    @Test func chatHintsAreDeliveredOnlyWhenEnabledAndAllowed() async {
+        let scheduler = NotificationSchedulerStub { $0.authorization = .authorized }
+        let (viewModel, _, store) = makeNotifications(scheduler: scheduler)
+        let hint = PlannedNotification(identifier: "pace.chat.1", dateComponents: DateComponents(), title: "Mia", body: "Hey")
+
+        #expect(viewModel.chatMessageHints)
+        await viewModel.announceIncomingMessage(hint)
+        #expect(scheduler.state.withLock { $0.delivered } == [hint])
+
+        await viewModel.setChatMessageHints(false)
+        await viewModel.announceIncomingMessage(hint)
+        #expect(scheduler.state.withLock { $0.delivered }.count == 1)
+        #expect(store.load().chatMessageHints == false)
+
+        // Wieder an, aber Mitteilungen in iOS ausgeschaltet: kein Hinweis, ehrlicher Text.
+        scheduler.state.withLock { $0.authorization = .denied }
+        await viewModel.setChatMessageHints(true)
+        await viewModel.announceIncomingMessage(hint)
+        #expect(scheduler.state.withLock { $0.delivered }.count == 1)
+        #expect(viewModel.message == NotificationSettingsViewModel.deniedMessage)
+        #expect(store.load().chatMessageHints)
+    }
+
+    @Test func enablingChatHintsAsksForPermissionOnce() async {
+        let scheduler = NotificationSchedulerStub()
+        let (viewModel, settings, _) = makeNotifications(scheduler: scheduler)
+        settings.chatMessageHints = false
+
+        await viewModel.setChatMessageHints(true)
+
+        #expect(scheduler.state.withLock { $0.requestCount } == 1)
+        #expect(viewModel.authorization == .authorized)
+        #expect(viewModel.message == nil)
+    }
+
     @Test func withoutSchedulerTheSectionIsUnavailable() async {
         let env = ProfileSettingsEnvironment(withBackend: false)
 

@@ -79,6 +79,9 @@ public final class ChatListViewModel {
     public private(set) var state: State = .idle
     /// Das letzte Aktualisieren ist fehlgeschlagen; die zuletzt geladenen Chats bleiben sichtbar.
     public private(set) var refreshError: String?
+    /// Neue Nachricht von jemand anderem in einer Unterhaltung, die gerade nicht offen ist – für einen Hinweis, solange
+    /// Pace läuft. Beim ersten Laden (schon vorhandene ungelesene Nachrichten) wird nichts gemeldet.
+    @ObservationIgnored public var onIncomingMessage: (@MainActor (ConversationSummary) -> Void)?
 
     @ObservationIgnored let repository: (any ChatRepository)?
     @ObservationIgnored let media: (any MediaRepository)?
@@ -208,8 +211,15 @@ public final class ChatListViewModel {
         }
         do {
             let loaded = try await repository.conversations()
+            // Nur gegen einen frischen Stand vergleichen: Nach der Rückkehr in die App (oder beim ersten Laden) gibt
+            // es keine Hinweise für Nachrichten, die inzwischen ohnehin in der Liste stehen.
+            let isRecent = lastLoadedAt.map { now().timeIntervalSince($0) <= Self.incomingHintMaximumGap } ?? false
+            let previous = isRecent ? conversations : nil
             conversations = loaded.sorted { lhs, rhs in
                 lhs.updatedAt == rhs.updatedAt ? lhs.id.uuidString < rhs.id.uuidString : lhs.updatedAt > rhs.updatedAt
+            }
+            if let previous {
+                announceIncomingMessages(previous: previous)
             }
             state = .loaded
             refreshError = nil
@@ -227,6 +237,23 @@ public final class ChatListViewModel {
             } else {
                 state = .failed(ChatTexts.message(for: error))
             }
+        }
+    }
+
+    /// Höchster Abstand zum vorigen Stand, damit neue Nachrichten gemeldet werden (länger: App war im Hintergrund).
+    static let incomingHintMaximumGap: TimeInterval = 120
+
+    /// Meldet Unterhaltungen mit neuen ungelesenen Nachrichten anderer seit dem letzten Stand (nicht den offenen Chat).
+    private func announceIncomingMessages(previous: [ConversationSummary]) {
+        guard let onIncomingMessage else { return }
+        let before = Dictionary(previous.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for conversation in conversations {
+            guard let last = conversation.lastMessage, !last.isOwn else { continue }
+            let old = before[conversation.id]
+            guard conversation.unreadCount > (old?.unreadCount ?? 0) else { continue }
+            if let oldLast = old?.lastMessage, oldLast.sentAt >= last.sentAt { continue }
+            if chats.contains(where: { $0.conversation?.id == conversation.id && $0.isVisible }) { continue }
+            onIncomingMessage(conversation)
         }
     }
 

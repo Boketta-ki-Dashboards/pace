@@ -68,7 +68,8 @@ public final class ChatViewModel {
     @ObservationIgnored private var lastReadMark: Date?
     /// Anzahl laufender ``observe()``-Aufrufe (beim schnellen Wechsel kann ein alter kurz neben dem neuen laufen).
     @ObservationIgnored private var observerCount = 0
-    private var isVisible: Bool { observerCount > 0 }
+    /// Der Chat ist gerade auf dem Bildschirm (dann kein Hinweis auf neue Nachrichten).
+    var isVisible: Bool { observerCount > 0 }
     /// Gerade hochgeladene Bilder (Pfad → Daten), damit sie nicht noch einmal geladen werden müssen.
     @ObservationIgnored private var uploadedMedia: [String: Data] = [:]
 
