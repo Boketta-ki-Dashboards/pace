@@ -72,6 +72,10 @@ enum ChatUIText {
 
     static var loadingMessages: String { t("Nachrichten werden geladen …", "Loading messages …", "Загружаем сообщения …") }
     static var loadingOlder: String { t("Ältere Nachrichten werden geladen …", "Loading older messages …", "Загружаем более ранние сообщения …") }
+
+    static var newMessages: String { t("Neue Nachrichten", "New messages", "Новые сообщения") }
+
+    static var newMessagesHint: String { t("Springt zur neuesten Nachricht", "Jumps to the latest message", "Переход к последнему сообщению") }
     static var loadOlder: String { t("Ältere Nachrichten laden", "Load older messages", "Загрузить более ранние сообщения") }
 
     static var sending: String { t("Wird gesendet …", "Sending …", "Отправляется …") }

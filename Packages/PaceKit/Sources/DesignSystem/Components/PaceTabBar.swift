@@ -39,10 +39,10 @@ public struct PaceTabBar<Value: Hashable>: View {
                 Button {
                     selection = item.value
                 } label: {
-                    VStack(spacing: 3) {
+                    VStack(spacing: 1) {
                         Image(systemName: isSelected ? item.selectedSystemImage : item.systemImage)
-                            .font(.system(size: 21, weight: .medium))
-                            .frame(height: 26)
+                            .font(.system(size: 20, weight: .medium))
+                            .frame(height: 24)
                             .overlay(alignment: .topTrailing) {
                                 if item.badge > 0 {
                                     TabBadge(count: item.badge)
@@ -55,10 +55,10 @@ public struct PaceTabBar<Value: Hashable>: View {
                             .minimumScaleFactor(0.7)
                     }
                     .foregroundStyle(isSelected ? PaceColor.onSelection : PaceColor.textPrimary)
-                    .frame(maxWidth: .infinity, minHeight: 54)
+                    .frame(maxWidth: .infinity, minHeight: 48)
                     .background {
                         if isSelected {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .fill(PaceColor.selectionFill)
                         }
                     }
@@ -71,7 +71,7 @@ public struct PaceTabBar<Value: Hashable>: View {
             }
         }
         .padding(.horizontal, PaceSpacing.s)
-        .padding(.top, PaceSpacing.xs)
+        .padding(.top, 6)
         .padding(.bottom, PaceSpacing.xxs)
         // Große Schriftgrade würden die vier Beschriftungen sprengen; der Inhalt der Screens skaliert weiter.
         .dynamicTypeSize(...DynamicTypeSize.xLarge)

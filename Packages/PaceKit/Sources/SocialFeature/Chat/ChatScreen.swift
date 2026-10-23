@@ -42,7 +42,7 @@ struct ChatActions {
 }
 
 /// Inhalt eines Chats (Referenzbild 5) ohne Scrollen und Eingabeleiste: Kopf, Gruppen- bzw. Profilkopf, Hinweise und
-/// Verlauf – auch für Snapshot-Tests.
+/// Verlauf – für Snapshot-Tests. In der App steht der Kopf fest über dem scrollbaren ``ChatBody``.
 struct ChatContent: View {
     let viewModel: ChatViewModel
     /// Ziel des Zurück-Links; ohne Angabe „Social“.
@@ -53,7 +53,21 @@ struct ChatContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
-            ChatHeader(viewModel: viewModel, backTitle: backTitle ?? SocialText.social, actions: actions)
+            ChatTitleBar(viewModel: viewModel, backTitle: backTitle ?? SocialText.social, actions: actions)
+            ChatBody(viewModel: viewModel, actions: actions, isLazy: isLazy)
+        }
+    }
+}
+
+/// Scrollbarer Teil eines Chats: Gruppen- bzw. Profilkopf, Hinweise, Zustände und Verlauf.
+struct ChatBody: View {
+    let viewModel: ChatViewModel
+    var actions = ChatActions()
+    var isLazy = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PaceSpacing.s) {
+            ChatInfoHeader(viewModel: viewModel, actions: actions)
             if let notice = viewModel.notice {
                 NoticeBanner(notice: SocialViewModel.Notice(text: notice.text, isError: notice.isError), onDismiss: actions.dismissNotice)
             }
@@ -76,24 +90,17 @@ struct ChatContent: View {
 
 // MARK: - Kopf
 
-/// „‹ Social“, Wortmarke mit Info und Einstellungen, Titel und darunter Gruppen- bzw. Profilkopf.
-struct ChatHeader: View {
+/// Fester Kopf eines Chats: „‹ Social“ oben links, Wortmarke mit Info und Einstellungen, Name des Chats.
+struct ChatTitleBar: View {
     let viewModel: ChatViewModel
     let backTitle: String
     let actions: ChatActions
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PaceSpacing.s) {
-            PaceSubpageHeader(backTitle: backTitle, title: viewModel.title) {
-                HStack(spacing: PaceSpacing.xs) {
-                    infoButton
-                    settingsButton
-                }
-            }
-            if viewModel.kind == .group {
-                groupHeader
-            } else if let peer = viewModel.peer {
-                ChatPeerCard(profile: peer) { actions.openProfile(peer) }
+        PaceSubpageHeader(backTitle: backTitle, title: viewModel.title) {
+            HStack(spacing: PaceSpacing.xs) {
+                infoButton
+                settingsButton
             }
         }
     }
@@ -148,6 +155,21 @@ struct ChatHeader: View {
                 ChatIconLabel(systemImage: "gearshape")
             }
             .accessibilityLabel(ChatUIText.chatOptions)
+        }
+    }
+}
+
+/// Gruppen- bzw. Profilkopf unter dem festen Kopf: Mitglieder und Gruppen-Streak bzw. Profilkarte des Gegenübers.
+/// Scrollt mit dem Verlauf, damit beim Schreiben mehr Platz für Nachrichten bleibt.
+struct ChatInfoHeader: View {
+    let viewModel: ChatViewModel
+    let actions: ChatActions
+
+    var body: some View {
+        if viewModel.kind == .group {
+            groupHeader
+        } else if let peer = viewModel.peer {
+            ChatPeerCard(profile: peer) { actions.openProfile(peer) }
         }
     }
 

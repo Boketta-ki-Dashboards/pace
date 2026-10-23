@@ -387,6 +387,19 @@ public final class HomeDashboardViewModel {
         activeModuleID = draggingModuleID
     }
 
+    /// Ziehen am Griff beginnt: Größenmenü schließen, Widget als aktiv markieren.
+    public func beginDragging(_ id: HomeModule.ID) {
+        sizeMenuModuleID = nil
+        draggingModuleID = id
+        activeModuleID = id
+    }
+
+    /// Ziehgriff: Das gezogene Widget wandert an die Position `index`.
+    public func moveDragged(toIndex index: Int) {
+        guard let draggingModuleID else { return }
+        settings.move(draggingModuleID, toIndex: index)
+    }
+
     /// Ziehen beendet (abgelegt oder abgebrochen): Das Widget ist wieder normal sichtbar.
     public func endDragging() {
         draggingModuleID = nil

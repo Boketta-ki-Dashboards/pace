@@ -305,8 +305,35 @@ struct HomeEditHeader: View {
             .fixedSize()
             .accessibilityLabel(HomeTexts.chooseSize)
             .accessibilityValue(module.size.title)
-            HomeDragHandle()
-                .padding(.leading, 2)
+            HomeReorderHandle(module: module, viewModel: viewModel)
         }
+    }
+}
+
+/// Ziehgriff eines Widgets im Anpassen-Modus: Berühren und Ziehen verschiebt das Widget (Finger-genau, mit
+/// Auto-Scroll am Rand). Die Geste hat Vorrang vor dem Scrollen, damit die Liste beim Ziehen am Griff stillsteht.
+struct HomeReorderHandle: View {
+    let module: HomeModule
+    let viewModel: HomeDashboardViewModel
+
+    @Environment(HomeReorderController.self) private var reorder: HomeReorderController?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HomeDragHandle(color: viewModel.draggingModuleID == module.id ? PaceColor.accent : PaceColor.textSecondary)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                    .onChanged { [reorder, viewModel, id = module.id] value in
+                        reorder?.drag(id, toGlobalY: value.location.y, dashboard: viewModel)
+                    }
+                    .onEnded { [reorder, reduceMotion] _ in
+                        withAnimation(reduceMotion ? nil : .snappy) {
+                            reorder?.endDrag()
+                        }
+                    }
+            )
+            .accessibilityHidden(true)
     }
 }

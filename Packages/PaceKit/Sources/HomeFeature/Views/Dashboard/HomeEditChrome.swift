@@ -2,16 +2,16 @@ import DesignSystem
 import Foundation
 import PaceCore
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// Ein Widget auf Home – im Anpassen-Modus mit X zum Entfernen, Größenmenü, mint Rahmen für das aktive Widget,
-/// dezentem Wackeln und Drag & Drop zum Umsortieren.
+/// dezentem Wackeln und Umsortieren am Ziehgriff (``HomeReorderController``).
 struct HomeEditableModule: View {
     let module: HomeModule
     let viewModel: HomeDashboardViewModel
     let onEdit: (HomeModule.ID) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(HomeReorderController.self) private var reorder: HomeReorderController?
 
     var body: some View {
         if viewModel.isEditing {
@@ -26,7 +26,11 @@ struct HomeEditableModule: View {
     }
 
     private var isActive: Bool {
-        isMenuOpen || viewModel.activeModuleID == module.id || viewModel.draggingModuleID == module.id
+        isMenuOpen || viewModel.activeModuleID == module.id || isDragged
+    }
+
+    private var isDragged: Bool {
+        viewModel.draggingModuleID == module.id
     }
 
     private var editing: some View {
@@ -64,16 +68,19 @@ struct HomeEditableModule: View {
                 .transition(.opacity)
             }
         }
-        .opacity(viewModel.draggingModuleID == module.id ? 0.55 : 1)
-        .onDrag {
-            viewModel.sizeMenuModuleID = nil
-            viewModel.draggingModuleID = module.id
-            return NSItemProvider(object: module.id as NSString)
+        // Layout-Rahmen im Scroll-Inhalt – vor Verschiebung und Skalierung gemessen.
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .named(HomeReorderController.contentSpace))
+        } action: { [reorder, id = module.id] frame in
+            reorder?.reportFrame(frame, for: id)
         }
-        .onDrop(
-            of: [UTType.text],
-            delegate: HomeModuleDropDelegate(targetID: module.id, viewModel: viewModel, animation: reduceMotion ? nil : .snappy)
-        )
+        .scaleEffect(isDragged && !reduceMotion ? 1.03 : 1)
+        .shadow(color: .black.opacity(isDragged ? 0.22 : 0), radius: isDragged ? 18 : 0, y: isDragged ? 8 : 0)
+        .offset(y: reorder?.offset(for: module.id) ?? 0)
+        // Das gezogene Widget folgt dem Finger ohne Verzögerung; die anderen gleiten animiert an ihren neuen Platz.
+        .transaction { [isDragged] transaction in
+            if isDragged { transaction.animation = nil }
+        }
     }
 
     private var removeButton: some View {
@@ -207,54 +214,6 @@ struct HomeSizeGlyph: View {
         .stroke(style: StrokeStyle(lineWidth: max(1.4, size / 10), lineCap: .round, lineJoin: .round))
         .frame(width: size, height: size)
         .accessibilityHidden(true)
-    }
-}
-
-/// Ziel beim Umsortieren: Sobald ein gezogenes Widget über einem anderen schwebt, tauschen sie die Plätze – die
-/// Reihenfolge ist sofort sichtbar und gespeichert.
-struct HomeModuleDropDelegate: DropDelegate {
-    let targetID: HomeModule.ID
-    let viewModel: HomeDashboardViewModel
-    let animation: Animation?
-
-    /// Nur Widgets von Home – kein Text aus anderen Apps.
-    func validateDrop(info: DropInfo) -> Bool {
-        viewModel.draggingModuleID != nil
-    }
-
-    func dropEntered(info: DropInfo) {
-        guard let dragging = viewModel.draggingModuleID, dragging != targetID else { return }
-        withAnimation(animation) {
-            viewModel.moveDragged(to: targetID)
-        }
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        viewModel.endDragging()
-        return true
-    }
-}
-
-/// Ablage außerhalb eines Widgets (Kopf, Zwischenräume): beendet das Ziehen, damit kein Widget halb durchsichtig
-/// zurückbleibt.
-struct HomeDragEndDropDelegate: DropDelegate {
-    let viewModel: HomeDashboardViewModel
-
-    func validateDrop(info: DropInfo) -> Bool {
-        viewModel.draggingModuleID != nil
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        viewModel.endDragging()
-        return true
     }
 }
 

@@ -191,6 +191,12 @@ public final class ChatViewModel {
         return messages.last.map { "message-\($0.id.uuidString)" }
     }
 
+    /// Ob der unterste Eintrag eine eigene Nachricht ist (dann scrollt der Verlauf immer mit).
+    public var lastEntryIsOwn: Bool {
+        if !pending.isEmpty { return true }
+        return messages.last?.isOwn ?? false
+    }
+
     /// Streak-Zeile der Gruppe („12 Tage Streak“) und Stand von heute („Flamme gesichert“).
     public var streakTitle: String? {
         group.map { ChatFormatting.streakTitle($0.currentStreak) }

@@ -10,29 +10,40 @@ import SwiftUI
 ///
 /// Die Tabs werden beim ersten Öffnen erzeugt und bleiben danach erhalten (wie bei `TabView`), damit Navigation und
 /// Scrollposition beim Wechseln bestehen bleiben.
+///
+/// Layout: Inhalt und Tab-Leiste stehen untereinander (`VStack`), die Leiste liegt also nie über Inhalten – jede
+/// Scrollansicht endet über ihr, auch auf Unterseiten. Bei eingeblendeter Tastatur verschwindet die Leiste, damit
+/// Eingabefelder (z. B. die Chat-Eingabe) direkt über der Tastatur stehen.
 struct MainTabView: View {
     @Bindable var viewModel: MainViewModel
     @State private var openedTabs: Set<MainViewModel.Tab> = [.home]
+    @State private var isKeyboardVisible = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        ZStack {
-            ForEach(MainViewModel.Tab.allCases, id: \.self) { tab in
-                if openedTabs.contains(tab) {
-                    let isSelected = viewModel.selectedTab == tab
-                    content(for: tab)
-                        .opacity(isSelected ? 1 : 0)
-                        .allowsHitTesting(isSelected)
-                        .accessibilityHidden(!isSelected)
-                        .zIndex(isSelected ? 1 : 0)
+        VStack(spacing: 0) {
+            ZStack {
+                ForEach(MainViewModel.Tab.allCases, id: \.self) { tab in
+                    if openedTabs.contains(tab) {
+                        let isSelected = viewModel.selectedTab == tab
+                        content(for: tab)
+                            .opacity(isSelected ? 1 : 0)
+                            .allowsHitTesting(isSelected)
+                            .accessibilityHidden(!isSelected)
+                            .zIndex(isSelected ? 1 : 0)
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if !isKeyboardVisible {
+                PaceTabBar(items: tabItems, selection: $viewModel.selectedTab)
+            }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            PaceTabBar(items: tabItems, selection: $viewModel.selectedTab)
+        .onKeyboardVisibilityChange { isVisible in
+            withAnimation(.easeOut(duration: 0.2)) {
+                isKeyboardVisible = isVisible
+            }
         }
-        // Die Tastatur schiebt die Inhalte nach oben, die Tab-Leiste bleibt unten (sie liegt dann unter der Tastatur).
-        .ignoresSafeArea(.keyboard, edges: .bottom)
         .onChange(of: viewModel.selectedTab, initial: true) { _, tab in
             openedTabs.insert(tab)
         }

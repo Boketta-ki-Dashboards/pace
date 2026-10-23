@@ -152,6 +152,14 @@ public final class HomeSettings {
         moveModules(fromOffsets: [source], toOffset: target > source ? target + 1 : target)
     }
 
+    /// Ziehgriff: legt das Widget an die Position `index` der Reihenfolge (0 = ganz oben). Gespeichert wird sofort.
+    public func move(_ id: HomeModule.ID, toIndex index: Int) {
+        guard let source = preferences.modules.firstIndex(where: { $0.id == id }) else { return }
+        let target = min(max(index, 0), preferences.modules.count - 1)
+        guard target != source else { return }
+        moveModules(fromOffsets: [source], toOffset: target > source ? target + 1 : target)
+    }
+
     public func canMoveUp(_ id: HomeModule.ID) -> Bool {
         (preferences.modules.firstIndex { $0.id == id } ?? 0) > 0
     }

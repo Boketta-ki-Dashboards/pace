@@ -2,7 +2,6 @@ import ActivityFeature
 import DesignSystem
 import PaceCore
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// Home-Dashboard: Wortmarke und Begrüßung, danach die Widgets des Nutzers in seiner Reihenfolge und Größe.
 ///
@@ -15,6 +14,7 @@ public struct HomeView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var path = NavigationPath()
+    @State private var reorder = HomeReorderController()
 
     public init(viewModel: HomeDashboardViewModel) {
         self.viewModel = viewModel
@@ -30,10 +30,30 @@ public struct HomeView: View {
                 )
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.l)
+                // Bezugssystem für das Umsortieren: Rahmen der Widgets im Inhalt, Inhaltsoberkante global.
+                .coordinateSpace(.named(HomeReorderController.contentSpace))
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.frame(in: .global).minY
+                } action: { [reorder] minY in
+                    reorder.reportContentMinY(minY)
+                }
+                .background {
+                    HomeScrollViewFinder { [reorder] scrollView in
+                        reorder.attach(scrollView)
+                    }
+                    .accessibilityHidden(true)
+                }
+            }
+            .scrollIndicators(.hidden)
+            // Während ein Widget am Griff gezogen wird, scrollt nur noch das automatische Scrollen am Rand.
+            .scrollDisabled(reorder.isDragging)
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { [reorder] frame in
+                reorder.reportViewport(frame)
             }
             .refreshable { [viewModel] in await viewModel.refresh() }
-            // Ablage auf freier Fläche unter den Widgets beendet das Ziehen ebenfalls.
-            .onDrop(of: [UTType.text], delegate: HomeDragEndDropDelegate(viewModel: viewModel))
+            .environment(reorder)
             .paceScreenBackground()
             .paceRootPage()
             .overlay(alignment: .bottom) {
@@ -66,6 +86,9 @@ public struct HomeView: View {
         }
         .task { [viewModel] in
             await viewModel.loadNotificationsIfNeeded()
+        }
+        .onChange(of: viewModel.isEditing) { _, isEditing in
+            if !isEditing { reorder.endDrag() }
         }
         .onChange(of: viewModel.streak.record) {
             viewModel.streak.saveRecordIfNeeded()
@@ -150,10 +173,9 @@ struct HomeDashboardContent: View {
 
             ForEach(viewModel.modules) { module in
                 HomeEditableModule(module: module, viewModel: viewModel, onEdit: onEditModule)
-                    .zIndex(viewModel.sizeMenuModuleID == module.id ? 1 : 0)
+                    .zIndex(viewModel.draggingModuleID == module.id ? 2 : viewModel.sizeMenuModuleID == module.id ? 1 : 0)
             }
         }
-        .onDrop(of: [UTType.text], delegate: HomeDragEndDropDelegate(viewModel: viewModel))
         .animation(reduceMotion ? nil : .snappy, value: viewModel.modules.map(\.id))
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.isEditing)
         .sensoryFeedback(.selection, trigger: viewModel.modules.map(\.id))
