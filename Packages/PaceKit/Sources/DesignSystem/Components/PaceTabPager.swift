@@ -1,6 +1,9 @@
 import PaceCore
 import SwiftUI
 
+/// Koordinatensystem der Seitenleiste (außerhalb des generischen Typs, damit die Messung ohne Typbezug auskommt).
+private let paceTabPagerSpace = "pace.tab.pager"
+
 /// Haupttabs nebeneinander, interaktiv per Wischen wechselbar (wie die Seiten-Navigation in Spielen): Die Seiten
 /// folgen dem Finger, Zwischenzustände (z. B. halb Rankings, halb Social) sind möglich, beim Loslassen entscheidet die
 /// native Paging-Logik nach Anteil und Geschwindigkeit; Zurückziehen bricht den Wechsel ab. An Home und Profil endet
@@ -25,8 +28,6 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
     @State private var pendingTarget: (tab: Tab, since: Date)?
     @State private var lastPosition: Double?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private nonisolated static var space: String { "pace.tab.pager" }
 
     /// - Parameters:
     ///   - onPositionChange: Laufende Position als Tab-Index mit Nachkommastellen (für die Tab-Leiste).
@@ -56,12 +57,12 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
             }
             .scrollTargetLayout()
             .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.frame(in: .named(Self.space)).minX
+                proxy.frame(in: .named(paceTabPagerSpace)).minX
             } action: { minX in
                 positionChanged(offset: -minX)
             }
         }
-        .coordinateSpace(.named(Self.space))
+        .coordinateSpace(.named(paceTabPagerSpace))
         .scrollTargetBehavior(.paging)
         .scrollPosition(id: $scrolledID)
         .defaultScrollAnchor(PaceTabPaging.advancesWithFingerMovingRight ? .trailing : .leading)

@@ -156,7 +156,9 @@ struct AppRouterSettingsTests {
         await router.start()
 
         try await waitUntil { notifications.state.withLock { $0.scheduled }.count == 1 }
-        #expect(notifications.state.withLock { $0.scheduled }.first?.hour == 8)
+        let planned = notifications.state.withLock { $0.scheduled }.first ?? []
+        #expect(!planned.isEmpty)
+        #expect(planned.allSatisfy { $0.dateComponents.hour == 8 && $0.dateComponents.minute == 0 })
     }
 
     // MARK: Konto gelöscht

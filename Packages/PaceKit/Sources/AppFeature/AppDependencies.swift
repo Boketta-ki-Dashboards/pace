@@ -67,8 +67,9 @@ public struct NoLocalNotifications: LocalNotificationScheduling {
     public init() {}
     public func authorization() async -> NotificationAuthorization { .denied }
     public func requestAuthorization() async -> Bool { false }
-    public func scheduleStreakReminders(hour: Int, minute: Int, skipToday: Bool, title: String, body: String) async {}
-    public func cancelStreakReminders() async {}
+    public func scheduleGoalReminders(_ notifications: [PlannedNotification]) async {}
+    public func cancelGoalReminders() async {}
+    public func deliver(_ notification: PlannedNotification) async {}
 }
 
 /// Backend-Dienste hinter den Protokollen aus PaceCore.

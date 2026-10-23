@@ -105,12 +105,12 @@ struct NotificationsPageContent: View {
         PaceCard {
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
                 PaceCardHeader(PaceLocalization.text(
-                    de: "Erinnerung an dein Tagesziel",
-                    en: "Daily goal reminder",
-                    ru: "Напоминание о дневной цели"
+                    de: "Tagesziel-Erinnerungen",
+                    en: "Daily goal reminders",
+                    ru: "Напоминания о дневной цели"
                 ))
                 ProfileToggleTile(
-                    title: PaceLocalization.text(de: "Täglich erinnern", en: "Remind me daily", ru: "Напоминать ежедневно"),
+                    title: PaceLocalization.text(de: "Erinnerungen", en: "Reminders", ru: "Напоминания"),
                     isOn: viewModel.reminder.isEnabled,
                     isHighlighted: viewModel.reminder.isEnabled,
                     isDisabled: viewModel.isUpdating
@@ -118,20 +118,27 @@ struct NotificationsPageContent: View {
                     Task { await viewModel.setReminderEnabled(enabled) }
                 }
                 if viewModel.reminder.isEnabled {
-                    PaceTile {
-                        DatePicker(
-                            selection: Binding(
-                                get: { [date = viewModel.reminderDate] in date },
-                                set: { [viewModel] date in Task { await viewModel.setReminderTime(date) } }
-                            ),
-                            displayedComponents: .hourAndMinute
-                        ) {
-                            Text(PaceLocalization.text(de: "Uhrzeit", en: "Time", ru: "Время"))
-                                .font(PaceFont.headline)
-                                .foregroundStyle(PaceColor.textPrimary)
+                    ForEach(viewModel.reminder.times) { time in
+                        reminderTimeRow(time)
+                    }
+                    if viewModel.reminder.canAddTime {
+                        Button {
+                            Task { await viewModel.addReminderTime() }
+                        } label: {
+                            Label(
+                                PaceLocalization.text(de: "Uhrzeit hinzufügen", en: "Add time", ru: "Добавить время"),
+                                systemImage: "plus"
+                            )
+                            .font(.system(.subheadline, weight: .semibold))
+                            .frame(maxWidth: .infinity, minHeight: 44)
                         }
-                        .tint(PaceColor.accentStrong)
-                        .padding(.vertical, PaceSpacing.xxs)
+                        .buttonStyle(.paceSoft)
+                    } else {
+                        ProfileFootnote(text: PaceLocalization.text(
+                            de: "Höchstens \(StreakReminderSettings.maximumTimes) Erinnerungen am Tag.",
+                            en: "At most \(StreakReminderSettings.maximumTimes) reminders a day.",
+                            ru: "Не больше \(StreakReminderSettings.maximumTimes) напоминаний в день."
+                        ))
                     }
                 }
                 if let message = viewModel.message {
@@ -141,6 +148,48 @@ struct NotificationsPageContent: View {
                 }
                 ProfileFootnote(text: viewModel.reminderExplanation)
             }
+        }
+    }
+
+    /// Eine Uhrzeit: Zeitauswahl und – wenn es mehr als eine gibt – Entfernen.
+    private func reminderTimeRow(_ time: ReminderTime) -> some View {
+        PaceTile {
+            HStack(spacing: PaceSpacing.s) {
+                Image(systemName: "bell")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(PaceColor.accent)
+                    .accessibilityHidden(true)
+                DatePicker(
+                    selection: Binding(
+                        get: { [date = viewModel.date(for: time)] in date },
+                        set: { [viewModel] date in Task { await viewModel.updateReminderTime(time, to: date) } }
+                    ),
+                    displayedComponents: .hourAndMinute
+                ) {
+                    Text(PaceLocalization.text(de: "Uhrzeit", en: "Time", ru: "Время"))
+                        .font(PaceFont.headline)
+                        .foregroundStyle(PaceColor.textPrimary)
+                }
+                .tint(PaceColor.accentStrong)
+                if viewModel.reminder.times.count > 1 {
+                    Button {
+                        Task { await viewModel.removeReminderTime(time) }
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(PaceColor.danger)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(PaceLocalization.text(
+                        de: "Erinnerung um \(viewModel.timeText(time)) entfernen",
+                        en: "Remove reminder at \(viewModel.timeText(time))",
+                        ru: "Удалить напоминание в \(viewModel.timeText(time))"
+                    ))
+                }
+            }
+            .padding(.vertical, PaceSpacing.xxs)
         }
     }
 }

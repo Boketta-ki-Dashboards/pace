@@ -2,24 +2,18 @@ import Foundation
 import Observation
 import PaceCore
 
-/// Mitteilungen: Erlaubnis von iOS und die lokale Erinnerung an das Tagesziel.
+/// Mitteilungen: Erlaubnis von iOS und die lokalen Erinnerungen an das Tagesziel (eine oder mehrere Uhrzeiten).
 ///
-/// Die Erinnerung wird für die nächsten Tage im Voraus geplant (ohne Server). Ist das Ziel heute schon erreicht,
-/// beginnt sie morgen – deshalb wird beim Start der App, beim Erreichen des Ziels, bei einer anderen Uhrzeit und beim
-/// Sprachwechsel neu geplant. Push-Mitteilungen (Anfragen, Einladungen, Chat) brauchen einen Push-Dienst auf dem
-/// Server und werden deshalb nicht als Schalter angeboten.
+/// Die Erinnerungen werden für die nächsten Tage im Voraus geplant (ohne Server, siehe ``GoalReminderPlanner``):
+/// Texte passend zur Tageszeit und – solange der Stand frisch ist – mit den fehlenden Schritten; ist das Ziel heute
+/// erreicht, entfallen die heutigen. Neu geplant wird beim Start der App, bei neuen Schrittwerten (höchstens alle
+/// paar Minuten), beim Erreichen des Ziels, bei geänderten Uhrzeiten und beim Sprachwechsel. Push-Mitteilungen
+/// (Anfragen, Einladungen, Chat bei geschlossener App) brauchen einen Push-Dienst und werden nicht angeboten.
 @MainActor
 @Observable
 public final class NotificationSettingsViewModel {
-    /// Was zuletzt geplant wurde – unveränderte Pläne werden nicht erneut an iOS übergeben.
-    struct Plan: Equatable {
-        let hour: Int
-        let minute: Int
-        let skipToday: Bool
-        let language: AppLanguage
-        /// Tag der Planung: An einem neuen Tag wird neu geplant (der Planungszeitraum rückt weiter).
-        let day: Date
-    }
+    /// Neue Schrittwerte planen höchstens so oft neu (Uhrzeiten, Sprache und Zielerreichung sofort).
+    static let minimumRescheduleInterval: TimeInterval = 5 * 60
 
     /// Erlaubnis von iOS; `nil`, solange sie nicht abgefragt wurde.
     public private(set) var authorization: NotificationAuthorization?
@@ -30,19 +24,36 @@ public final class NotificationSettingsViewModel {
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let notifications: (any LocalNotificationScheduling)?
     @ObservationIgnored private let isTodayGoalReached: @MainActor () -> Bool
+    @ObservationIgnored private let todayProgress: @MainActor () -> GoalProgressSnapshot?
+    @ObservationIgnored private let currentGoal: @MainActor () -> Int
+    @ObservationIgnored private let calendar: ActivityCalendar
     @ObservationIgnored private let now: @Sendable () -> Date
-    @ObservationIgnored private var lastPlan: Plan??
+    /// Zuletzt an iOS übergebene Erinnerungen und wann.
+    @ObservationIgnored private var lastPlan: [PlannedNotification]?
+    @ObservationIgnored private var lastScheduledAt: Date?
+    @ObservationIgnored private var lastPlanLanguage: AppLanguage?
+    /// Tag, an dem Pace das Ziel zuletzt noch offen gesehen hat – „Geschafft!“ nur nach einem selbst erlebten Wechsel.
+    @ObservationIgnored private var sawGoalOpenOn: LocalDate?
 
-    /// - Parameter isTodayGoalReached: Ob das heutige Tagesziel schon erreicht ist (dann beginnt die Erinnerung morgen).
+    /// - Parameters:
+    ///   - isTodayGoalReached: Ob das heutige Tagesziel schon erreicht ist (dann entfallen die heutigen Erinnerungen).
+    ///   - todayProgress: Zuletzt bekannter Stand von heute aus Apple Health (für Texte mit fehlenden Schritten).
+    ///   - currentGoal: Aktuelles Tagesziel (für Texte ohne bekannten Stand).
     public init(
         settings: AppSettings,
         notifications: (any LocalNotificationScheduling)?,
         isTodayGoalReached: @escaping @MainActor () -> Bool = { false },
+        todayProgress: @escaping @MainActor () -> GoalProgressSnapshot? = { nil },
+        currentGoal: @escaping @MainActor () -> Int = { StepGoalRules.defaultGoal },
+        calendar: ActivityCalendar = ActivityCalendar(),
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.settings = settings
         self.notifications = notifications
         self.isTodayGoalReached = isTodayGoalReached
+        self.todayProgress = todayProgress
+        self.currentGoal = currentGoal
+        self.calendar = calendar
         self.now = now
     }
 
@@ -52,29 +63,49 @@ public final class NotificationSettingsViewModel {
     public var reminder: StreakReminderSettings { settings.streakReminder }
 
     /// Ob das heutige Ziel erreicht ist – für Auslöser in der Oberfläche (neu planen, sobald es sich ändert).
-    public var todayGoalReached: Bool { isTodayGoalReached() }
+    public var todayGoalReached: Bool { isTodayGoalReached() || todayProgress()?.isGoalReached == true }
 
-    /// Uhrzeit der Erinnerung, z. B. `19:00` bzw. `7:00 PM`.
-    public var reminderTimeText: String {
-        let components = DateComponents(hour: reminder.hour, minute: reminder.minute)
+    /// Uhrzeit, z. B. `19:00` bzw. `7:00 PM`.
+    public func timeText(_ time: ReminderTime) -> String {
+        let components = DateComponents(hour: time.hour, minute: time.minute)
         guard let date = Calendar(identifier: .gregorian).date(from: components) else {
-            return String(format: "%02d:%02d", reminder.hour, reminder.minute)
+            return String(format: "%02d:%02d", time.hour, time.minute)
         }
         var style = Date.FormatStyle.pace(Date.FormatStyle(date: .omitted, time: .shortened))
         style.timeZone = Calendar(identifier: .gregorian).timeZone
         return date.formatted(style)
     }
 
-    /// Uhrzeit als Datum für die Zeitauswahl (heute zur gewählten Uhrzeit).
-    public var reminderDate: Date {
-        let today = now()
-        return Calendar.current.date(bySettingHour: reminder.hour, minute: reminder.minute, second: 0, of: today) ?? today
+    /// Alle Uhrzeiten, z. B. `8:00 · 12:30 · 19:00`.
+    public var reminderTimeText: String {
+        reminder.times.map(timeText).joined(separator: " · ")
     }
 
-    /// Übernimmt Stunde und Minute aus der Zeitauswahl.
+    /// Kurzfassung für die Profilseite: „Aus“, „19:00“ oder „3 Erinnerungen“.
+    public var reminderSummary: String {
+        guard reminder.isEnabled else { return ProfileTexts.off }
+        let count = reminder.times.count
+        guard count > 1 else { return timeText(reminder.times[0]) }
+        return PaceLocalization.plural(
+            count,
+            de: ("\(count) Erinnerung", "\(count) Erinnerungen"),
+            en: ("\(count) reminder", "\(count) reminders"),
+            ru: ("\(count) напоминание", "\(count) напоминания", "\(count) напоминаний")
+        )
+    }
+
+    /// Uhrzeit als Datum für die Zeitauswahl (heute zur gewählten Uhrzeit).
+    public func date(for time: ReminderTime) -> Date {
+        let today = now()
+        return Calendar.current.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: today) ?? today
+    }
+
+    /// Erste Uhrzeit als Datum (für ältere Aufrufer).
+    public var reminderDate: Date { date(for: reminder.times[0]) }
+
+    /// Übernimmt Stunde und Minute aus der Zeitauswahl für die erste Uhrzeit.
     public func setReminderTime(_ date: Date) async {
-        let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
-        await setReminderTime(hour: parts.hour ?? reminder.hour, minute: parts.minute ?? reminder.minute)
+        await updateReminderTime(reminder.times[0], to: date)
     }
 
     // MARK: Erlaubnis
@@ -142,8 +173,8 @@ public final class NotificationSettingsViewModel {
 
     // MARK: Erinnerung
 
-    /// Schaltet die Erinnerung ein oder aus. Beim Einschalten wird – falls nötig – nach der Erlaubnis gefragt; ohne
-    /// Erlaubnis bleibt sie aus.
+    /// Schaltet die Erinnerungen ein oder aus. Beim Einschalten wird – falls nötig – nach der Erlaubnis gefragt; ohne
+    /// Erlaubnis bleiben sie aus.
     public func setReminderEnabled(_ enabled: Bool) async {
         guard let notifications, !isUpdating, enabled != reminder.isEnabled else { return }
         isUpdating = true
@@ -168,66 +199,110 @@ public final class NotificationSettingsViewModel {
         await reschedule()
     }
 
-    /// Neue Uhrzeit (Stunde 0–23, Minute 0–59).
+    /// Neue Uhrzeit für die erste Erinnerung (Stunde 0–23, Minute 0–59).
     public func setReminderTime(hour: Int, minute: Int) async {
-        let updated = StreakReminderSettings(isEnabled: reminder.isEnabled, hour: hour, minute: minute)
+        await updateReminderTime(reminder.times[0], to: ReminderTime(hour: hour, minute: minute))
+    }
+
+    /// Weitere Uhrzeit hinzufügen (ohne Angabe ein Vorschlag in einer Lücke des Tages).
+    public func addReminderTime(_ time: ReminderTime? = nil) async {
+        var updated = reminder
+        updated.add(time ?? reminder.suggestedNextTime)
         guard updated != reminder else { return }
         settings.streakReminder = updated
         await reschedule()
     }
 
-    /// Plant die Erinnerung passend zu Einstellung, Sprache und heutigem Ziel – nur, wenn sich etwas geändert hat.
-    public func reschedule() async {
-        guard let notifications else { return }
-        let reminder = reminder
-        let plan: Plan? = reminder.isEnabled
-            ? Plan(
-                hour: reminder.hour,
-                minute: reminder.minute,
-                skipToday: isTodayGoalReached(),
-                language: PaceLocalization.shared.effectiveLanguage,
-                day: Calendar.current.startOfDay(for: now())
-            )
-            : nil
-        if let lastPlan, lastPlan == plan { return }
-        lastPlan = .some(plan)
+    public func removeReminderTime(_ time: ReminderTime) async {
+        var updated = reminder
+        updated.remove(time)
+        guard updated != reminder else { return }
+        settings.streakReminder = updated
+        await reschedule()
+    }
 
-        if let plan {
-            await notifications.scheduleStreakReminders(
-                hour: plan.hour,
-                minute: plan.minute,
-                skipToday: plan.skipToday,
-                title: Self.reminderTitle,
-                body: Self.reminderBody
+    /// Ändert eine Uhrzeit auf die in der Zeitauswahl gewählte.
+    public func updateReminderTime(_ time: ReminderTime, to date: Date) async {
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+        await updateReminderTime(time, to: ReminderTime(hour: parts.hour ?? time.hour, minute: parts.minute ?? time.minute))
+    }
+
+    public func updateReminderTime(_ time: ReminderTime, to newTime: ReminderTime) async {
+        var updated = reminder
+        updated.replace(time, with: newTime)
+        guard updated != reminder else { return }
+        settings.streakReminder = updated
+        await reschedule()
+    }
+
+    /// Neue Schrittwerte aus Apple Health: einmal am Tag „Geschafft!“, wenn Pace das Erreichen miterlebt, und die
+    /// kommenden Erinnerungen mit frischem Stand neu planen (gedrosselt).
+    public func progressDidChange() async {
+        if reminder.isEnabled, let progress = todayProgress(), progress.day == calendar.day(containing: now()) {
+            if !progress.isGoalReached {
+                sawGoalOpenOn = progress.day
+            } else if sawGoalOpenOn == progress.day, settings.goalReachedNotifiedOn != progress.day {
+                settings.goalReachedNotifiedOn = progress.day
+                await notifications?.deliver(GoalReminderPlanner.success(steps: progress.steps, day: progress.day))
+            }
+        }
+        await reschedule(force: false)
+    }
+
+    /// Plant die Erinnerungen passend zu Uhrzeiten, Sprache, Ziel und Stand – nur, wenn sich etwas geändert hat.
+    /// - Parameter force: `false` bei reinen Schritt-Aktualisierungen: dann höchstens alle
+    ///   ``minimumRescheduleInterval`` neu, außer heutige Erinnerungen fallen weg (Ziel erreicht).
+    public func reschedule(force: Bool = true) async {
+        guard let notifications else { return }
+        let currentDate = now()
+        let progress = todayProgress()
+        var planned: [PlannedNotification] = []
+        if reminder.isEnabled {
+            let today = calendar.day(containing: currentDate)
+            var planProgress = progress?.day == today ? progress : nil
+            if isTodayGoalReached(), planProgress?.isGoalReached != true {
+                // Laut Serie heute erreicht, der Schrittstand fehlt aber: die heutigen Erinnerungen entfallen trotzdem.
+                planProgress = GoalProgressSnapshot(
+                    day: today, steps: currentGoal(), goal: currentGoal(), measuredAt: currentDate
+                )
+            }
+            planned = GoalReminderPlanner.plan(
+                times: reminder.times,
+                goal: progress?.goal ?? currentGoal(),
+                progress: planProgress,
+                now: currentDate,
+                calendar: calendar
             )
+        }
+        let language = PaceLocalization.shared.effectiveLanguage
+        if let lastPlan, lastPlan == planned, lastPlanLanguage == language { return }
+        if !force, let lastPlan, let lastScheduledAt, lastPlanLanguage == language,
+           lastPlan.map(\.identifier) == planned.map(\.identifier),
+           currentDate.timeIntervalSince(lastScheduledAt) < Self.minimumRescheduleInterval {
+            return
+        }
+        lastPlan = planned
+        lastScheduledAt = currentDate
+        lastPlanLanguage = language
+        if planned.isEmpty {
+            await notifications.cancelGoalReminders()
         } else {
-            await notifications.cancelStreakReminders()
+            await notifications.scheduleGoalReminders(planned)
         }
     }
 
     /// Entfernt geplante Erinnerungen (z. B. nach dem Löschen des Kontos).
     public func cancelAll() async {
-        lastPlan = .some(nil)
-        await notifications?.cancelStreakReminders()
-    }
-
-    static var reminderTitle: String {
-        PaceLocalization.text(de: "Dein Tagesziel wartet", en: "Your daily goal is waiting", ru: "Твоя дневная цель ждёт")
-    }
-
-    static var reminderBody: String {
-        PaceLocalization.text(
-            de: "Erreiche heute dein Tagesziel, um deine Serie fortzusetzen.",
-            en: "Reach your daily goal today to keep your streak going.",
-            ru: "Достигни сегодня дневной цели, чтобы продолжить свою серию."
-        )
+        lastPlan = []
+        lastScheduledAt = now()
+        await notifications?.cancelGoalReminders()
     }
 
     public var reminderExplanation: String {
         PaceLocalization.text(
-            de: "Eine Mitteilung zur gewählten Uhrzeit als Erinnerung an dein Tagesziel. Hast du es heute schon erreicht und Pace danach geöffnet, entfällt die Erinnerung für heute. Öffne Pace mindestens alle zwei Wochen, damit die Erinnerungen weiter geplant werden.",
-            en: "A notification at the chosen time to remind you of your daily goal. If you've already reached it today and opened Pace since, today's reminder is skipped. Open Pace at least every two weeks so reminders keep getting scheduled.",
-            ru: "Уведомление в выбранное время — напоминание о дневной цели. Если ты уже достиг её сегодня и после этого открывал Pace, сегодняшнее напоминание не придёт. Открывай Pace хотя бы раз в две недели, чтобы напоминания продолжали планироваться."
+            de: "Mitteilungen zu deinen Uhrzeiten – morgens als Erinnerung, später mit den fehlenden Schritten, sofern Pace einen aktuellen Stand kennt. iOS plant Mitteilungen im Voraus: Pace kann Apple Health nicht direkt vor der Zustellung lesen. Ist dein Ziel erreicht und war Pace seitdem geöffnet, entfallen die restlichen Erinnerungen des Tages. Öffne Pace mindestens alle \(GoalReminderPlanner.plannedDays(timesPerDay: reminder.times.count)) Tage, damit weiter geplant wird.",
+            en: "Notifications at your times – a reminder in the morning, later with the steps you still need if Pace knows a recent count. iOS schedules notifications in advance: Pace can't read Apple Health right before delivery. Once your goal is reached and Pace was opened since, the remaining reminders for the day are skipped. Open Pace at least every \(GoalReminderPlanner.plannedDays(timesPerDay: reminder.times.count)) days so reminders keep being scheduled.",
+            ru: "Уведомления в выбранное время – утром как напоминание, позже с оставшимися шагами, если Pace знает актуальное значение. iOS планирует уведомления заранее: Pace не может прочитать данные «Здоровья» прямо перед доставкой. Если цель достигнута и после этого Pace открывался, остальные напоминания за день не придут. Открывай Pace хотя бы раз в \(GoalReminderPlanner.plannedDays(timesPerDay: reminder.times.count)) дн., чтобы напоминания продолжали планироваться."
         )
     }
 

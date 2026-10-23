@@ -98,6 +98,7 @@ struct PrivacyAndNotificationTests {
         scheduler: NotificationSchedulerStub,
         reminder: StreakReminderSettings = StreakReminderSettings(),
         goalReached: @escaping @MainActor () -> Bool = { false },
+        progress: @escaping @MainActor () -> GoalProgressSnapshot? = { nil },
         now: @escaping @Sendable () -> Date = { Fixtures.date(2026, 10, 20, 9) }
     ) -> (NotificationSettingsViewModel, AppSettings, InMemoryAppPreferencesStore) {
         let store = InMemoryAppPreferencesStore(AppPreferences(language: .fixed(.german), streakReminder: reminder))
@@ -106,6 +107,9 @@ struct PrivacyAndNotificationTests {
             settings: settings,
             notifications: scheduler,
             isTodayGoalReached: goalReached,
+            todayProgress: progress,
+            currentGoal: { 10_000 },
+            calendar: Fixtures.activityCalendar,
             now: now
         )
         return (viewModel, settings, store)
@@ -122,9 +126,10 @@ struct PrivacyAndNotificationTests {
         #expect(viewModel.authorization == .authorized)
         let scheduled = scheduler.state.withLock { $0.scheduled }
         #expect(scheduled.count == 1)
-        #expect(scheduled.first?.hour == 19)
-        #expect(scheduled.first?.minute == 0)
-        #expect(scheduled.first?.skipToday == false)
+        // 19:00 an 14 Tagen, beginnend heute (20.10., 9 Uhr).
+        #expect(scheduled.first?.count == 14)
+        #expect(scheduled.first?.first?.dateComponents.day == 20)
+        #expect(scheduled.first?.first?.dateComponents.hour == 19)
     }
 
     @Test func deniedPermissionKeepsTheReminderOff() async {
@@ -162,8 +167,8 @@ struct PrivacyAndNotificationTests {
 
         let scheduled = scheduler.state.withLock { $0.scheduled }
         #expect(scheduled.count == 2)
-        #expect(scheduled.last?.hour == 7)
-        #expect(scheduled.last?.minute == 45)
+        #expect(scheduled.last?.first?.dateComponents.hour == 7)
+        #expect(scheduled.last?.first?.dateComponents.minute == 45)
         #expect(store.load().streakReminder == StreakReminderSettings(isEnabled: true, hour: 7, minute: 45))
         // Deutsch „07:45“ (je nach Plattform-ICU auch „7:45“), Englisch mit AM/PM.
         #expect(viewModel.reminderTimeText.hasSuffix("7:45"))
@@ -172,7 +177,33 @@ struct PrivacyAndNotificationTests {
         }
     }
 
-    @Test func reachedGoalSkipsTodaysReminder() async {
+    @Test func severalTimesAreAddedEditedRemovedAndStored() async {
+        let scheduler = NotificationSchedulerStub { $0.authorization = .authorized }
+        let (viewModel, _, store) = makeNotifications(scheduler: scheduler, reminder: StreakReminderSettings(isEnabled: true))
+
+        await viewModel.addReminderTime(ReminderTime(hour: 8, minute: 0))
+        await viewModel.addReminderTime(ReminderTime(hour: 12, minute: 30))
+        await viewModel.addReminderTime(ReminderTime(hour: 12, minute: 30)) // doppelt → ignoriert
+        #expect(viewModel.reminder.times == [ReminderTime(hour: 8, minute: 0), ReminderTime(hour: 12, minute: 30), ReminderTime(hour: 19, minute: 0)])
+        #expect(viewModel.reminderSummary == "3 Erinnerungen")
+
+        await viewModel.updateReminderTime(ReminderTime(hour: 12, minute: 30), to: ReminderTime(hour: 16, minute: 0))
+        await viewModel.removeReminderTime(ReminderTime(hour: 8, minute: 0))
+        #expect(viewModel.reminder.times == [ReminderTime(hour: 16, minute: 0), ReminderTime(hour: 19, minute: 0)])
+
+        // Gespeichert – auch nach einem „Neustart“.
+        #expect(store.load().streakReminder.times == viewModel.reminder.times)
+        // Heute ab 9 Uhr: 16:00 und 19:00 → je Tag zwei Mitteilungen.
+        let last = scheduler.state.withLock { $0.scheduled.last ?? [] }
+        #expect(last.prefix(2).map { $0.dateComponents.hour } == [16, 19])
+
+        // Die letzte verbleibende Uhrzeit lässt sich nicht entfernen.
+        await viewModel.removeReminderTime(ReminderTime(hour: 16, minute: 0))
+        await viewModel.removeReminderTime(ReminderTime(hour: 19, minute: 0))
+        #expect(viewModel.reminder.times == [ReminderTime(hour: 19, minute: 0)])
+    }
+
+    @Test func reachedGoalSkipsTodaysReminders() async {
         let scheduler = NotificationSchedulerStub { $0.authorization = .authorized }
         let reached = Locked(false)
         let (viewModel, _, _) = makeNotifications(
@@ -185,7 +216,78 @@ struct PrivacyAndNotificationTests {
         reached.withLock { $0 = true }
         await viewModel.reschedule()
 
-        #expect(scheduler.state.withLock { $0.scheduled }.map(\.skipToday) == [false, true])
+        let plans = scheduler.state.withLock { $0.scheduled }
+        #expect(plans.map { $0.first?.dateComponents.day } == [20, 21])
+    }
+
+    @Test func freshProgressNamesTheMissingStepsAndIsThrottled() async throws {
+        let scheduler = NotificationSchedulerStub { $0.authorization = .authorized }
+        let clock = Locked(Fixtures.date(2026, 10, 20, 18, 0))
+        let steps = Locked(6_580)
+        let (viewModel, _, _) = makeNotifications(
+            scheduler: scheduler,
+            reminder: StreakReminderSettings(isEnabled: true),
+            progress: {
+                GoalProgressSnapshot(day: Fixtures.day(2026, 10, 20), steps: steps.withLock { $0 }, goal: 10_000, measuredAt: clock.withLock { $0 })
+            },
+            now: { clock.withLock { $0 } }
+        )
+
+        await viewModel.progressDidChange()
+        let first = try #require(scheduler.state.withLock { $0.scheduled.last?.first })
+        #expect(first.body == "Dir fehlen noch 3.420 Schritte bis zu deinem Tagesziel.")
+
+        // Wenige Minuten später, neuer Stand: noch nicht neu planen (Drosselung) …
+        clock.withLock { $0 = Fixtures.date(2026, 10, 20, 18, 2) }
+        steps.withLock { $0 = 9_350 }
+        await viewModel.progressDidChange()
+        #expect(scheduler.state.withLock { $0.scheduled.count } == 1)
+        // … nach fünf Minuten schon – jetzt „fast geschafft“.
+        clock.withLock { $0 = Fixtures.date(2026, 10, 20, 18, 6) }
+        await viewModel.progressDidChange()
+        let updated = try #require(scheduler.state.withLock { $0.scheduled.last?.first })
+        #expect(updated.title == "Nur noch 650 Schritte!")
+        #expect(updated.body == "Dein Tagesziel ist fast geschafft.")
+    }
+
+    @Test func successIsAnnouncedOnceWhenTheGoalIsCrossed() async {
+        let scheduler = NotificationSchedulerStub { $0.authorization = .authorized }
+        let steps = Locked(9_800)
+        let (viewModel, settings, _) = makeNotifications(
+            scheduler: scheduler,
+            reminder: StreakReminderSettings(isEnabled: true),
+            progress: {
+                GoalProgressSnapshot(day: Fixtures.day(2026, 10, 20), steps: steps.withLock { $0 }, goal: 10_000, measuredAt: Fixtures.date(2026, 10, 20, 9))
+            }
+        )
+
+        await viewModel.progressDidChange()
+        steps.withLock { $0 = 10_120 }
+        await viewModel.progressDidChange()
+        await viewModel.progressDidChange()
+
+        let delivered = scheduler.state.withLock { $0.delivered }
+        #expect(delivered.count == 1)
+        #expect(delivered.first?.title == "Geschafft!")
+        #expect(delivered.first?.body == "Du hast dein Tagesziel erreicht – 10.120 Schritte heute.")
+        #expect(settings.goalReachedNotifiedOn == Fixtures.day(2026, 10, 20))
+        // Heutige Erinnerungen entfallen, der Plan beginnt morgen.
+        #expect(scheduler.state.withLock { $0.scheduled.last?.first?.dateComponents.day } == 21)
+    }
+
+    @Test func goalAlreadyReachedAtLaunchIsNotAnnouncedAgain() async {
+        let scheduler = NotificationSchedulerStub { $0.authorization = .authorized }
+        let (viewModel, _, _) = makeNotifications(
+            scheduler: scheduler,
+            reminder: StreakReminderSettings(isEnabled: true),
+            progress: {
+                GoalProgressSnapshot(day: Fixtures.day(2026, 10, 20), steps: 12_000, goal: 10_000, measuredAt: Fixtures.date(2026, 10, 20, 9))
+            }
+        )
+
+        await viewModel.progressDidChange()
+
+        #expect(scheduler.state.withLock { $0.delivered }.isEmpty)
     }
 
     @Test func aNewDayReschedulesTheSamePlan() async {
@@ -225,16 +327,5 @@ struct PrivacyAndNotificationTests {
 
         #expect(!env.viewModel.notifications.isAvailable)
         #expect(!env.viewModel.notifications.reminder.isEnabled)
-    }
-
-    @Test func reminderTextsAreLocalized() {
-        #expect(NotificationSettingsViewModel.reminderTitle == "Dein Tagesziel wartet")
-        PaceLocalization.$languageOverride.withValue(.english) {
-            #expect(NotificationSettingsViewModel.reminderTitle == "Your daily goal is waiting")
-            #expect(NotificationSettingsViewModel.reminderBody == "Reach your daily goal today to keep your streak going.")
-        }
-        PaceLocalization.$languageOverride.withValue(.russian) {
-            #expect(NotificationSettingsViewModel.reminderTitle == "Твоя дневная цель ждёт")
-        }
     }
 }

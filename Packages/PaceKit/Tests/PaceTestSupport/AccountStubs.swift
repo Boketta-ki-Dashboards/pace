@@ -63,7 +63,10 @@ public final class NotificationSchedulerStub: LocalNotificationScheduling, Senda
     public struct State: Sendable {
         public var authorization: NotificationAuthorization = .notDetermined
         public var grantsOnRequest = true
-        public var scheduled: [(hour: Int, minute: Int, skipToday: Bool)] = []
+        /// Jede Planung (alle Erinnerungen einer Übergabe).
+        public var scheduled: [[PlannedNotification]] = []
+        /// Sofort gezeigte Mitteilungen (z. B. „Geschafft!“).
+        public var delivered: [PlannedNotification] = []
         public var cancelCalls = 0
     }
 
@@ -86,11 +89,15 @@ public final class NotificationSchedulerStub: LocalNotificationScheduling, Senda
         }
     }
 
-    public func scheduleStreakReminders(hour: Int, minute: Int, skipToday: Bool, title: String, body: String) async {
-        state.withLock { $0.scheduled.append((hour, minute, skipToday)) }
+    public func scheduleGoalReminders(_ notifications: [PlannedNotification]) async {
+        state.withLock { $0.scheduled.append(notifications) }
     }
 
-    public func cancelStreakReminders() async {
+    public func cancelGoalReminders() async {
         state.withLock { $0.cancelCalls += 1 }
+    }
+
+    public func deliver(_ notification: PlannedNotification) async {
+        state.withLock { $0.delivered.append(notification) }
     }
 }

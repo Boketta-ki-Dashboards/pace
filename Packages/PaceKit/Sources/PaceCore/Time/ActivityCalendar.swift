@@ -42,6 +42,16 @@ public struct ActivityCalendar: Sendable {
         return DateInterval(start: startOfDay(first), end: startOfDay(adding(1, to: last)))
     }
 
+    /// Zeitpunkt `hour:minute` an `day` in der Zeitzone des Kalenders; `nil`, wenn es die Uhrzeit nicht gibt (z. B. in
+    /// der übersprungenen Stunde der Sommerzeitumstellung).
+    public func date(_ day: LocalDate, hour: Int, minute: Int) -> Date? {
+        let components = DateComponents(year: day.year, month: day.month, day: day.day, hour: hour, minute: minute)
+        guard let date = calendar.date(from: components),
+              calendar.component(.hour, from: date) == hour
+        else { return nil }
+        return date
+    }
+
     public func adding(_ days: Int, to day: LocalDate) -> LocalDate {
         // Mittags rechnen, damit Sommerzeitwechsel um Mitternacht keinen Tag verschluckt.
         let noon = calendar.date(byAdding: .hour, value: 12, to: startOfDay(day))!

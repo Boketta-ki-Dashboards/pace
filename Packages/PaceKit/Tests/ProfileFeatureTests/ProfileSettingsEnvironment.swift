@@ -212,13 +212,18 @@ struct LoggingNotifications: LocalNotificationScheduling {
         return await base.requestAuthorization()
     }
 
-    func scheduleStreakReminders(hour: Int, minute: Int, skipToday: Bool, title: String, body: String) async {
+    func scheduleGoalReminders(_ notifications: [PlannedNotification]) async {
         log.record("notifications.schedule")
-        await base.scheduleStreakReminders(hour: hour, minute: minute, skipToday: skipToday, title: title, body: body)
+        await base.scheduleGoalReminders(notifications)
     }
 
-    func cancelStreakReminders() async {
+    func cancelGoalReminders() async {
         log.record("notifications.cancel")
-        await base.cancelStreakReminders()
+        await base.cancelGoalReminders()
+    }
+
+    func deliver(_ notification: PlannedNotification) async {
+        log.record("notifications.deliver")
+        await base.deliver(notification)
     }
 }

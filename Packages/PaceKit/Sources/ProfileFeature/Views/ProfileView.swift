@@ -356,11 +356,11 @@ struct ProfileContent: View {
                 systemImage: "bell",
                 title: ProfileRoute.notifications.title,
                 subtitle: PaceLocalization.text(
-                    de: "Erinnerung an dein Tagesziel",
-                    en: "Daily goal reminder",
-                    ru: "Напоминание о дневной цели"
+                    de: "Tagesziel-Erinnerungen",
+                    en: "Daily goal reminders",
+                    ru: "Напоминания о дневной цели"
                 ),
-                value: viewModel.notifications.reminder.isEnabled ? viewModel.notifications.reminderTimeText : ProfileTexts.off
+                value: viewModel.notifications.reminderSummary
             ) { onOpen(.notifications) }
 
             ProfileSectionTitle(PaceLocalization.text(de: "Daten & Hilfe", en: "Data & help", ru: "Данные и помощь"))

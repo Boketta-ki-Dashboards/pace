@@ -2,13 +2,19 @@ import Foundation
 import PaceCore
 import UserNotifications
 
-/// Lokale Mitteilungen über `UNUserNotificationCenter`. Plant die Erinnerung an das Tagesziel als einzelne Mitteilungen
-/// für die nächsten 14 Tage – so lässt sich der heutige Tag auslassen, sobald das Ziel erreicht ist.
+/// Lokale Mitteilungen über `UNUserNotificationCenter`: Tagesziel-Erinnerungen (im Voraus geplant, siehe
+/// ``GoalReminderPlanner``) und sofortige Mitteilungen wie „Geschafft!“. Mitteilungen erscheinen auch, während Pace
+/// geöffnet ist (als Banner).
+///
+/// Push-Mitteilungen bei geschlossener App (z. B. neue Chatnachrichten) bräuchten APNs mit einer Push-Capability und
+/// einem Server-Versand – das ist nicht eingerichtet (mit einem kostenlosen Personal Team auch nicht möglich).
 public struct UserNotificationScheduler: LocalNotificationScheduling {
-    private static let identifierPrefix = "pace.streak-reminder."
-    private static let daysAhead = 14
+    /// Kennung der Erinnerungen älterer Versionen (eine Uhrzeit) – werden beim Neuplanen entfernt.
+    private static let legacyIdentifierPrefix = "pace.streak-reminder."
 
-    public init() {}
+    public init() {
+        ForegroundNotificationPresenter.activate()
+    }
 
     public func authorization() async -> NotificationAuthorization {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
@@ -23,31 +29,55 @@ public struct UserNotificationScheduler: LocalNotificationScheduling {
         (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
     }
 
-    public func scheduleStreakReminders(hour: Int, minute: Int, skipToday: Bool, title: String, body: String) async {
+    public func scheduleGoalReminders(_ notifications: [PlannedNotification]) async {
         let center = UNUserNotificationCenter.current()
-        await cancelStreakReminders()
-        let calendar = Calendar.current
-        let now = Date()
-        for offset in 0..<Self.daysAhead {
-            guard let day = calendar.date(byAdding: .day, value: offset, to: now) else { continue }
-            var components = calendar.dateComponents([.year, .month, .day], from: day)
-            components.hour = hour
-            components.minute = minute
-            guard let fireDate = calendar.date(from: components), fireDate > now else { continue }
-            if offset == 0, skipToday { continue }
-            let content = UNMutableNotificationContent()
-            content.title = title
-            content.body = body
-            content.sound = .default
-            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-            let request = UNNotificationRequest(identifier: Self.identifierPrefix + "\(offset)", content: content, trigger: trigger)
+        await cancelGoalReminders()
+        for notification in notifications {
+            let trigger = UNCalendarNotificationTrigger(dateMatching: notification.dateComponents, repeats: false)
+            let request = UNNotificationRequest(identifier: notification.identifier, content: content(notification), trigger: trigger)
             try? await center.add(request)
         }
     }
 
-    public func cancelStreakReminders() async {
+    public func cancelGoalReminders() async {
         let center = UNUserNotificationCenter.current()
-        let identifiers = (0..<Self.daysAhead).map { Self.identifierPrefix + "\($0)" }
+        let identifiers = await center.pendingNotificationRequests()
+            .map(\.identifier)
+            .filter { $0.hasPrefix(GoalReminderPlanner.identifierPrefix) || $0.hasPrefix(Self.legacyIdentifierPrefix) }
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
+    }
+
+    public func deliver(_ notification: PlannedNotification) async {
+        let request = UNNotificationRequest(identifier: notification.identifier, content: content(notification), trigger: nil)
+        try? await UNUserNotificationCenter.current().add(request)
+    }
+
+    private func content(_ notification: PlannedNotification) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.title = notification.title
+        content.body = notification.body
+        content.sound = .default
+        return content
+    }
+}
+
+/// Zeigt Mitteilungen von Pace auch an, während die App im Vordergrund ist (sonst unterdrückt iOS sie).
+final class ForegroundNotificationPresenter: NSObject, @unchecked Sendable {
+    private static let shared = ForegroundNotificationPresenter()
+
+    static func activate() {
+        let center = UNUserNotificationCenter.current()
+        if center.delegate !== shared {
+            center.delegate = shared
+        }
+    }
+}
+
+extension ForegroundNotificationPresenter: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
     }
 }

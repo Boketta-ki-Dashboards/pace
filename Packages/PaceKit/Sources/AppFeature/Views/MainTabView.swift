@@ -64,9 +64,13 @@ struct MainTabView: View {
         .onChange(of: viewModel.selectedTab) { _, tab in
             Task { await viewModel.didSelect(tab) }
         }
-        // Ist das Tagesziel erreicht, entfällt die Erinnerung für heute.
+        // Ist das Tagesziel erreicht, entfallen die Erinnerungen von heute.
         .onChange(of: viewModel.profile.notifications.todayGoalReached) {
             Task { await viewModel.profile.notifications.reschedule() }
+        }
+        // Neuer Stand aus Apple Health: „Geschafft!“ (einmal am Tag) und Erinnerungen mit frischem Stand (gedrosselt).
+        .onChange(of: viewModel.dashboard.healthKitStepsToday) {
+            Task { await viewModel.profile.notifications.progressDidChange() }
         }
         // Bewegungsdaten und Sync laufen für die ganze Main App, nicht nur, solange der Home-Tab offen ist.
         .activityUpdates(viewModel.home)

@@ -200,6 +200,16 @@ public final class AppRouter {
                 settings: settings,
                 profiles: services.profiles,
                 notifications: dependencies.notifications,
+                todayProgress: { [weak home, goals] in
+                    home?.overview.map { overview in
+                        GoalProgressSnapshot(
+                            day: overview.today.date,
+                            steps: overview.today.competitionSteps,
+                            goal: goals.goal(on: overview.today.date),
+                            measuredAt: overview.updatedAt
+                        )
+                    }
+                },
                 account: services.account,
                 media: services.media,
                 social: services.social,

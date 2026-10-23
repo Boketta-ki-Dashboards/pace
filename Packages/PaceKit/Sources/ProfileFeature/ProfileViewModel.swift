@@ -13,6 +13,8 @@ public struct ProfileSettingsServices {
     /// Für die Verfügbarkeitsprüfung beim Ändern des Benutzernamens.
     public var profiles: (any ProfileRepository)?
     public var notifications: (any LocalNotificationScheduling)?
+    /// Zuletzt bekannter Stand von heute aus Apple Health (für Erinnerungstexte und „Geschafft!“).
+    public var todayProgress: (@MainActor () -> GoalProgressSnapshot?)?
     public var account: (any AccountRepository)?
     public var media: (any MediaRepository)?
     /// Blockierte Personen.
@@ -33,6 +35,7 @@ public struct ProfileSettingsServices {
         settings: AppSettings? = nil,
         profiles: (any ProfileRepository)? = nil,
         notifications: (any LocalNotificationScheduling)? = nil,
+        todayProgress: (@MainActor () -> GoalProgressSnapshot?)? = nil,
         account: (any AccountRepository)? = nil,
         media: (any MediaRepository)? = nil,
         social: (any SocialRepository)? = nil,
@@ -47,6 +50,7 @@ public struct ProfileSettingsServices {
         self.settings = settings
         self.profiles = profiles
         self.notifications = notifications
+        self.todayProgress = todayProgress
         self.account = account
         self.media = media
         self.social = social
@@ -168,6 +172,8 @@ public final class ProfileViewModel {
             settings: settings,
             notifications: services.notifications,
             isTodayGoalReached: { [weak streak] in streak?.streak?.isTodayReached ?? false },
+            todayProgress: services.todayProgress ?? { nil },
+            currentGoal: { [weak streak] in streak?.goals.currentGoal ?? StepGoalRules.defaultGoal },
             now: services.now
         )
         self.notifications = notifications
