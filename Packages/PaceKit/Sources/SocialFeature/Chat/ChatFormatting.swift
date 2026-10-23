@@ -118,7 +118,8 @@ public enum ChatFormatting {
     public static func voiceDuration(_ duration: Duration) -> String {
         let milliseconds = ChatRules.milliseconds(of: duration)
         let seconds = max(1, (milliseconds + 500) / 1_000)
-        return "\(seconds / 60):" + String(format: "%02d", seconds % 60)
+        let rest = seconds % 60
+        return "\(seconds / 60):" + (rest < 10 ? "0" : "") + "\(rest)"
     }
 
     public static var photo: String {
