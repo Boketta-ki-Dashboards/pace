@@ -5,11 +5,13 @@ import Storage
 import FoundationNetworking
 #endif
 
-/// Bilder in Supabase Storage (private Buckets, Migration 20261019100300). Format und Größe werden vor dem Upload
-/// geprüft; der Server erzwingt dieselben Grenzen (Bucket-Einstellungen) und die Berechtigungen (Policies).
+/// Bilder und Sprachnachrichten in Supabase Storage (private Buckets, Migrationen 20261019100300 und 20261023100100).
+/// Format und Größe werden vor dem Upload geprüft; der Server erzwingt dieselben Grenzen (Bucket-Einstellungen) und
+/// die Berechtigungen (Policies).
 ///
 /// Pfade: `<Ordner>/<zufällige UUID>.<Endung>` – Ordner ist die eigene öffentliche ID (Profilbild), die Gruppen-ID
-/// (Gruppenbild) bzw. die Unterhaltung (Chat-Anhang). Dateien werden nie überschrieben.
+/// (Gruppenbild) bzw. die Unterhaltung (Chat-Anhang: Bild, GIF oder Sprachnachricht als `.m4a`/`.aac`). Dateien
+/// werden nie überschrieben.
 struct SupabaseMediaRepository: MediaRepository {
     let storage: SupabaseStorageClient
     let ownPublicID: OwnPublicID
@@ -18,7 +20,7 @@ struct SupabaseMediaRepository: MediaRepository {
 
     func upload(_ data: Data, contentType: String, to target: MediaUploadTarget) async throws -> MediaReference {
         let type = contentType.lowercased()
-        guard let fileExtension = Self.fileExtensions[type], MediaRules.allowedContentTypes.contains(type) else {
+        guard let fileExtension = Self.fileExtensions[type], MediaRules.allowedContentTypes(for: target).contains(type) else {
             throw MediaError.unsupportedType
         }
         guard !data.isEmpty else { throw MediaError.unexpected("Leere Datei.") }
@@ -75,13 +77,16 @@ struct SupabaseMediaRepository: MediaRepository {
         }
     }
 
-    /// Endungen passend zu `MediaRules.allowedContentTypes` (wie die Pfadprüfung auf dem Server).
+    /// Endungen passend zu `MediaRules.allowedContentTypes(for:)` (wie die Pfadprüfung auf dem Server).
     static let fileExtensions: [String: String] = [
         "image/jpeg": "jpg",
         "image/png": "png",
         "image/gif": "gif",
         "image/heic": "heic",
         "image/webp": "webp",
+        "audio/mp4": "m4a",
+        "audio/x-m4a": "m4a",
+        "audio/aac": "aac",
     ]
 }
 

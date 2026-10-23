@@ -32,6 +32,8 @@ public struct LeaderboardEntry: Equatable, Hashable, Sendable, Identifiable {
     public let isCurrentUser: Bool
     /// Profilbild im Bucket `avatars`.
     public let avatarPath: String?
+    /// Eigener, privater Spitzname für diese Person (nur Freunde; Migration 20261023100000).
+    public let nickname: String?
 
     public init(
         rank: Int,
@@ -40,7 +42,8 @@ public struct LeaderboardEntry: Equatable, Hashable, Sendable, Identifiable {
         displayName: String,
         competitionSteps: Int,
         isCurrentUser: Bool,
-        avatarPath: String? = nil
+        avatarPath: String? = nil,
+        nickname: String? = nil
     ) {
         self.rank = rank
         self.publicUserID = publicUserID
@@ -49,11 +52,15 @@ public struct LeaderboardEntry: Equatable, Hashable, Sendable, Identifiable {
         self.competitionSteps = competitionSteps
         self.isCurrentUser = isCurrentUser
         self.avatarPath = avatarPath
+        self.nickname = nickname
     }
 
     public var id: UUID { publicUserID }
 
     public var avatar: MediaReference? { .avatar(avatarPath) }
+
+    /// Angezeigter Name: eigener Spitzname, sonst Anzeigename.
+    public var shownName: String { NicknameRules.shownName(nickname: nickname, displayName: displayName) }
 }
 
 /// Ein Ausschnitt des Rankings (serverseitig sortiert und paginiert).

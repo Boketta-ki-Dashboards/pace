@@ -28,11 +28,20 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
         public var deleteError: SocialError?
         /// Profile, die bei geteilten Profilen zurückgegeben werden (sonst ein Platzhalter).
         public var sharedProfiles: [UUID: SocialProfile] = [:]
+        /// Eigene Favoriten (Nachrichten-IDs).
+        public var favoriteIDs: Set<UUID> = []
+        /// Pins je Unterhaltung, zuletzt angepinnte zuerst.
+        public var pins: [UUID: [ChatPin]] = [:]
+        /// `false`: `setPinned` antwortet wie für Nicht-Owner im Gruppenchat (`notAllowed`).
+        public var canPin = true
+        /// Fehler nur bei Bearbeiten, Favoriten und Pins.
+        public var actionError: SocialError?
     }
 
     public let state: Locked<State>
     public let gate = CallGate()
     private let messageContinuations = Locked<[UUID: [AsyncStream<Void>.Continuation]]>([:])
+    private let activityContinuations = Locked<[UUID: [AsyncStream<ChatConversationEvent>.Continuation]]>([:])
     private let listContinuations = Locked<[AsyncStream<Void>.Continuation]>([])
 
     public init(configure: (inout State) -> Void = { _ in }) {
@@ -86,6 +95,20 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
                 return existing
             }
             state.now = state.now.addingTimeInterval(1)
+            var reply: ChatReplyPreview?
+            if let replyToID = draft.replyToID {
+                guard let original = state.messages[conversationID]?.first(where: { $0.id == replyToID }) else {
+                    throw SocialError.notFound
+                }
+                reply = ChatReplyPreview(
+                    id: original.id,
+                    sender: original.sender,
+                    kind: original.kind,
+                    text: original.text.map { String($0.prefix(ChatRules.replyPreviewLength)) },
+                    mediaDuration: original.mediaDuration,
+                    isDeleted: false
+                )
+            }
             let message = ChatMessage(
                 id: UUID(),
                 conversationID: conversationID,
@@ -98,7 +121,9 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
                 sharedProfile: draft.sharedProfileID.map { id in
                     state.sharedProfiles[id] ?? SocialProfile(publicID: id, username: "geteilt", displayName: "Geteilt")
                 },
-                sentAt: state.now
+                sentAt: state.now,
+                replyPreview: reply,
+                mediaDuration: draft.kind == .voice ? draft.mediaDuration : nil
             )
             state.messages[conversationID, default: []].append(message)
             return message
@@ -129,6 +154,118 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
                 return
             }
             messageContinuations.withLock { $0[conversationID, default: []].append(continuation) }
+        }
+    }
+
+    // MARK: Nachrichtenaktionen
+
+    private func checkAction(_ name: String) throws {
+        try check(name)
+        if let error = state.withLock({ $0.actionError }) { throw error }
+    }
+
+    public func editMessage(_ messageID: UUID, text: String) async throws -> ChatMessage {
+        try checkAction("editMessage")
+        guard let valid = ChatRules.validText(text) else { throw SocialError.invalidMessage }
+        return try state.withLock { state in
+            for key in state.messages.keys {
+                guard let index = state.messages[key]?.firstIndex(where: { $0.id == messageID }) else { continue }
+                let old = state.messages[key]![index]
+                guard old.isOwn else { throw SocialError.notFound }
+                guard old.kind == .text else { throw SocialError.invalidInput }
+                state.now = state.now.addingTimeInterval(1)
+                let edited = ChatMessage(
+                    id: old.id, conversationID: old.conversationID, clientID: old.clientID, sender: old.sender, isOwn: old.isOwn,
+                    kind: old.kind, text: valid, media: old.media, sharedProfile: old.sharedProfile, sentAt: old.sentAt,
+                    replyPreview: old.replyPreview, editedAt: valid == old.text ? old.editedAt : state.now,
+                    mediaDuration: old.mediaDuration, isFavorite: old.isFavorite, isPinned: old.isPinned
+                )
+                state.messages[key]![index] = edited
+                return edited
+            }
+            throw SocialError.notFound
+        }
+    }
+
+    public func setFavorite(_ messageID: UUID, isFavorite: Bool) async throws {
+        try checkAction("setFavorite")
+        try state.withLock { state in
+            guard isFavorite else {
+                state.favoriteIDs.remove(messageID)
+                Self.update(&state, messageID) { $0.withFavorite(false) }
+                return
+            }
+            guard state.messages.values.contains(where: { $0.contains { $0.id == messageID } }) else { throw SocialError.notFound }
+            state.favoriteIDs.insert(messageID)
+            Self.update(&state, messageID) { $0.withFavorite(true) }
+        }
+    }
+
+    public func favorites(conversationID: UUID) async throws -> [ChatMessage] {
+        try checkAction("favorites")
+        return state.withLock { state in
+            (state.messages[conversationID] ?? [])
+                .filter { state.favoriteIDs.contains($0.id) }
+                .sorted { $0.sentAt > $1.sentAt }
+                .map { $0.withFavorite(true) }
+        }
+    }
+
+    @discardableResult
+    public func setPinned(_ messageID: UUID, isPinned: Bool) async throws -> [ChatPin] {
+        try checkAction("setPinned")
+        let (conversationID, pins) = try state.withLock { state -> (UUID, [ChatPin]) in
+            guard let conversationID = state.messages.first(where: { $0.value.contains { $0.id == messageID } })?.key else {
+                throw SocialError.notFound
+            }
+            guard state.canPin else { throw SocialError.notAllowed }
+            var pins = state.pins[conversationID] ?? []
+            if isPinned {
+                if !pins.contains(where: { $0.message.id == messageID }) {
+                    guard pins.count < ChatRules.maximumPinnedMessages else { throw SocialError.pinLimitReached }
+                    let message = state.messages[conversationID]!.first { $0.id == messageID }!.withPinned(true)
+                    state.now = state.now.addingTimeInterval(1)
+                    pins.insert(ChatPin(message: message, pinnedBy: state.me, pinnedAt: state.now), at: 0)
+                }
+            } else {
+                pins.removeAll { $0.message.id == messageID }
+            }
+            state.pins[conversationID] = pins
+            Self.update(&state, messageID) { $0.withPinned(isPinned) }
+            return (conversationID, pins)
+        }
+        sendActivity(.pinsChanged, in: conversationID)
+        return pins
+    }
+
+    public func pins(conversationID: UUID) async throws -> [ChatPin] {
+        try checkAction("pins")
+        return state.withLock { $0.pins[conversationID] ?? [] }
+    }
+
+    public func conversationActivity(in conversationID: UUID) -> AsyncStream<ChatConversationEvent> {
+        AsyncStream { continuation in
+            guard state.withLock({ $0.realtimeAvailable }) else {
+                continuation.finish()
+                return
+            }
+            activityContinuations.withLock { $0[conversationID, default: []].append(continuation) }
+        }
+    }
+
+    /// Simuliert einen Echtzeit-Hinweis mit Art (z. B. Bearbeitung durch einen zweiten Nutzer).
+    public func sendActivity(_ event: ChatConversationEvent, in conversationID: UUID) {
+        activityContinuations.withLock { $0[conversationID]?.forEach { $0.yield(event) } }
+        if event == .message {
+            messageContinuations.withLock { $0[conversationID]?.forEach { $0.yield() } }
+        }
+    }
+
+    private static func update(_ state: inout State, _ messageID: UUID, _ transform: (ChatMessage) -> ChatMessage) {
+        for key in state.messages.keys {
+            if let index = state.messages[key]?.firstIndex(where: { $0.id == messageID }) {
+                state.messages[key]![index] = transform(state.messages[key]![index])
+            }
         }
     }
 
@@ -164,6 +301,7 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
     public func receive(_ message: ChatMessage) {
         state.withLock { $0.messages[message.conversationID, default: []].append(message) }
         messageContinuations.withLock { $0[message.conversationID]?.forEach { $0.yield() } }
+        activityContinuations.withLock { $0[message.conversationID]?.forEach { $0.yield(.message) } }
         listContinuations.withLock { $0.forEach { $0.yield() } }
     }
 }
@@ -188,7 +326,7 @@ public final class MediaRepositoryStub: MediaRepository, Sendable {
     }
 
     public func upload(_ data: Data, contentType: String, to target: MediaUploadTarget) async throws -> MediaReference {
-        guard MediaRules.allowedContentTypes.contains(contentType) else { throw MediaError.unsupportedType }
+        guard MediaRules.allowedContentTypes(for: target).contains(contentType) else { throw MediaError.unsupportedType }
         guard data.count <= MediaRules.maximumBytes(for: target) else { throw MediaError.tooLarge }
         return try state.withLock { state in
             if let error = state.error { throw error }
@@ -197,7 +335,9 @@ public final class MediaRepositoryStub: MediaRepository, Sendable {
             switch target {
             case .avatar: reference = MediaReference(bucket: .avatars, path: "\(Fixtures.publicUserID.uuidString.lowercased())/\(UUID().uuidString.lowercased()).jpg")
             case .groupImage(let id): reference = MediaReference(bucket: .groupImages, path: "\(id.uuidString.lowercased())/\(UUID().uuidString.lowercased()).jpg")
-            case .chat(let id): reference = MediaReference(bucket: .chatMedia, path: "\(id.uuidString.lowercased())/\(UUID().uuidString.lowercased())")
+            case .chat(let id):
+                let suffix = MediaRules.isAudio(contentType) ? ".m4a" : ""
+                reference = MediaReference(bucket: .chatMedia, path: "\(id.uuidString.lowercased())/\(UUID().uuidString.lowercased())\(suffix)")
             }
             state.files[reference] = data
             return reference
@@ -349,7 +489,12 @@ public enum ChatFixtures {
         mediaPath: String? = nil,
         sharedProfile: SocialProfile? = nil,
         clientID: UUID? = nil,
-        at sentAt: Date
+        at sentAt: Date,
+        replyPreview: ChatReplyPreview? = nil,
+        editedAt: Date? = nil,
+        mediaDuration: Duration? = nil,
+        isFavorite: Bool = false,
+        isPinned: Bool = false
     ) -> ChatMessage {
         ChatMessage(
             id: id,
@@ -361,7 +506,12 @@ public enum ChatFixtures {
             text: text,
             media: .chatMedia(mediaPath),
             sharedProfile: sharedProfile,
-            sentAt: sentAt
+            sentAt: sentAt,
+            replyPreview: replyPreview,
+            editedAt: editedAt,
+            mediaDuration: mediaDuration,
+            isFavorite: isFavorite,
+            isPinned: isPinned
         )
     }
 }

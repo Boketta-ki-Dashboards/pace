@@ -4,8 +4,10 @@ import Realtime
 /// Echtzeit-Hinweise über private Broadcast-Kanäle von Supabase Realtime (Migration 20261019100200/100300).
 ///
 /// Der Server sendet nach jeder neuen oder gelöschten Nachricht ein Ereignis ohne Inhalt an `chat:<conversation_id>`
-/// und `user:<public_id>`; wer ein Topic empfangen darf, prüft eine Policy auf `realtime.messages` mit dem Access
-/// Token. Jeder Hinweis wird als `Void` weitergegeben – die App lädt dann über die RPCs.
+/// und `user:<public_id>`, seit Migration 20261023100100 zusätzlich `message_updated` (Bearbeitung) und
+/// `pins_changed` an `chat:<conversation_id>`; wer ein Topic empfangen darf, prüft eine Policy auf
+/// `realtime.messages` mit dem Access Token. Jeder Hinweis wird ohne Inhalt weitergegeben – die App lädt dann über die
+/// RPCs.
 ///
 /// Der Stream endet, sobald Realtime nicht erreichbar ist, der Beitritt abgelehnt wird oder der Kanal getrennt
 /// wird. Die App fällt dann auf regelmäßiges Aktualisieren zurück (Vertrag von `ChatRepository`).
@@ -35,7 +37,25 @@ struct RealtimeEvents: Sendable {
         let usage = usage
         return AsyncStream { continuation in
             let task = Task {
-                await Self.forward(client: client, usage: usage, topic: topic, event: event, to: continuation)
+                await Self.forward(
+                    client: client, usage: usage, topic: topic, events: [event],
+                    yield: { _ in continuation.yield(()) }, finish: { continuation.finish() }
+                )
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// Mehrere Ereignisse auf einem privaten Topic (ein Kanal); liefert jeweils den Namen des Ereignisses.
+    func stream(topic: String, events: [String]) -> AsyncStream<String> {
+        let client = client
+        let usage = usage
+        return AsyncStream { continuation in
+            let task = Task {
+                await Self.forward(
+                    client: client, usage: usage, topic: topic, events: events,
+                    yield: { continuation.yield($0) }, finish: { continuation.finish() }
+                )
             }
             continuation.onTermination = { _ in task.cancel() }
         }
@@ -52,7 +72,10 @@ struct RealtimeEvents: Sendable {
                     continuation.finish()
                     return
                 }
-                await Self.forward(client: client, usage: usage, topic: resolved, event: event, to: continuation)
+                await Self.forward(
+                    client: client, usage: usage, topic: resolved, events: [event],
+                    yield: { _ in continuation.yield(()) }, finish: { continuation.finish() }
+                )
             }
             continuation.onTermination = { _ in task.cancel() }
         }
@@ -62,19 +85,20 @@ struct RealtimeEvents: Sendable {
         client: RealtimeClientV2,
         usage: TopicUsage,
         topic: String,
-        event: String,
-        to continuation: AsyncStream<Void>.Continuation
+        events: [String],
+        yield: @escaping @Sendable (String) -> Void,
+        finish: @escaping @Sendable () -> Void
     ) async {
         await usage.acquire(topic)
         let channel = client.channel(topic) { $0.isPrivate = true }
         // Vor dem Beitritt registrieren, damit kein Hinweis verloren geht.
-        let broadcasts = channel.broadcastStream(event: event)
+        let broadcasts = events.map { event in (event, channel.broadcastStream(event: event)) }
 
         do {
             try await channel.subscribeWithError()
         } catch {
             await release(channel, topic: topic, client: client, usage: usage)
-            continuation.finish()
+            finish()
             return
         }
 
@@ -83,20 +107,27 @@ struct RealtimeEvents: Sendable {
         let statuses = channel.statusChange
         let watcher = Task {
             for await status in statuses where status == .unsubscribed {
-                continuation.finish()
+                finish()
                 return
             }
-            continuation.finish()
+            finish()
         }
 
-        for await _ in broadcasts {
-            if Task.isCancelled { break }
-            continuation.yield(())
+        // Je Ereignis eine Teilaufgabe; alle enden, wenn der Verbraucher aufhört (Abbruch) oder der Kanal entfernt wird.
+        await withTaskGroup(of: Void.self) { group in
+            for (event, stream) in broadcasts {
+                group.addTask {
+                    for await _ in stream {
+                        if Task.isCancelled { break }
+                        yield(event)
+                    }
+                }
+            }
         }
 
         watcher.cancel()
         await release(channel, topic: topic, client: client, usage: usage)
-        continuation.finish()
+        finish()
     }
 
     private static func release(_ channel: RealtimeChannelV2, topic: String, client: RealtimeClientV2, usage: TopicUsage) async {

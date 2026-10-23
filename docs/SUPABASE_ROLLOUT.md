@@ -136,3 +136,94 @@ Danach:
 - `Config/Pace.xcconfig` bleibt lokal (nie committen); in die App gelangt nur der Publishable Key.
 - Moderation: offene Meldungen regelmäßig im Dashboard sichten (Ablauf in [BACKEND.md](BACKEND.md), „Moderation“).
 - Diese Datei um Datum, ausführende Person und Ergebnis der Prüfungen ergänzen.
+
+---
+
+# Auftrag 3: drei neue Migrationen (Spitznamen, Nachrichtenaktionen, Gruppenkalender)
+
+> **Status: NICHT ausgeführt – Freigabe durch den Nutzer nötig.** Die drei Migrationen sind nur lokal (Docker:
+> pgTAP 908 Prüfungen, `db lint`, `db advisors`, Realtime-Skript, Swift-Unit- und Integrationstests) gelaufen.
+> Ziel ist ausschließlich das Pace-Projekt `bnkrenfvfiaapsbkeejq`. Die sechs Migrationen aus dem ersten Teil
+> (`20261018100000` … `20261019100400`) sind laut Nutzer bereits produktiv eingespielt und bleiben unverändert.
+
+## A. Was eingespielt wird
+
+| # | Migration | Inhalt | Voraussetzung |
+|---|---|---|---|
+| 7 | `20261023100000_friend_nicknames.sql` | Tabelle `friend_nicknames`, `social_set_friend_nickname`, `nickname` in Profil-/Ranking-/Einladungsausgaben, `account_export` mit Spitznamen | 1–6 produktiv |
+| 8 | `20261023100100_chat_message_actions.sql` | Spalten `reply_to_id`, `edited_at`, `media_duration_ms` und Art `voice` in `chat_messages`; Tabellen `chat_message_favorites`, `chat_message_pins`; `chat_send` mit zwei neuen Parametern (Standard `null`), `chat_edit_message`, `chat_set_favorite`, `chat_favorites`, `chat_set_pinned`, `chat_pins`; Bucket `chat-media` mit `audio/mp4`, `audio/x-m4a`, `audio/aac` | 7 |
+| 9 | `20261023100200_group_calendar.sql` | `social_group_calendar` | 7 |
+
+Alle drei sind **additiv**: neue Tabellen, nullable Spalten ohne Standardwert (sofort, ohne Umschreiben der Tabelle),
+neue Funktionen, ersetzte Funktionen mit gleicher Signatur. Die Prüfregeln von `chat_messages` werden als `not
+valid` neu angelegt und anschließend validiert (kurze Sperre, bestehende Zeilen erfüllen sie: Obermengen bzw. nur
+neue Spalten). Einzige Signaturänderung: `chat_send` (alte Fassung entfernt, neue mit zwei zusätzlichen
+Parametern **mit Standardwert**) – ältere App-Versionen rufen sie mit den bisherigen Parametern auf und laufen
+unverändert. Keine Daten werden gelöscht. Neue Antwortfelder ignorieren ältere Versionen.
+
+## B. Vorbereitung
+
+1. Sicherung wie in Abschnitt 3 oben (Backup-Zeitpunkt notieren bzw. `supabase db dump --linked …`).
+2. *Storage → Settings:* globales Upload-Limit weiterhin ≥ 10 MB (Sprachnachrichten nutzen den Bucket `chat-media`
+   mit 10 MB).
+3. Realtime unverändert (private Kanäle, „Allow public access“ aus) – neue Ereignisse `message_updated` und
+   `pins_changed` laufen über dieselben Topics und dieselbe Policy.
+4. Keine Dashboard-Änderungen an Buckets von Hand: Migration 8 setzt `allowed_mime_types` von `chat-media` selbst.
+
+## C. Probelauf (durch den Nutzer)
+
+```sh
+supabase link --project-ref bnkrenfvfiaapsbkeejq
+supabase migration list --linked     # erwartet: alles bis 20261019100400 „remote“, die drei neuen nur „local“
+supabase db push --dry-run           # muss genau 20261023100000, 20261023100100, 20261023100200 nennen
+```
+
+Abbrechen, wenn andere oder zusätzliche Migrationen erscheinen oder die Projekt-Ref nicht stimmt.
+
+## D. Einspielen (nur nach ausdrücklicher Freigabe)
+
+```sh
+supabase db push                     # NIE mit --include-seed
+```
+
+Jede Migration läuft in einer Transaktion; bei einem Abbruch bleiben die vorherigen bestehen, die fehlerhafte ist
+vollständig zurückgerollt.
+
+## E. Prüfung danach (SQL Editor, nur lesend)
+
+```sql
+-- Neue Tabellen mit RLS und ohne Policies
+select tablename, rowsecurity from pg_tables
+ where schemaname = 'public' and tablename in ('friend_nicknames', 'chat_message_favorites', 'chat_message_pins');
+-- erwartet: 3 Zeilen, rowsecurity = true
+select count(*) from pg_policies
+ where schemaname = 'public' and tablename in ('friend_nicknames', 'chat_message_favorites', 'chat_message_pins');
+-- erwartet: 0
+
+-- Genau eine Fassung von chat_send (8 Parameter) und die neuen RPCs nur für authenticated
+select oid::regprocedure from pg_proc where proname = 'chat_send';
+select proname, has_function_privilege('anon', oid, 'execute') as anon,
+       has_function_privilege('authenticated', oid, 'execute') as authenticated
+  from pg_proc
+ where pronamespace = 'public'::regnamespace
+   and proname in ('social_set_friend_nickname', 'social_group_calendar', 'chat_edit_message', 'chat_set_favorite',
+                   'chat_favorites', 'chat_set_pinned', 'chat_pins');
+-- erwartet: 7 Zeilen, anon = false, authenticated = true
+
+-- Bucket chat-media mit Audio, Grenze unverändert
+select file_size_limit, allowed_mime_types from storage.buckets where id = 'chat-media';
+-- erwartet: 10485760, … image/webp, audio/mp4, audio/x-m4a, audio/aac
+
+-- Bestehende Nachrichten unverändert gültig
+select count(*) from public.chat_messages where kind not in ('text', 'image', 'gif', 'profile');   -- direkt danach 0
+```
+
+Danach *Database → Advisors* (keine neuen Warnungen) und mit zwei Konten in der App: Spitzname setzen (nur bei
+mir sichtbar), Antworten, eigene Nachricht bearbeiten (erscheint beim anderen als „Bearbeitet“), Favorit, Pin
+(Gruppe nur Owner), Sprachnachricht senden und beim anderen abspielen, Gruppenkalender öffnen.
+
+## F. Rücknahme
+
+Vorwärts korrigieren (neue Migration mit `create or replace function …`). Ältere App-Versionen nutzen die neuen
+Funktionen nicht; die aktuelle App zeigt bei fehlenden Funktionen „noch nicht eingerichtet“ (`PGRST202` →
+`.unavailable`). Ein vollständiges Zurück geht nur über die Sicherung (Daten seit dem Rollout gehen verloren).

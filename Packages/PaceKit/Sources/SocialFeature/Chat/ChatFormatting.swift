@@ -79,32 +79,34 @@ public enum ChatFormatting {
                 ? PaceLocalization.text(de: "Noch keine Nachrichten in der Gruppe", en: "No messages in the group yet", ru: "В группе пока нет сообщений")
                 : PaceLocalization.text(de: "Noch keine Nachrichten", en: "No messages yet", ru: "Сообщений пока нет")
         }
-        let body = content(kind: last.kind, text: last.text)
+        let body = content(kind: last.kind, text: last.text, duration: last.mediaDuration)
         if last.isOwn {
             return ownPrefix + ": " + body
         }
         if conversation.kind == .group {
-            let sender = last.senderName ?? deletedAccount
+            // Eigener Spitzname für den Absender, sonst sein Anzeigename.
+            let sender = last.shownSenderName ?? deletedAccount
             return sender + ": " + body
         }
         return body
     }
 
-    /// Hinweis auf eine neue Nachricht (lokale Mitteilung, solange Pace läuft): Name des Chats als Titel, Vorschau wie in
-    /// der Chatliste. Je Unterhaltung dieselbe Kennung, damit ein neuer Hinweis den vorigen ersetzt statt zu stapeln.
+    /// Hinweis auf eine neue Nachricht (lokale Mitteilung, solange Pace läuft): Name des Chats (bei Freunden der eigene
+    /// Spitzname) als Titel, Vorschau wie in der Chatliste. Je Unterhaltung dieselbe Kennung, damit ein neuer Hinweis den vorigen ersetzt statt zu stapeln.
     public static func incomingNotification(for conversation: ConversationSummary) -> PlannedNotification {
         PlannedNotification(
             identifier: incomingNotificationPrefix + conversation.id.uuidString.lowercased(),
             dateComponents: DateComponents(),
-            title: conversation.title,
+            title: conversation.shownTitle,
             body: String(preview(for: conversation).prefix(160))
         )
     }
 
     public static let incomingNotificationPrefix = "pace.chat."
 
-    /// Inhalt einer Nachricht in einer Zeile (Zeilenumbrüche werden zu Leerzeichen).
-    public static func content(kind: ChatMessageKind, text: String?) -> String {
+    /// Inhalt einer Nachricht in einer Zeile (Zeilenumbrüche werden zu Leerzeichen); Sprachnachrichten mit Dauer
+    /// („Sprachnachricht · 0:18“).
+    public static func content(kind: ChatMessageKind, text: String?, duration: Duration? = nil) -> String {
         switch kind {
         case .text:
             let words = (text ?? "").split(whereSeparator: { $0.isWhitespace || $0.isNewline })
@@ -115,7 +117,22 @@ public enum ChatFormatting {
             return "GIF"
         case .profile:
             return PaceLocalization.text(de: "Profil geteilt", en: "Shared a profile", ru: "Поделился профилем")
+        case .voice:
+            guard let duration else { return voiceMessage }
+            return voiceMessage + " · " + voiceDuration(duration)
         }
+    }
+
+    public static var voiceMessage: String {
+        PaceLocalization.text(de: "Sprachnachricht", en: "Voice message", ru: "Голосовое сообщение")
+    }
+
+    /// Dauer einer Sprachnachricht als „m:ss“ (auf ganze Sekunden gerundet, mindestens 0:01).
+    public static func voiceDuration(_ duration: Duration) -> String {
+        let milliseconds = ChatRules.milliseconds(of: duration)
+        let seconds = max(1, (milliseconds + 500) / 1_000)
+        let rest = seconds % 60
+        return "\(seconds / 60):" + (rest < 10 ? "0" : "") + "\(rest)"
     }
 
     public static var photo: String {

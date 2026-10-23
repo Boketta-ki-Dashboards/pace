@@ -7,6 +7,8 @@
 //   1. Teilnehmer dürfen den privaten Kanal chat:<conversation_id> und ihren Kanal user:<public_id> abonnieren.
 //   2. Fremde werden bei beiden abgewiesen.
 //   3. Eine neue Nachricht löst Hinweise auf beiden Kanälen aus – ohne Nachrichteninhalt.
+//   4. Bearbeiten (message_updated) und Anpinnen (pins_changed) melden sich auf chat:<conversation_id> – ebenfalls
+//      ohne Inhalt (Migration 20261023100100).
 //
 // Aufruf (nach `supabase start`):
 //   eval "$(supabase status -o env)"
@@ -173,7 +175,7 @@ try {
   check(!(await outsiderSocket.join(benTopic)), "Fremde werden bei user:<public_id> anderer abgewiesen");
 
   const secret = `Geheim ${crypto.randomUUID()}`;
-  await rpc(anna.token, "chat_send", {
+  const sent = await rpc(anna.token, "chat_send", {
     p_conversation_id: conversation.id,
     p_client_id: crypto.randomUUID(),
     p_kind: "text",
@@ -191,6 +193,19 @@ try {
     "Hinweise enthalten keinen Nachrichteninhalt");
   check(!outsiderSocket.broadcasts.some((b) => b.event === "message" || b.event === "conversation"),
     "Fremde empfangen keine Hinweise");
+
+  const edited = `Bearbeitet ${crypto.randomUUID()}`;
+  await rpc(anna.token, "chat_edit_message", { p_message_id: sent.id, p_text: edited });
+  const updateHint = await benSocket.waitForBroadcast(chatTopic, "message_updated");
+  check(updateHint !== null, "Hinweis „message_updated“ nach dem Bearbeiten angekommen");
+  check(!JSON.stringify(updateHint ?? {}).includes(edited), "Bearbeitungs-Hinweis ohne Nachrichteninhalt");
+
+  await rpc(ben.token, "chat_set_pinned", { p_message_id: sent.id, p_pinned: true });
+  const pinHint = await benSocket.waitForBroadcast(chatTopic, "pins_changed");
+  check(pinHint !== null, "Hinweis „pins_changed“ nach dem Anpinnen angekommen");
+  check(pinHint?.payload?.conversation_id === conversation.id, "Pin-Hinweis nennt die Unterhaltung");
+  check(!outsiderSocket.broadcasts.some((b) => b.event === "message_updated" || b.event === "pins_changed"),
+    "Fremde empfangen keine Bearbeitungs- oder Pin-Hinweise");
 } finally {
   benSocket.close();
   outsiderSocket.close();

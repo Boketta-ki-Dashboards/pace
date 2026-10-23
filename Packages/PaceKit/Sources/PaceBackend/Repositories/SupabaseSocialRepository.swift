@@ -296,6 +296,44 @@ struct SupabaseSocialRepository: SocialRepository {
         }
     }
 
+    // MARK: Spitznamen und Gruppenkalender
+
+    /// Leere Eingaben entfernen den Spitznamen; Normalisierung und Prüfung wie auf dem Server (`NicknameRules`).
+    @discardableResult
+    func setFriendNickname(publicID: UUID, nickname: String?) async throws -> SocialProfile {
+        let value = nickname.flatMap(NicknameRules.storedValue)
+        if let value, NicknameRules.violation(for: value) != nil {
+            throw SocialError.invalidNickname
+        }
+        let row: SocialProfileRow = try await mapped {
+            try await client.rpc("social_set_friend_nickname", params: NicknameParams(publicID: publicID, nickname: value)).execute().value
+        }
+        return row.profile
+    }
+
+    /// Zeiträume über `GroupCalendarRules.maximumDays` lehnt schon die App ab (der Server antwortet `invalid_date`).
+    func groupCalendar(groupID: UUID, from: LocalDate, to: LocalDate) async throws -> GroupCalendar {
+        guard from <= to, Self.dayCount(from: from, to: to) <= GroupCalendarRules.maximumDays else {
+            throw SocialError.invalidInput
+        }
+        let response: GroupCalendarResponse = try await mapped {
+            try await client.rpc(
+                "social_group_calendar",
+                params: GroupCalendarParams(groupID: groupID, firstDay: from.isoString, lastDay: to.isoString)
+            ).execute().value
+        }
+        return response.calendar
+    }
+
+    /// Anzahl der Kalendertage von `from` bis einschließlich `to` (unabhängig von Zeitzonen).
+    private static func dayCount(from: LocalDate, to: LocalDate) -> Int {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let start = calendar.date(from: DateComponents(year: from.year, month: from.month, day: from.day))!
+        let end = calendar.date(from: DateComponents(year: to.year, month: to.month, day: to.day))!
+        return (calendar.dateComponents([.day], from: start, to: end).day ?? 0) + 1
+    }
+
     // MARK: Hilfen
 
     private func summary(_ function: String, _ params: some Encodable & Sendable) async throws -> GroupSummary {
@@ -518,5 +556,34 @@ private struct GroupMemberParams: Encodable {
     enum CodingKeys: String, CodingKey {
         case groupID = "p_group_id"
         case publicID = "p_public_id"
+    }
+}
+
+private struct NicknameParams: Encodable {
+    let publicID: UUID
+    let nickname: String?
+
+    enum CodingKeys: String, CodingKey {
+        case publicID = "p_public_id"
+        case nickname = "p_nickname"
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(publicID, forKey: .publicID)
+        // `null` entfernt den Spitznamen; der Parameter hat keinen Standardwert und muss immer gesendet werden.
+        try container.encode(nickname, forKey: .nickname)
+    }
+}
+
+private struct GroupCalendarParams: Encodable {
+    let groupID: UUID
+    let firstDay: String
+    let lastDay: String
+
+    enum CodingKeys: String, CodingKey {
+        case groupID = "p_group_id"
+        case firstDay = "p_first_day"
+        case lastDay = "p_last_day"
     }
 }

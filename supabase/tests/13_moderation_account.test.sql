@@ -160,8 +160,9 @@ grant select, insert on t_export to authenticated;
 insert into t_export select public.account_export();
 select is(
   (select array_agg(k order by k) from t_export, jsonb_object_keys(data) k),
-  array['blocked_users', 'chat_messages', 'conversation_reads', 'daily_activity', 'exported_at', 'feedback', 'friend_requests',
-        'friends', 'group_invitations', 'group_membership_periods', 'groups', 'media', 'profile', 'reports'],
+  array['blocked_users', 'chat_message_favorites', 'chat_message_pins', 'chat_messages', 'conversation_reads',
+        'daily_activity', 'exported_at', 'feedback', 'friend_nicknames', 'friend_requests', 'friends', 'group_invitations',
+        'group_membership_periods', 'groups', 'media', 'profile', 'reports'],
   'Export: alle Bereiche'
 );
 select is((select data->'profile'->>'username' from t_export), 'ina', 'Export: Profil');
