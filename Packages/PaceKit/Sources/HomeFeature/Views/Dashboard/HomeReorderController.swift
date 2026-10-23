@@ -155,18 +155,18 @@ final class HomeReorderController {
     }
 }
 
-/// `CADisplayLink` braucht ein Objective-C-Ziel; hält den Controller nur schwach.
+/// `CADisplayLink` braucht ein Objective-C-Ziel; hält den Controller nur schwach. Der Display-Link läuft auf dem
+/// Main-Run-Loop, deshalb ist das Ziel an den Main Actor gebunden.
+@MainActor
 private final class DisplayLinkTarget: NSObject {
-    private let action: @MainActor (CADisplayLink) -> Void
+    private let action: (CADisplayLink) -> Void
 
-    init(action: @escaping @MainActor (CADisplayLink) -> Void) {
+    init(action: @escaping (CADisplayLink) -> Void) {
         self.action = action
     }
 
     @objc func step(_ link: CADisplayLink) {
-        MainActor.assumeIsolated {
-            action(link)
-        }
+        action(link)
     }
 }
 
