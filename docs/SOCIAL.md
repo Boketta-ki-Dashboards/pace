@@ -27,15 +27,16 @@ Pluralformen über `PaceLocalization.plural`). Unterseiten verwenden `PaceSubpag
 
 | Seite | Route | ViewModel | Inhalt |
 |---|---|---|---|
-| Hauptseite (Bild 9) | – | `SocialViewModel` | Wortmarke, Einstellungen, „Freund hinzufügen“/„Gruppe erstellen“, Suche (Freunde und Chats lokal), Top-Freunde (Top 3 aus dem Freundesranking), Freundschaftsanfragen mit Zähler, Gruppen (mit Zähler offener Einladungen), Chats (`ChatListSection`) |
+| Hauptseite (Bild 9) | – | `SocialViewModel` | Wortmarke, oben rechts Freundschaftsanfragen (Person-Plus mit Zähler) neben den Einstellungen, „Freund hinzufügen“/„Gruppe erstellen“, Suche (Freunde inkl. Spitznamen und Chats lokal), Top-Freunde (kompakt: Profilbild, Spitzname bzw. Name, Schritte, Platz – nur Freunde), Chats (`ChatListSection`, Überschrift mit Link „Meine Gruppen“ und Einladungszähler) |
 | Freund hinzufügen (Bild 1) | `.addFriend` | `FriendSearchViewModel` | Präfixsuche ab 3 Zeichen mit Verzögerung (350 ms), nur die neueste Antwort zählt; Hinzufügen / Anfrage gesendet / Bereits befreundet / Annehmen; Menü: Profil teilen, Nachricht schreiben (nur Freunde), Nutzer blockieren (mit Bestätigung) |
 | Freundschaftsanfragen (Bild 2) | `.requests` | `SocialViewModel` | Eingegangen (Annehmen/Ablehnen), Gesendet (Ausstehend/Zurückziehen) |
-| Profil | `.profile` | `UserProfileViewModel` | `publicProfile`: Aktionen je Beziehung, Schritte nur unter Freunden, Nachricht, Teilen, Freund entfernen, Blockieren/Aufheben, Melden |
+| Profil | `.profile` | `UserProfileViewModel` | `publicProfile`: Aktionen je Beziehung, Schritte nur unter Freunden, Nachricht, Spitzname vergeben/ändern/entfernen (nur Freunde; darunter bleibt der Anzeigename sichtbar), Teilen, Freund entfernen, Blockieren/Aufheben, Melden |
 | Profil teilen | `.shareProfile` | `ShareProfileViewModel` | Empfänger (Freunde, eigene Gruppen) → `ChatListViewModel.shareProfile`; Link `pace://u/<name>` über `ShareLink` |
 | Melden | `.report` | `ReportViewModel` | Grund aus `ReportReason`, Details (max. 500 Zeichen) → `report` |
 | Gruppe erstellen (Bild 3) | `.createGroup` | `CreateGroupViewModel` | Bild (PhotosPicker, auf 1.024 px verkleinert, JPEG ≤ 5 MB), Name, Beschreibung, Typ, Privatsphäre, Einladungen, Tagesziel (500er-Stufen), Drittel-Regel; danach öffnen sich die Details |
 | Gruppen | `.groups` | `SocialViewModel` | eigene Gruppen, Einladungen annehmen/ablehnen, Beitritt per Code, neue Gruppe |
-| Gruppendetails (Bild 4) | `.group` | `GroupDetailViewModel` | Kopf, Streak-Karte, Fortschritt (Pillen je Mitglied, „x von y benötigten Zielen“, Flamme), Gruppenchat/Mitglieder/Einstellungen, „Heute in der Gruppe“ mit `PaceRankingRow` |
+| Gruppendetails (Bild 4) | `.group` | `GroupDetailViewModel` | Kopf, Streak-Karte, Fortschritt (Pillen je Mitglied, „x von y benötigten Zielen“, Flamme), Gruppenchat/Mitglieder/Einstellungen, Zeile „Gruppenkalender“, „Heute in der Gruppe“ mit `PaceRankingRow` |
+| Gruppenkalender | `.groupCalendar` | `GroupCalendarViewModel` | Monat ab Montag (Vor/Zurück in der Gruppenzeit, „Heute“), Zellen: gesichert mintgrün, Pokal für Tagesbeste, ohne Daten gestrichelt, Zukunft/vor Gründung neutral; ausgewählter Tag: Flamme, Gruppenziel je Mitglied, „x von n erreicht“, benötigt ⌈n/3⌉, vollständige Rangliste (eigene Zeile hervorgehoben, „Ehemaliges Mitglied“ ohne Profil) |
 | Mitglieder | `.groupMembers` | `GroupDetailViewModel` | Rollen, Entfernen (nur Verwaltung), offene Einladungen zurückziehen (Verwaltung), Freunde einladen |
 | Gruppeneinstellungen | `.groupSettings` | `GroupDetailViewModel` | Bild, Name, Beschreibung, Typ, Privatsphäre (`updateGroupDetails`), Tagesziel ab morgen, Einladungscode teilen/erneuern, verlassen, löschen (Verwaltung), melden |
 | Freundesranking | `.friendsRanking` | `FriendsRankingViewModel` | heute / diese Woche |
@@ -57,6 +58,10 @@ Wichtige Abläufe:
   Gruppenchat aus den Details: `.group(id:name:)`, Privatchat aus Profil und Suche: `.direct(profile)`.
 - **Sichtbarkeit in der Suche:** keine eigene Einstellung im Social-Bereich; `SocialViewModel.openPrivacySettings`
   (vom App-Rahmen gesetzt) öffnet die Profil-Einstellung.
+- **Spitznamen:** `UserProfileViewModel.saveNickname` (Prüfung beim Tippen über `NicknameRules`, leer = entfernen)
+  → `setFriendNickname`; danach `SocialViewModel.nicknameDidChange` (Freunde, Ranking, Top-Freunde sofort) und
+  `ChatListViewModel.profileDidChange` (Chatliste und offene Chats neu laden). Angezeigt wird überall `shownName`
+  bzw. `shownTitle`; Freundschaftsanfragen und Blockierte zeigen den Anzeigenamen (dort gibt es keinen Spitznamen).
 
 Tests: `Tests/SocialFeatureTests` (Suche mit Verzögerung und veralteten Antworten, Anfragen, Blockieren/Melden,
 Gruppe erstellen mit Einladungen, Privatsphäre und Bild, Gruppendetails/Mitglieder/Einstellungen, Profile, Teilen,

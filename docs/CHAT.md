@@ -23,7 +23,9 @@ zeigt Fehler ehrlich an und täuscht nichts vor.
 | `ChatScreen.swift` | `ChatContent` (Kopf, Gruppen- bzw. Profilkopf, Zustände), Streak-Karte, Navigationslinks |
 | `ChatMessageViews.swift` | Verlauf, Sprechblasen, Profilkarten, ausstehende und eingeklappte Nachrichten, Kontextmenüs |
 | `ChatMediaViews.swift` | Bild-/GIF-Vorschau, animierte GIFs, Vollbild mit Zoom, Foto-Aufbereitung (JPEG) |
-| `ChatInputBar.swift` | Eingabeleiste („+“, Textfeld, Senden) bzw. Hinweis, wenn nicht geschrieben werden kann |
+| `ChatInputBar.swift` | Eingabeleiste („+“, Textfeld, Mikrofon/Senden, Antwort-/Bearbeiten-Vorschau, Aufnahme-Geste) bzw. Hinweis, wenn nicht geschrieben werden kann |
+| `ChatVoice.swift` | `ChatVoiceRecorder` (Aufnahme AAC/.m4a), `ChatVoicePlayer` (Wiedergabe), Sprachnachrichten-Blase, Aufnahme-Zeile |
+| `ChatFavoritesView.swift` | Favoritenliste des Chats (Stern im Chat-Kopf) |
 
 Alles ohne SwiftUI (ViewModels, Texte, Verlauf, Medienregeln) wird auf Linux gebaut und getestet.
 
@@ -119,10 +121,35 @@ anderen trotzdem gesendet und danach `ProfileShareError` (gesendet an n Chats, n
 - `ChatListViewModel(repository:media:social:calendar:now:pollInterval:sleep:)` – `social` liefert Gruppenkopf,
   blockierte Personen, Blockieren und Melden; ohne Angabe fehlen nur diese Teile.
 
-## Nachrichtenaktionen und Sprachnachrichten (Verträge, Migration 20261023100100)
+## Nachrichtenaktionen und Sprachnachrichten in der App
 
-Server und Verträge sind fertig; die Oberfläche (Kontextmenü, Antwort-Leiste, Pin-Hinweis, Aufnahme und
-Wiedergabe) baut der Hauptstrang darauf auf. Bis dahin zeigt der Verlauf Sprachnachrichten als Hinweis mit Dauer.
+- **Kontextmenü** (Nachricht gedrückt halten, natives iOS-Menü: reagiert sofort, wird nicht abgeschnitten, schließt
+  beim Tippen daneben, öffnet nicht beim Scrollen, VoiceOver-Aktionen): nur Aktionen, die gerade möglich sind
+  (`ChatViewModel.actions(for:)`): Antworten und Bearbeiten nur mit Schreibrecht, Kopieren nur bei Text, Bearbeiten nur
+  bei eigenen Texten, Favorit immer (privat), Anpinnen nur mit `canPin`. Dazu wie bisher Löschen/Melden/Blockieren.
+- **Antworten:** Vorschau über der Eingabe („Antwort auf Mia“ + Ausschnitt, ✕ bricht ab), die ausstehende Nachricht
+  trägt den Verweis schon vor der Server-Antwort. In der Blase ein kompakter Verweis; Antippen springt zur Nachricht
+  (`jump(to:)` lädt ältere Seiten nach, höchstens 10) und hebt sie 1,6 s hervor; nicht mehr vorhandene Originale:
+  „Nachricht nicht verfügbar“.
+- **Bearbeiten:** Text kommt ins Eingabefeld (der bisherige Entwurf wird aufbewahrt und danach zurückgelegt), Haken
+  speichert (`editMessage` → gleiche Nachricht ersetzt, nichts doppelt), ✕ bricht ab. Bei einem Fehler bleibt der Text
+  im Feld. Kennzeichen „Bearbeitet“ unter der Blase.
+- **Favoriten:** sofort umgeschaltet, bei Fehler zurückgenommen; kleiner Stern an der Nachricht (nur für mich); Liste
+  über den Stern im Chat-Kopf (Antippen springt zur Nachricht, Kontextmenü „Favorit entfernen“).
+- **Pins:** Hinweis oben unter dem Kopf („Angepinnt 1 von 3“ + Vorschau); Antippen springt hin und zeigt danach den
+  nächsten Pin; Kontextmenü „Lösen“ (mit Recht). Verborgene Pins erscheinen als „Nachricht nicht verfügbar“ und lassen
+  sich so lösen. Pins anderer kommen per Echtzeit (`pinsChanged`).
+- **Sprachnachrichten:** Mikrofon bei leerem Feld, sonst Senden (beide Knöpfe liegen übereinander, damit eine
+  laufende Geste nicht abreißt). Gedrückt halten nimmt auf (roter Punkt mit Pegel, Zeit, Haptik); nach oben wischen
+  sperrt (dann Stopp, Verwerfen, Senden), nach links wischen verwirft (Datei gelöscht, nichts hochgeladen). Nach dem
+  Loslassen bzw. Stopp folgt eine Vorschau zum Anhören – hochgeladen und gesendet wird erst mit „Senden“. Kürzer als
+  1 s gilt als Antippen („Zum Aufnehmen gedrückt halten.“). Erste Nutzung: iOS fragt nach dem Mikrofon, aufgenommen
+  wird beim nächsten Halten. Unterbrechungen: Anruf (Audio-Unterbrechung) und Wechsel in den Hintergrund beenden eine
+  Aufnahme als Vorschau; Verlassen des Chats verwirft sie. Wiedergabe-Blase mit Abspielen/Pause, Fortschritt (antippen
+  bzw. ziehen springt), Dauer bzw. „0:05 / 0:18“; immer nur eine Wiedergabe gleichzeitig. Eine fehlgeschlagene,
+  schon hochgeladene Sprachnachricht wird beim Verwerfen auch im Speicher gelöscht.
+
+## Nachrichtenaktionen und Sprachnachrichten (Verträge, Migration 20261023100100)
 
 - **Antworten:** `ChatMessageDraft.text(_:replyTo:)` bzw. `ChatMessageDraft(…, replyToID:)`. Der Server nimmt nur
   sichtbare, nicht gelöschte Nachrichten derselben Unterhaltung (`notFound`). Jede Nachricht trägt
@@ -165,8 +192,13 @@ Wiedergabe) baut der Hauptstrang darauf auf. Bis dahin zeigt der Verlauf Sprachn
   Fehlern, Profil teilen an mehrere Ziele, Blockieren, Melden, Löschen, Datums-Trenner, Sprachen.
 - Test-Doubles: `Tests/PaceTestSupport/ChatAndMediaStubs.swift` (`ChatRepositoryStub`, `MediaRepositoryStub`,
   `ManualTicker`, `ChatFixtures`).
+- `ChatMessageActionsTests.swift`: Menü je Lage, Antworten (Verweis vor und nach der Server-Antwort), Sprung mit
+  Nachladen, Bearbeiten (Entwurf, Fehler, nur eigene), Favoriten (Liste, Rücknahme), Pins (Hinweis, Sprung, Limit,
+  Echtzeit, verborgene lösen), Sprachnachrichten (Upload erst beim Senden, Dauer, ungültige, Verwerfen löscht Datei).
+  `ChatListViewModelTests.swift` → `ChatIncomingHintTests`: Hinweise auf neue Nachrichten.
 - Snapshots (`Tests/PaceSnapshotTests/ChatSnapshotTests.swift`, nur mit `PACE_SNAPSHOT_DIR`): `chat-list`
-  (DE/EN/RU), `group-chat` (wie Bild 5, DE/EN/RU), `direct-chat` (DE/EN/RU), `chat-states`, `chat-read-only`,
+  (DE/EN/RU), `group-chat` (wie Bild 5, DE/EN/RU), `direct-chat` (DE/EN/RU), `chat-actions` (Pin, Antwort, Bearbeitet,
+  Favorit, Sprachnachricht, Antwort-Vorschau; DE/EN/RU), `chat-states`, `chat-read-only`,
   `chat-unavailable` – jeweils Hell und Dunkel, mit Kopfzeile. Das Textfeld erscheint im Snapshot als Platzhalter
   (Grenze des `ImageRenderer`).
 
@@ -175,3 +207,5 @@ Wiedergabe) baut der Hauptstrang darauf auf. Bis dahin zeigt der Verlauf Sprachn
 Mediathek-Auswahl inkl. GIFs aus „Fotos“, Upload und Anzeige aus dem privaten Bucket, Echtzeit zwischen zwei
 Konten, Scrollverhalten (unten beginnen, ältere Nachrichten nachladen, Mitscrollen bei neuen Nachrichten), Tastatur
 mit der globalen Tab-Leiste, Kontextmenüs, Vollbild-Zoom, VoiceOver und „Bewegung reduzieren“ bei GIFs.
+**Nicht auf einem Gerät getestet:** Aufnahme-Geste (Halten, Sperren, Verwerfen), Mikrofon-Abfrage, Aufnahme und
+Wiedergabe mit AVFoundation, Unterbrechungen durch Anrufe, Haptik, Sprung mit Hervorhebung, lokale Chat-Hinweise.
