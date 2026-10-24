@@ -27,6 +27,8 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
     /// damit ein unterbrochenes Gleiten die Auswahl nicht dauerhaft festhält).
     @State private var pendingTarget: (tab: Tab, since: Date)?
     @State private var lastPosition: Double?
+    /// Startpunkt beim ersten Anzeigen: die Seite des anfangs gewählten Tabs (nicht immer Home).
+    private let initialAnchor: UnitPoint
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// - Parameters:
@@ -44,6 +46,8 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
         self.onPositionChange = onPositionChange
         self.page = page
         _scrolledID = State(initialValue: selection.wrappedValue)
+        let index = tabs.firstIndex(of: selection.wrappedValue) ?? 0
+        initialAnchor = UnitPoint(x: PaceTabPaging.initialAnchorX(index: index, count: tabs.count), y: 0.5)
     }
 
     public var body: some View {
@@ -65,7 +69,7 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
         .coordinateSpace(.named(paceTabPagerSpace))
         .scrollTargetBehavior(.paging)
         .scrollPosition(id: $scrolledID)
-        .defaultScrollAnchor(PaceTabPaging.advancesWithFingerMovingRight ? .trailing : .leading)
+        .defaultScrollAnchor(initialAnchor)
         .scrollIndicators(.hidden)
         .scrollDisabled(!isPagingEnabled)
         .onGeometryChange(for: CGFloat.self) { proxy in

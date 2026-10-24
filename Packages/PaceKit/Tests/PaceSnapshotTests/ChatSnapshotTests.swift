@@ -23,14 +23,16 @@ struct ChatSnapshotTests {
     /// Chat-Inhalt mit Eingabeleiste darunter, wie auf dem iPhone (ohne Scrollen).
     private func chatPage(_ chat: ChatViewModel, loader: PaceImageLoader? = nil) -> some View {
         VStack(spacing: 0) {
-            if let pin = chat.shownPin {
-                ChatPinBanner(pin: pin, index: 0, count: chat.pins.count, onTap: {})
-                    .padding(.horizontal, PaceSpacing.m)
-                    .padding(.top, PaceSpacing.m)
+            // Wie in der App: fester Kopf, darunter der Pin-Hinweis, dann der Verlauf.
+            VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                ChatTitleBar(viewModel: chat, backTitle: SocialText.social, actions: ChatActions())
+                if let pin = chat.shownPin {
+                    ChatPinBanner(pin: pin, index: 0, count: chat.pins.count, onTap: {})
+                }
+                ChatBody(viewModel: chat, isLazy: false)
             }
-            ChatContent(viewModel: chat, isLazy: false)
-                .padding(.horizontal, PaceSpacing.m)
-                .padding(.vertical, PaceSpacing.m)
+            .padding(.horizontal, PaceSpacing.m)
+            .padding(.vertical, PaceSpacing.m)
             ChatInputBar(
                 viewModel: chat,
                 recorder: ChatVoiceRecorder(),

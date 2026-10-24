@@ -33,6 +33,15 @@ public enum PaceTabPaging {
         return advancesWithFingerMovingRight ? last - visual : visual
     }
 
+    /// Waagerechter Startpunkt der Scrollansicht (0 = ganz links, 1 = ganz rechts), damit sie beim ersten Anzeigen genau
+    /// auf der Seite des gewählten Tabs steht – z. B. wenn ein Link die App direkt im Social-Tab öffnet.
+    public static func initialAnchorX(index: Int, count: Int, advancesWithFingerMovingRight: Bool = advancesWithFingerMovingRight) -> Double {
+        guard count > 1 else { return 0 }
+        let clamped = Double(min(max(index, 0), count - 1))
+        let visual = advancesWithFingerMovingRight ? Double(count - 1) - clamped : clamped
+        return visual / Double(count - 1)
+    }
+
     /// Ruhende Seite, wenn die Position (fast) ganzzahlig ist – sonst `nil` (Wischen oder Animation läuft).
     public static func settledIndex(_ position: Double, tolerance: Double = 0.002) -> Int? {
         let rounded = position.rounded()

@@ -45,4 +45,18 @@ struct PaceTabPagingTests {
         #expect(PaceTabPaging.visibleIndices(5, count: 4) == [3])
         #expect(PaceTabPaging.visibleIndices(0, count: 0).isEmpty)
     }
+
+    @Test func initialAnchorPointsAtTheSelectedPage() {
+        // Umgekehrte Reihenfolge: Home ganz rechts, Profil ganz links.
+        #expect(PaceTabPaging.initialAnchorX(index: 0, count: 4) == 1)
+        #expect(PaceTabPaging.initialAnchorX(index: 3, count: 4) == 0)
+        #expect(abs(PaceTabPaging.initialAnchorX(index: 2, count: 4) - 1.0 / 3.0) < 0.0001)
+        // Übliche Richtung: Home ganz links.
+        #expect(PaceTabPaging.initialAnchorX(index: 0, count: 4, advancesWithFingerMovingRight: false) == 0)
+        #expect(PaceTabPaging.initialAnchorX(index: 9, count: 4, advancesWithFingerMovingRight: false) == 1)
+        #expect(PaceTabPaging.initialAnchorX(index: 0, count: 1) == 0)
+        // Der Anker trifft genau die Seite: Versatz = Anker × (Seiten − 1) Seitenbreiten.
+        let offset = PaceTabPaging.initialAnchorX(index: 2, count: 4) * 3 * 390
+        #expect(PaceTabPaging.position(offset: offset, pageWidth: 390, count: 4).map { ($0 * 1000).rounded() / 1000 } == 2)
+    }
 }
