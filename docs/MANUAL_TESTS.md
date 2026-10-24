@@ -99,6 +99,13 @@ deckt genau diese Punkte ab.
       gebündelt, meist alle paar Minuten; Apple-Watch-Schritte teils später).
 - [ ] App in den Hintergrund und zurück: Schritte, Platzierungen und Chats werden aktualisiert.
 
+## G. Live-Schritte, Erinnerungen, Wischen, Messenger, Gruppenkalender
+
+Die 22 Testfälle dieses Updates (Live-Schritte, Kalorien, Chat-Layout und Tastatur, Wischen zwischen den Tabs,
+Widget-Ziehen, Spitznamen, Sprachnachrichten, Antworten, Bearbeiten, Favoriten, Pins, Gruppenkalender, mehrere
+Erinnerungen, Dark-Mode-Kalender, Tab-Leiste) stehen mit Erwartung in [IPHONE_TEST.md](IPHONE_TEST.md), Abschnitt 6.
+Fälle mit „B“ brauchen die drei Migrationen vom 23.10.2026 (Freigabe, siehe [SUPABASE_ROLLOUT.md](SUPABASE_ROLLOUT.md)).
+
 ## Bekannte Grenzen
 
 - Schritte kommen vom Gerät; das System ist nicht vollständig manipulationssicher (siehe `docs/SOCIAL.md`).
