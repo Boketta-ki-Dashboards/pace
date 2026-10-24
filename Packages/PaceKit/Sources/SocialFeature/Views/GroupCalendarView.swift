@@ -183,6 +183,7 @@ struct GroupCalendarContent: View {
             if let goal = viewModel.goalText(day) {
                 Text(goal)
             }
+            Text(GroupCalendarTexts.rankingHint)
             Text(viewModel.reachedText(day))
             Text(viewModel.requiredText(day))
         }
@@ -230,6 +231,7 @@ struct GroupCalendarContent: View {
                     .font(entry.isCurrentUser ? PaceFont.headline : PaceFont.body)
                     .foregroundStyle(PaceColor.textPrimary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 if isBest {
                     Image(systemName: "trophy.fill")
                         .font(.footnote)
@@ -237,12 +239,13 @@ struct GroupCalendarContent: View {
                         .accessibilityLabel(GroupCalendarTexts.bestOfDay)
                 }
                 Spacer(minLength: PaceSpacing.xs)
-                Text(PaceLocalization.steps(entry.competitionSteps))
+                // Nur die Zahl (die Karte sagt schon „Schritte“), damit Namen Platz haben.
+                Text(entry.competitionSteps.paceFormatted)
                     .font(.system(.subheadline, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(PaceColor.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .fixedSize()
+                    .accessibilityLabel(PaceLocalization.steps(entry.competitionSteps))
                 Image(systemName: entry.reached ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(entry.reached ? PaceColor.accent : PaceColor.track)
                     .accessibilityLabel(entry.reached ? GroupCalendarTexts.goalReached : GroupCalendarTexts.goalNotReached)
@@ -353,6 +356,13 @@ enum GroupCalendarTexts {
     static var bestOfDay: String { PaceLocalization.text(de: "Tagesbeste", en: "Best of the day", ru: "Лучший дня") }
     static var goalReached: String { PaceLocalization.text(de: "Ziel erreicht", en: "Goal reached", ru: "Цель выполнена") }
     static var goalNotReached: String { PaceLocalization.text(de: "Ziel nicht erreicht", en: "Goal not reached", ru: "Цель не выполнена") }
+    static var rankingHint: String {
+        PaceLocalization.text(
+            de: "Rangliste nach Wettbewerbsschritten des Tages.",
+            en: "Ranking by the day's competition steps.",
+            ru: "Рейтинг по шагам для рейтинга за день."
+        )
+    }
     static func you(_ name: String) -> String {
         PaceLocalization.text(de: "\(name) (du)", en: "\(name) (you)", ru: "\(name) (ты)")
     }

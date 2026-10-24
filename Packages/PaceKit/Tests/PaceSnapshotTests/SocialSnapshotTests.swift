@@ -130,7 +130,11 @@ private enum SocialSnapshotData {
         let days: [GroupCalendarDay] = (1...16).map { dayNumber in
             let day = Fixtures.day(2026, 10, dayNumber)
             let hasData = dayNumber != 15
-            let steps = members.enumerated().map { index, _ in hasData ? (dayNumber * 1_373 + index * 2_711) % 15_000 : 0 }
+            // Jeder dritte Tag ruhiger (nicht gesichert), damit alle Zustände im Bild vorkommen.
+            let factor = dayNumber % 3 == 0 ? 0.45 : 1.0
+            let steps = members.enumerated().map { index, _ in
+                hasData ? Int(Double((dayNumber * 1_373 + index * 2_711) % 15_000) * factor) : 0
+            }
             let order = steps.indices.sorted { steps[$0] == steps[$1] ? $0 < $1 : steps[$0] > steps[$1] }
             let ranking = hasData ? order.enumerated().map { rank, index in
                 GroupCalendarEntry(

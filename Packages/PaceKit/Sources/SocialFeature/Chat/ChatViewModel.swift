@@ -346,11 +346,19 @@ public final class ChatViewModel {
             messages = sorted
             hasOlderMessages = false
         } else if let first = sorted.first {
-            let kept = messages.filter { $0.sentAt < first.sentAt }
-            if kept.isEmpty {
+            let overlaps = messages.isEmpty || messages.contains { $0.sentAt >= first.sentAt }
+            if overlaps {
+                let kept = messages.filter { $0.sentAt < first.sentAt }
+                if kept.isEmpty {
+                    hasOlderMessages = true
+                }
+                messages = kept + sorted
+            } else {
+                // Inzwischen mehr neue Nachrichten als eine Seite: Zwischen dem alten Stand und der neuen Seite könnte
+                // eine Lücke sein. Der alte Stand wird verworfen; ältere Nachrichten lädt das Hochscrollen neu.
+                messages = sorted
                 hasOlderMessages = true
             }
-            messages = kept + sorted
         }
         removeDeliveredPending()
     }
@@ -413,6 +421,26 @@ public final class ChatViewModel {
         }
     }
 
+    /// Lädt die schon geladenen älteren Nachrichten (vor der neuesten Seite) erneut – z. B. nach einer Bearbeitung durch
+    /// jemand anderen. Höchstens ``maximumRefreshPages`` Seiten.
+    func refreshOlderLoadedMessages() async {
+        guard let repository, let conversation, let oldestLoaded = messages.first?.sentAt else { return }
+        var before = messages.count > ChatRules.pageSize ? messages[messages.count - ChatRules.pageSize].sentAt : nil
+        var pages = 0
+        while let cursor = before, cursor > oldestLoaded, pages < Self.maximumRefreshPages {
+            guard let older = try? await repository.messages(in: conversation.id, before: cursor, limit: ChatRules.pageSize),
+                  let first = older.first
+            else { return }
+            // Nur ersetzen, was schon geladen ist – keine neuen Lücken.
+            let loadedIDs = Set(messages.map(\.id))
+            merge(older.filter { loadedIDs.contains($0.id) })
+            before = older.count < ChatRules.pageSize ? nil : first.sentAt
+            pages += 1
+        }
+    }
+
+    static let maximumRefreshPages = 5
+
     /// Lädt ältere Nachrichten (beim Hochscrollen an den Anfang des Verlaufs).
     public func loadOlder() async {
         guard let repository, let conversation, hasOlderMessages, let oldest = messages.first else { return }
@@ -447,7 +475,12 @@ public final class ChatViewModel {
         defer { observerCount -= 1 }
         let interval = pollInterval
         let sleep = sleep
+        // Schon geladen (z. B. Chat erneut geöffnet): sofort auf den neuesten Stand, nicht erst beim nächsten Ereignis.
+        let wasLoaded = state == .loaded
         await loadIfNeeded()
+        if wasLoaded {
+            await refresh()
+        }
         await markReadIfNeeded()
         // Ohne geladene Unterhaltung (z. B. offline): regelmäßig erneut versuchen, bis es klappt.
         while conversation == nil {
@@ -464,8 +497,12 @@ public final class ChatViewModel {
             group.addTask { [weak self] in
                 for await event in repository.conversationActivity(in: conversationID) {
                     switch event {
-                    case .message, .messageUpdated:
+                    case .message:
                         await self?.refresh()
+                    case .messageUpdated:
+                        // Bearbeitet werden kann auch eine ältere Nachricht: den ganzen geladenen Bereich auffrischen.
+                        await self?.refresh()
+                        await self?.refreshOlderLoadedMessages()
                     case .pinsChanged:
                         await self?.loadPins()
                     }
@@ -633,10 +670,15 @@ public final class ChatViewModel {
     public func discard(_ clientID: UUID) {
         guard let item = pending.first(where: { $0.clientID == clientID && $0.isFailed }) else { return }
         pending.removeAll { $0.clientID == clientID }
-        // Schon hochgeladen, aber nie gesendet: Datei wieder entfernen (keine Reste im Speicher).
+        // Schon hochgeladen, aber (scheinbar) nicht gesendet: Datei wieder entfernen – aber erst, wenn feststeht, dass die
+        // Nachricht wirklich nicht beim Server angekommen ist (die Antwort aufs Senden kann verloren gegangen sein).
         if let path = item.mediaPath, let reference = MediaReference.chatMedia(path), let media {
-            uploadedMedia[path] = nil
-            Task { try? await media.delete(reference) }
+            Task {
+                await refresh()
+                guard refreshError == nil, !messages.contains(where: { $0.clientID == clientID }) else { return }
+                uploadedMedia[path] = nil
+                try? await media.delete(reference)
+            }
         }
     }
 
@@ -797,7 +839,7 @@ public final class ChatViewModel {
 
     /// Eigene Textnachricht bearbeiten: Ihr Text kommt ins Eingabefeld, der bisherige Entwurf wird aufbewahrt.
     public func startEditing(_ message: ChatMessage) {
-        guard canSend, message.canEdit else { return }
+        guard canSend, message.canEdit, !isSavingEdit else { return }
         replyingTo = nil
         if editingMessage == nil {
             draftBeforeEditing = draftText
@@ -806,8 +848,13 @@ public final class ChatViewModel {
         draftText = message.text ?? ""
     }
 
+    /// Die Bearbeitung wird gerade gespeichert (Haken und Abbrechen gesperrt).
+    public var isSavingEdit: Bool {
+        editingMessage.map { busyMessageIDs.contains($0.id) } ?? false
+    }
+
     public func cancelEditing() {
-        guard editingMessage != nil else { return }
+        guard editingMessage != nil, !isSavingEdit else { return }
         editingMessage = nil
         draftText = draftBeforeEditing ?? ""
         draftBeforeEditing = nil
@@ -824,9 +871,11 @@ public final class ChatViewModel {
         do {
             let saved = try await repository.editMessage(message.id, text: text)
             merge([saved])
-            editingMessage = nil
-            draftText = draftBeforeEditing ?? ""
-            draftBeforeEditing = nil
+            if editingMessage?.id == message.id {
+                editingMessage = nil
+                draftText = draftBeforeEditing ?? ""
+                draftBeforeEditing = nil
+            }
             list?.conversationDidChange()
         } catch let error as SocialError where error == .notFound {
             // Inzwischen gelöscht: Bearbeiten beenden, Verlauf neu laden.
@@ -938,6 +987,11 @@ public final class ChatViewModel {
         if pins.count > 1 {
             pinIndex = (pinIndex + 1) % pins.count
         }
+        // Verborgene Pins stehen nicht im Verlauf – kein Nachladen, nur ein Hinweis.
+        guard !pin.isHidden else {
+            notice = ChatNotice(text: ChatTexts.messageUnavailable, isError: false)
+            return
+        }
         await jump(to: pin.message.id)
     }
 
@@ -952,7 +1006,10 @@ public final class ChatViewModel {
             if messages.count == before { break }
         }
         guard messages.contains(where: { $0.id == messageID }) else {
-            notice = ChatNotice(text: ChatTexts.messageUnavailable, isError: false)
+            // Laden fehlgeschlagen → ehrlich sagen; sonst gibt es die Nachricht (für dich) nicht mehr.
+            notice = olderError != nil
+                ? ChatNotice(text: ChatTexts.olderFailed, isError: true)
+                : ChatNotice(text: ChatTexts.messageUnavailable, isError: false)
             return
         }
         jumpRequest = ChatJumpRequest(messageID: messageID)

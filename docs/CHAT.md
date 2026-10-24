@@ -146,7 +146,7 @@ anderen trotzdem gesendet und danach `ProfileShareError` (gesendet an n Chats, n
   1 s gilt als Antippen („Zum Aufnehmen gedrückt halten.“). Erste Nutzung: iOS fragt nach dem Mikrofon, aufgenommen
   wird beim nächsten Halten. Unterbrechungen: Anruf (Audio-Unterbrechung) und Wechsel in den Hintergrund beenden eine
   Aufnahme als Vorschau; Verlassen des Chats verwirft sie. Wiedergabe-Blase mit Abspielen/Pause, Fortschritt (antippen
-  bzw. ziehen springt), Dauer bzw. „0:05 / 0:18“; immer nur eine Wiedergabe gleichzeitig. Eine fehlgeschlagene,
+  springt), Dauer bzw. „0:05 / 0:18“; immer nur eine Wiedergabe gleichzeitig. Eine fehlgeschlagene,
   schon hochgeladene Sprachnachricht wird beim Verwerfen auch im Speicher gelöscht.
 
 ## Nachrichtenaktionen und Sprachnachrichten (Verträge, Migration 20261023100100)

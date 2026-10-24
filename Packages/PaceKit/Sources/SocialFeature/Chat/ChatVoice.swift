@@ -20,12 +20,17 @@ final class ChatVoicePlayer {
     private(set) var loadingID: UUID?
     /// Konnte nicht geladen bzw. abgespielt werden.
     private(set) var failedID: UUID?
+    /// Während einer Aufnahme gesperrt (ein Wechsel der Audio-Sitzung würde die Aufnahme beenden).
+    var isBlocked = false {
+        didSet { if isBlocked { stop() } }
+    }
 
     @ObservationIgnored private var player: AVAudioPlayer?
     @ObservationIgnored private var ticker: Task<Void, Never>?
 
     /// Startet bzw. pausiert die Wiedergabe; beim ersten Antippen werden die Daten geladen.
     func toggle(_ id: UUID, load: @escaping @MainActor () async -> Data?) async {
+        guard !isBlocked else { return }
         if currentID == id, let player {
             if player.isPlaying {
                 pause()
@@ -225,7 +230,10 @@ final class ChatVoiceRecorder {
     /// Losgelassen bzw. „Stopp“: Aufnahme beenden und als Vorschau anbieten (zu kurze werden verworfen).
     func finish() {
         guard isRecording, let recorder else { return }
-        recordedDuration = recorder.currentTime
+        // Hat der Rekorder schon selbst gestoppt (Höchstdauer, System), ist `currentTime` 0 – dann zählt der letzte
+        // gemessene Stand, damit eine volle Aufnahme nicht als „zu kurz“ verworfen wird.
+        let measured = recorder.isRecording ? recorder.currentTime : 0
+        recordedDuration = min(max(measured, elapsed), Self.maximumDuration)
         recorder.stop()
         ticker?.cancel()
         ticker = nil
@@ -334,7 +342,7 @@ private extension Duration {
 
 // MARK: - Blase
 
-/// Sprachnachricht im Verlauf: Abspielen/Pause, Fortschritt (antippen bzw. ziehen springt), Dauer bzw. vergangene Zeit.
+/// Sprachnachricht im Verlauf: Abspielen/Pause, Fortschritt (antippen springt), Dauer bzw. vergangene Zeit.
 struct ChatVoiceBubble: View {
     let id: UUID
     let duration: Duration?
@@ -369,7 +377,7 @@ struct ChatVoiceBubble: View {
                 .contentShape(Circle())
             }
             .buttonStyle(.pacePressable)
-            .disabled(load == nil || player == nil)
+            .disabled(load == nil || player == nil || player?.isBlocked == true)
             .accessibilityLabel(isPlaying ? ChatUIText.voicePause : ChatUIText.voicePlay)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -420,13 +428,11 @@ struct ChatVoiceBubble: View {
             .frame(height: 4)
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        guard isCurrent, geometry.size.width > 0 else { return }
-                        player?.seek(id, to: value.location.x / geometry.size.width)
-                    }
-            )
+            // Antippen springt (kein Ziehen – das würde das Scrollen des Verlaufs blockieren).
+            .onTapGesture { location in
+                guard isCurrent, geometry.size.width > 0 else { return }
+                player?.seek(id, to: location.x / geometry.size.width)
+            }
         }
         .frame(height: 20)
         .accessibilityElement()

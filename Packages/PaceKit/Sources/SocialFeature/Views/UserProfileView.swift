@@ -389,7 +389,8 @@ struct NicknameEditSheet: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .paceScreenBackground()
-            .navigationTitle(model.profile.nickname == nil ? SocialText.addNickname : SocialText.editNickname)
+            // Kurzer Titel, damit er zwischen „Abbrechen“ und „Speichern“ nicht abgeschnitten wird.
+            .navigationTitle(SocialText.nickname)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -406,6 +407,7 @@ struct NicknameEditSheet: View {
                 }
             }
         }
+        .tint(PaceColor.accent)
         .presentationDetents([.medium, .large])
         .interactiveDismissDisabled(model.isSavingNickname)
         .onAppear { isFocused = true }
