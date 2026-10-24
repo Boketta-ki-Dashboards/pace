@@ -51,6 +51,18 @@ public final class ChatViewModel {
     public private(set) var isPerformingAction = false
     /// Text im Eingabefeld – bleibt beim Zurücknavigieren erhalten (gleiche Instanz je Unterhaltung).
     public var draftText = ""
+    /// Nachricht, auf die die nächste geantwortet wird (Vorschau über der Eingabe).
+    public private(set) var replyingTo: ChatMessage?
+    /// Eigene Textnachricht, die gerade bearbeitet wird (ihr Text steht im Eingabefeld).
+    public private(set) var editingMessage: ChatMessage?
+    /// Angepinnte Nachrichten, zuletzt angepinnte zuerst.
+    public private(set) var pins: [ChatPin] = []
+    /// Index des Pins, den der Hinweis oben zeigt (Antippen springt hin und zeigt danach den nächsten).
+    public private(set) var pinIndex = 0
+    /// Sprung zu einer Nachricht (Antwort-Verweis, Pin, Favorit): Die Ansicht scrollt hin und hebt sie kurz hervor.
+    public private(set) var jumpRequest: ChatJumpRequest?
+    /// Eigene Favoriten dieser Unterhaltung (Chat-Einstellungen).
+    public private(set) var favorites: ChatFavoritesState = .idle
 
     @ObservationIgnored let repository: (any ChatRepository)?
     @ObservationIgnored let media: (any MediaRepository)?
@@ -70,8 +82,11 @@ public final class ChatViewModel {
     @ObservationIgnored private var observerCount = 0
     /// Der Chat ist gerade auf dem Bildschirm (dann kein Hinweis auf neue Nachrichten).
     var isVisible: Bool { observerCount > 0 }
-    /// Gerade hochgeladene Bilder (Pfad → Daten), damit sie nicht noch einmal geladen werden müssen.
+    /// Gerade hochgeladene Bilder und Sprachnachrichten (Pfad → Daten), damit sie nicht noch einmal geladen werden
+    /// müssen.
     @ObservationIgnored private var uploadedMedia: [String: Data] = [:]
+    /// Entwurf vor dem Bearbeiten – kommt nach Speichern oder Abbrechen zurück ins Eingabefeld.
+    @ObservationIgnored private var draftBeforeEditing: String?
 
     init(
         target: ChatTarget,
@@ -261,6 +276,7 @@ public final class ChatViewModel {
             state = .loaded
             refreshError = nil
             await loadContext()
+            await loadPins()
             await markReadIfNeeded()
         } catch is CancellationError {
             if state == .loading { state = .idle }
@@ -436,8 +452,13 @@ public final class ChatViewModel {
         guard let conversationID = conversation?.id else { return }
         await withTaskGroup(of: Void.self) { group in
             group.addTask { [weak self] in
-                for await _ in repository.messageEvents(in: conversationID) {
-                    await self?.refresh()
+                for await event in repository.conversationActivity(in: conversationID) {
+                    switch event {
+                    case .message, .messageUpdated:
+                        await self?.refresh()
+                    case .pinsChanged:
+                        await self?.loadPins()
+                    }
                 }
             }
             group.addTask { [weak self] in
@@ -502,6 +523,10 @@ public final class ChatViewModel {
             }
             return
         }
+        if let editingMessage {
+            await saveEdit(of: editingMessage, text: text)
+            return
+        }
         draftText = ""
         let message = PendingChatMessage(
             clientID: UUID(),
@@ -510,10 +535,46 @@ public final class ChatViewModel {
             localMedia: nil,
             mediaPath: nil,
             createdAt: now(),
-            status: .sending
+            status: .sending,
+            replyTo: takeReply()
         )
         pending.append(message)
         await deliver(message.clientID)
+    }
+
+    /// Sendet eine aufgenommene Sprachnachricht (AAC in .m4a). Erst hier wird hochgeladen – verworfene Aufnahmen
+    /// verlassen das Gerät nie.
+    public func sendVoice(_ data: Data, duration: Duration) async {
+        guard canSend else { return }
+        guard ChatRules.validVoiceMilliseconds(duration) != nil else {
+            notice = ChatNotice(text: ChatTexts.voiceInvalidDuration, isError: true)
+            return
+        }
+        guard !data.isEmpty, let conversation,
+              data.count <= MediaRules.maximumBytes(for: .chat(conversationID: conversation.id))
+        else {
+            notice = ChatNotice(text: data.isEmpty ? ChatTexts.voiceRecordingFailed : ChatTexts.media(.tooLarge), isError: true)
+            return
+        }
+        let message = PendingChatMessage(
+            clientID: UUID(),
+            kind: .voice,
+            text: nil,
+            localMedia: PendingChatMessage.LocalMedia(data: data, contentType: MediaRules.voiceContentType),
+            mediaPath: nil,
+            createdAt: now(),
+            status: .uploading,
+            replyTo: takeReply(),
+            mediaDuration: duration
+        )
+        pending.append(message)
+        await deliver(message.clientID)
+    }
+
+    /// Antwort-Vorschau für die nächste Nachricht übernehmen und die Antwort beenden.
+    private func takeReply() -> ChatReplyPreview? {
+        defer { replyingTo = nil }
+        return replyingTo.map(ChatReplyPreview.init(replyingTo:))
     }
 
     /// Sendet ein Foto (bereits verkleinert, JPEG) oder ein GIF (unverändert, `image/gif`) aus der Mediathek.
@@ -538,7 +599,8 @@ public final class ChatViewModel {
             localMedia: PendingChatMessage.LocalMedia(data: data, contentType: contentType),
             mediaPath: nil,
             createdAt: now(),
-            status: .uploading
+            status: .uploading,
+            replyTo: takeReply()
         )
         pending.append(message)
         await deliver(message.clientID)
@@ -559,7 +621,13 @@ public final class ChatViewModel {
 
     /// Verwirft eine fehlgeschlagene Nachricht.
     public func discard(_ clientID: UUID) {
-        pending.removeAll { $0.clientID == clientID && $0.isFailed }
+        guard let item = pending.first(where: { $0.clientID == clientID && $0.isFailed }) else { return }
+        pending.removeAll { $0.clientID == clientID }
+        // Schon hochgeladen, aber nie gesendet: Datei wieder entfernen (keine Reste im Speicher).
+        if let path = item.mediaPath, let reference = MediaReference.chatMedia(path), let media {
+            uploadedMedia[path] = nil
+            Task { try? await media.delete(reference) }
+        }
     }
 
     private func deliver(_ clientID: UUID) async {
@@ -686,5 +754,247 @@ public final class ChatViewModel {
     /// Zeigt eine eingeklappte Nachricht einer blockierten Person.
     public func reveal(_ messageID: UUID) {
         revealedMessageIDs.insert(messageID)
+    }
+
+    // MARK: Antworten, Bearbeiten, Favoriten, Pins
+
+    /// Aktionen im Kontextmenü einer Nachricht – nur, was hier wirklich möglich ist.
+    public func actions(for message: ChatMessage) -> [ChatMessageAction] {
+        var actions: [ChatMessageAction] = []
+        if canSend { actions.append(.reply) }
+        if message.kind != .voice, let text = message.text, !text.isEmpty { actions.append(.copy) }
+        if canSend, message.canEdit { actions.append(.edit) }
+        if conversation != nil { actions.append(message.isFavorite ? .unfavorite : .favorite) }
+        if canPin { actions.append(message.isPinned ? .unpin : .pin) }
+        return actions
+    }
+
+    /// Anpinnen erlaubt (Gruppen: Owner, Privatchats: beide, solange sie schreiben dürfen; der Server prüft).
+    public var canPin: Bool {
+        canSend && conversation?.canPin == true
+    }
+
+    /// Antwort auf eine Nachricht beginnen (beendet ein laufendes Bearbeiten).
+    public func startReply(to message: ChatMessage) {
+        guard canSend else { return }
+        if editingMessage != nil { cancelEditing() }
+        replyingTo = message
+    }
+
+    public func cancelReply() {
+        replyingTo = nil
+    }
+
+    /// Eigene Textnachricht bearbeiten: Ihr Text kommt ins Eingabefeld, der bisherige Entwurf wird aufbewahrt.
+    public func startEditing(_ message: ChatMessage) {
+        guard canSend, message.canEdit else { return }
+        replyingTo = nil
+        if editingMessage == nil {
+            draftBeforeEditing = draftText
+        }
+        editingMessage = message
+        draftText = message.text ?? ""
+    }
+
+    public func cancelEditing() {
+        guard editingMessage != nil else { return }
+        editingMessage = nil
+        draftText = draftBeforeEditing ?? ""
+        draftBeforeEditing = nil
+    }
+
+    private func saveEdit(of message: ChatMessage, text: String) async {
+        guard let repository, !busyMessageIDs.contains(message.id) else { return }
+        guard text != message.text else {
+            cancelEditing()
+            return
+        }
+        busyMessageIDs.insert(message.id)
+        defer { busyMessageIDs.remove(message.id) }
+        do {
+            let saved = try await repository.editMessage(message.id, text: text)
+            merge([saved])
+            editingMessage = nil
+            draftText = draftBeforeEditing ?? ""
+            draftBeforeEditing = nil
+            list?.conversationDidChange()
+        } catch let error as SocialError where error == .notFound {
+            // Inzwischen gelöscht: Bearbeiten beenden, Verlauf neu laden.
+            editingMessage = nil
+            draftText = draftBeforeEditing ?? ""
+            draftBeforeEditing = nil
+            notice = ChatNotice(text: ChatTexts.messageUnavailable, isError: true)
+            await refresh()
+        } catch {
+            // Text bleibt im Eingabefeld, damit nichts verloren geht.
+            notice = ChatNotice(text: ChatTexts.message(for: error), isError: true)
+        }
+    }
+
+    /// Persönlicher Favorit (nur für dich sichtbar) – sofort angezeigt, bei einem Fehler zurückgenommen.
+    public func toggleFavorite(_ message: ChatMessage) async {
+        guard let repository, !busyMessageIDs.contains(message.id) else { return }
+        let favorite = !message.isFavorite
+        replaceMessage(message.id) { $0.withFavorite(favorite) }
+        do {
+            try await repository.setFavorite(message.id, isFavorite: favorite)
+            notice = ChatNotice(text: favorite ? ChatTexts.favoriteAdded : ChatTexts.favoriteRemoved, isError: false)
+            if case .loaded(var list) = favorites {
+                list.removeAll { $0.id == message.id }
+                if favorite, let current = messages.first(where: { $0.id == message.id }) {
+                    list.append(current)
+                    list.sort { $0.sentAt > $1.sentAt }
+                }
+                favorites = .loaded(list)
+            }
+        } catch {
+            replaceMessage(message.id) { $0.withFavorite(!favorite) }
+            notice = ChatNotice(text: ChatTexts.message(for: error), isError: true)
+        }
+    }
+
+    /// Eigene Favoriten dieser Unterhaltung laden (Chat-Einstellungen).
+    public func loadFavorites() async {
+        guard let repository, let conversation else { return }
+        if case .loaded = favorites {} else { favorites = .loading }
+        do {
+            favorites = .loaded(try await repository.favorites(conversationID: conversation.id))
+        } catch is CancellationError {
+            if case .loading = favorites { favorites = .idle }
+        } catch {
+            favorites = .failed(ChatTexts.message(for: error))
+        }
+    }
+
+    /// Anpinnen bzw. lösen (für alle Teilnehmer).
+    public func togglePin(_ message: ChatMessage) async {
+        guard canPin, let repository, !busyMessageIDs.contains(message.id) else { return }
+        let pin = !message.isPinned
+        busyMessageIDs.insert(message.id)
+        defer { busyMessageIDs.remove(message.id) }
+        do {
+            let updated = try await repository.setPinned(message.id, isPinned: pin)
+            applyPins(updated)
+            notice = ChatNotice(text: pin ? ChatTexts.pinned : ChatTexts.unpinned, isError: false)
+        } catch let error as SocialError where error == .pinLimitReached {
+            notice = ChatNotice(text: ChatTexts.pinLimitReached, isError: true)
+        } catch {
+            notice = ChatNotice(text: ChatTexts.message(for: error), isError: true)
+        }
+    }
+
+    /// Angepinnte Nachrichten vom Server (beim Laden und nach einem Echtzeit-Hinweis). Ohne Unterstützung auf dem
+    /// Server bleibt die Liste leer.
+    func loadPins() async {
+        guard let repository, let conversation else { return }
+        do {
+            applyPins(try await repository.pins(conversationID: conversation.id))
+        } catch {
+            // Pins sind ein Zusatz: Fehler hier stören den Chat nicht; beim nächsten Hinweis erneut.
+        }
+    }
+
+    private func applyPins(_ updated: [ChatPin]) {
+        pins = updated
+        if pinIndex >= updated.count { pinIndex = 0 }
+        let pinnedIDs = Set(updated.map(\.id))
+        messages = messages.map { message in
+            message.isPinned == pinnedIDs.contains(message.id) ? message : message.withPinned(pinnedIDs.contains(message.id))
+        }
+    }
+
+    /// Pin, den der Hinweis oben zeigt.
+    public var shownPin: ChatPin? {
+        pins.indices.contains(pinIndex) ? pins[pinIndex] : pins.first
+    }
+
+    /// Antippen des Pin-Hinweises: zur Nachricht springen und danach den nächsten Pin zeigen.
+    public func openShownPin() async {
+        guard let pin = shownPin else { return }
+        if pins.count > 1 {
+            pinIndex = (pinIndex + 1) % pins.count
+        }
+        await jump(to: pin.message.id)
+    }
+
+    /// Springt zu einer Nachricht; ist sie noch nicht geladen, werden ältere Seiten nachgeladen (begrenzt). Gibt es
+    /// sie nicht mehr, erscheint ein Hinweis.
+    public func jump(to messageID: UUID) async {
+        var pages = 0
+        while !messages.contains(where: { $0.id == messageID }), hasOlderMessages, pages < Self.maximumJumpPages {
+            let before = messages.count
+            await loadOlder()
+            pages += 1
+            if messages.count == before { break }
+        }
+        guard messages.contains(where: { $0.id == messageID }) else {
+            notice = ChatNotice(text: ChatTexts.messageUnavailable, isError: false)
+            return
+        }
+        jumpRequest = ChatJumpRequest(messageID: messageID)
+    }
+
+    /// So viele ältere Seiten werden für einen Sprung höchstens nachgeladen.
+    static let maximumJumpPages = 10
+
+    /// Name über der Antwort-Vorschau („Du“ bei eigenen Nachrichten).
+    public func replyAuthor(of message: ChatMessage) -> String {
+        message.isOwn ? ChatFormatting.ownPrefix : (message.sender?.shownName ?? ChatFormatting.deletedAccount)
+    }
+
+    /// Name im Verweis einer Antwort („Du“, wenn das Original von dir ist).
+    public func replyAuthor(of preview: ChatReplyPreview) -> String {
+        if let original = messages.first(where: { $0.id == preview.id }), original.isOwn {
+            return ChatFormatting.ownPrefix
+        }
+        return preview.sender?.shownName ?? ChatFormatting.deletedAccount
+    }
+
+    private func replaceMessage(_ id: UUID, _ change: (ChatMessage) -> ChatMessage) {
+        guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
+        messages[index] = change(messages[index])
+    }
+}
+
+/// Aktion im Kontextmenü einer Nachricht.
+public enum ChatMessageAction: Equatable, Sendable {
+    case reply
+    case copy
+    case edit
+    case favorite
+    case unfavorite
+    case pin
+    case unpin
+}
+
+/// Auftrag an die Ansicht, zu einer Nachricht zu scrollen und sie kurz hervorzuheben (jede Anfrage einmalig).
+public struct ChatJumpRequest: Equatable, Sendable {
+    public let messageID: UUID
+    public let id = UUID()
+
+    public init(messageID: UUID) {
+        self.messageID = messageID
+    }
+}
+
+/// Favoritenliste einer Unterhaltung.
+public enum ChatFavoritesState: Equatable, Sendable {
+    case idle
+    case loading
+    case loaded([ChatMessage])
+    case failed(String)
+}
+
+extension ChatReplyPreview {
+    /// Vorschau einer geladenen Nachricht – für die eigene Antwort, bevor der Server sie liefert.
+    init(replyingTo message: ChatMessage) {
+        self.init(
+            id: message.id,
+            sender: message.sender,
+            kind: message.kind,
+            text: message.text.map { String($0.prefix(ChatRules.replyPreviewLength)) },
+            mediaDuration: message.mediaDuration,
+            isDeleted: false
+        )
     }
 }

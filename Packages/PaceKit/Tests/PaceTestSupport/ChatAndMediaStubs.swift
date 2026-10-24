@@ -287,7 +287,9 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
     /// Anzahl der offenen Echtzeit-Abos (Chatliste bzw. eine Unterhaltung).
     public func subscriberCount(conversationID: UUID? = nil) -> Int {
         if let conversationID {
+            // Neue Nachrichten kommen je nach Aufrufer über `messageEvents` oder `conversationActivity`.
             return messageContinuations.withLock { $0[conversationID]?.count ?? 0 }
+                + activityContinuations.withLock { $0[conversationID]?.count ?? 0 }
         }
         return listContinuations.withLock { $0.count }
     }
@@ -437,7 +439,8 @@ public enum ChatFixtures {
         last: ChatMessagePreview? = nil,
         unread: Int = 0,
         canSend: Bool = true,
-        updatedAt: Date = Date(timeIntervalSince1970: 1_792_000_000)
+        updatedAt: Date = Date(timeIntervalSince1970: 1_792_000_000),
+        canPin: Bool = false
     ) -> ConversationSummary {
         ConversationSummary(
             id: id,
@@ -450,7 +453,8 @@ public enum ChatFixtures {
             lastMessage: last,
             unreadCount: unread,
             canSend: canSend,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            canPin: canPin
         )
     }
 
@@ -462,7 +466,8 @@ public enum ChatFixtures {
         last: ChatMessagePreview? = nil,
         unread: Int = 0,
         canSend: Bool = true,
-        updatedAt: Date = Date(timeIntervalSince1970: 1_792_000_000)
+        updatedAt: Date = Date(timeIntervalSince1970: 1_792_000_000),
+        canPin: Bool = false
     ) -> ConversationSummary {
         ConversationSummary(
             id: id,
@@ -475,7 +480,8 @@ public enum ChatFixtures {
             lastMessage: last,
             unreadCount: unread,
             canSend: canSend,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            canPin: canPin
         )
     }
 

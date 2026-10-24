@@ -31,6 +31,10 @@ public struct PendingChatMessage: Identifiable, Equatable, Sendable {
     public internal(set) var mediaPath: String?
     public let createdAt: Date
     public internal(set) var status: Status
+    /// Nachricht, auf die geantwortet wird (Verweis in der Blase schon vor dem Senden).
+    public let replyTo: ChatReplyPreview?
+    /// Dauer einer Sprachnachricht.
+    public let mediaDuration: Duration?
 
     public init(
         clientID: UUID,
@@ -39,7 +43,9 @@ public struct PendingChatMessage: Identifiable, Equatable, Sendable {
         localMedia: LocalMedia?,
         mediaPath: String?,
         createdAt: Date,
-        status: Status
+        status: Status,
+        replyTo: ChatReplyPreview? = nil,
+        mediaDuration: Duration? = nil
     ) {
         self.clientID = clientID
         self.kind = kind
@@ -48,6 +54,8 @@ public struct PendingChatMessage: Identifiable, Equatable, Sendable {
         self.mediaPath = mediaPath
         self.createdAt = createdAt
         self.status = status
+        self.replyTo = replyTo
+        self.mediaDuration = mediaDuration
     }
 
     public var id: UUID { clientID }
@@ -63,7 +71,9 @@ public struct PendingChatMessage: Identifiable, Equatable, Sendable {
     }
 
     var draft: ChatMessageDraft {
-        ChatMessageDraft(clientID: clientID, kind: kind, text: text, mediaPath: mediaPath)
+        ChatMessageDraft(
+            clientID: clientID, kind: kind, text: text, mediaPath: mediaPath, replyToID: replyTo?.id, mediaDuration: mediaDuration
+        )
     }
 }
 

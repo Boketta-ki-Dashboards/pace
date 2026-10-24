@@ -100,6 +100,50 @@ enum ChatTexts {
         SocialError.invalidMessage.message
     }
 
+    static var messageUnavailable: String {
+        PaceLocalization.text(
+            de: "Diese Nachricht ist nicht mehr verfügbar.",
+            en: "This message is no longer available.",
+            ru: "Это сообщение больше недоступно."
+        )
+    }
+
+    static var favoriteAdded: String {
+        PaceLocalization.text(de: "Als Favorit gespeichert.", en: "Saved as favorite.", ru: "Добавлено в избранное.")
+    }
+
+    static var favoriteRemoved: String {
+        PaceLocalization.text(de: "Favorit entfernt.", en: "Favorite removed.", ru: "Удалено из избранного.")
+    }
+
+    static var pinned: String {
+        PaceLocalization.text(de: "Nachricht angepinnt.", en: "Message pinned.", ru: "Сообщение закреплено.")
+    }
+
+    static var unpinned: String {
+        PaceLocalization.text(de: "Nachricht gelöst.", en: "Message unpinned.", ru: "Сообщение откреплено.")
+    }
+
+    static var pinLimitReached: String {
+        SocialError.pinLimitReached.message
+    }
+
+    static var voiceInvalidDuration: String {
+        PaceLocalization.text(
+            de: "Sprachnachrichten dürfen höchstens 5 Minuten lang sein.",
+            en: "Voice messages can be at most 5 minutes long.",
+            ru: "Голосовое сообщение может длиться не более 5 минут."
+        )
+    }
+
+    static var voiceRecordingFailed: String {
+        PaceLocalization.text(
+            de: "Die Aufnahme konnte nicht gespeichert werden.",
+            en: "The recording couldn't be saved.",
+            ru: "Не удалось сохранить запись."
+        )
+    }
+
     static var olderFailed: String {
         PaceLocalization.text(
             de: "Ältere Nachrichten konnten nicht geladen werden.",
