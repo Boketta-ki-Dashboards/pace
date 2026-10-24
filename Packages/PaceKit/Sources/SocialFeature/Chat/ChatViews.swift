@@ -1,7 +1,9 @@
+import AVFoundation
 import DesignSystem
 import PaceCore
 import PhotosUI
 import SwiftUI
+import UIKit
 
 /// Chatliste mit Filter Alle/Freunde/Gruppen auf der Social-Hauptseite (Referenzbild 9). Die Überschrift „Chats“
 /// zeichnet die Hauptseite selbst.
@@ -44,6 +46,9 @@ public struct ChatView: View {
     @State private var dialog: ChatDialog?
     @State private var showsDialog = false
     @State private var scroll = ChatScrollTracker()
+    @State private var recorder = ChatVoiceRecorder()
+    @State private var voicePlayer = ChatVoicePlayer()
+    @State private var showsFavorites = false
 
     private nonisolated static let scrollSpace = "pace.chat.scroll"
     private nonisolated static let bottomAnchor = "pace.chat.bottom"
@@ -69,13 +74,25 @@ public struct ChatView: View {
             ChatTitleBar(viewModel: viewModel, backTitle: backTitle ?? SocialText.social, actions: actions(proxy: nil))
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.xs)
+            if let pin = viewModel.shownPin {
+                ChatPinBanner(pin: pin, index: viewModel.pins.firstIndex(of: pin) ?? 0, count: viewModel.pins.count) { [viewModel] in
+                    Task { await viewModel.openShownPin() }
+                }
+                .padding(.horizontal, PaceSpacing.m)
+                .padding(.bottom, PaceSpacing.xs)
+            }
             timeline
+                .environment(voicePlayer)
             ChatInputBar(
                 viewModel: viewModel,
+                recorder: recorder,
+                player: voicePlayer,
                 onPickMedia: { showsPhotoPicker = true },
                 onSend: { [viewModel] in
                     Task { await viewModel.sendText() }
-                }
+                },
+                onSendVoice: sendVoice,
+                onDiscardVoice: discardVoice
             )
         }
         .paceScreenBackground()
@@ -83,6 +100,28 @@ public struct ChatView: View {
         .task(id: scenePhase == .active) { [viewModel, scenePhase] in
             guard scenePhase == .active else { return }
             await viewModel.observe()
+        }
+        // Hintergrund oder Unterbrechung (Anruf): Aufnahme als Vorschau behalten, Wiedergabe pausieren.
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                recorder.interrupt()
+                voicePlayer.pause()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { _ in
+            recorder.interrupt()
+            voicePlayer.pause()
+        }
+        // Chat verlassen: nichts nimmt weiter auf, nichts spielt weiter, keine Datei bleibt liegen.
+        .onDisappear {
+            recorder.cancel()
+            voicePlayer.stop()
+        }
+        .sheet(isPresented: $showsFavorites) {
+            ChatFavoritesSheet(viewModel: viewModel) { [viewModel] messageID in
+                showsFavorites = false
+                Task { await viewModel.jump(to: messageID) }
+            }
         }
         .photosPicker(isPresented: $showsPhotoPicker, selection: $pickerItem, matching: .images, preferredItemEncoding: .current)
         .onChange(of: pickerItem) { _, item in
@@ -166,8 +205,34 @@ public struct ChatView: View {
                     }
                 }
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: scroll.hasUnseenMessages)
+                // Sprung zu einer Nachricht (Antwort-Verweis, Pin, Favorit): hinscrollen, kurz hervorheben.
+                .onChange(of: viewModel.jumpRequest) { _, request in
+                    guard let request else { return }
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
+                        proxy.scrollTo("message-\(request.messageID.uuidString)", anchor: .center)
+                    }
+                    Task { [viewModel] in
+                        try? await Task.sleep(for: .seconds(1.6))
+                        viewModel.finishJump(request)
+                    }
+                }
             }
         }
+    }
+
+    // MARK: Sprachnachrichten
+
+    private func sendVoice() {
+        voicePlayer.stop()
+        guard let recording = recorder.takeRecording() else { return }
+        Task { [viewModel] in
+            await viewModel.sendVoice(recording.data, duration: recording.duration)
+        }
+    }
+
+    private func discardVoice() {
+        voicePlayer.stop()
+        recorder.cancel()
     }
 
     // MARK: Aktionen
@@ -210,6 +275,26 @@ public struct ChatView: View {
             confirm: { dialog in
                 self.dialog = dialog
                 showsDialog = true
+            },
+            messageAction: { [viewModel] action, message in
+                switch action {
+                case .reply:
+                    viewModel.startReply(to: message)
+                case .copy:
+                    UIPasteboard.general.string = message.text
+                case .edit:
+                    viewModel.startEditing(message)
+                case .favorite, .unfavorite:
+                    Task { await viewModel.toggleFavorite(message) }
+                case .pin, .unpin:
+                    Task { await viewModel.togglePin(message) }
+                }
+            },
+            jumpTo: { [viewModel] messageID in
+                Task { await viewModel.jump(to: messageID) }
+            },
+            openFavorites: {
+                showsFavorites = true
             }
         )
     }

@@ -121,6 +121,70 @@ enum ChatUIText {
     // MARK: Aktionen
 
     static var copy: String { t("Kopieren", "Copy", "Копировать") }
+    static var reply: String { t("Antworten", "Reply", "Ответить") }
+    static var edit: String { t("Bearbeiten", "Edit", "Изменить") }
+    static var favorite: String { t("Als Favorit speichern", "Save as favorite", "В избранное") }
+    static var unfavorite: String { t("Favorit entfernen", "Remove favorite", "Убрать из избранного") }
+    static var pin: String { t("Anpinnen", "Pin", "Закрепить") }
+    static var unpin: String { t("Lösen", "Unpin", "Открепить") }
+    static var edited: String { t("Bearbeitet", "Edited", "Изменено") }
+    static var pinnedLabel: String { t("Angepinnt", "Pinned", "Закреплено") }
+    static var favoriteLabel: String { t("Favorit", "Favorite", "Избранное") }
+    static func replyingTo(_ name: String) -> String { t("Antwort auf \(name)", "Reply to \(name)", "Ответ \(name)") }
+    static var editingMessage: String { t("Nachricht bearbeiten", "Edit message", "Изменить сообщение") }
+    static var cancelReply: String { t("Antwort abbrechen", "Cancel reply", "Отменить ответ") }
+    static var cancelEditing: String { t("Bearbeiten abbrechen", "Cancel editing", "Отменить изменение") }
+    static var saveEdit: String { t("Änderung speichern", "Save change", "Сохранить изменение") }
+    static var originalUnavailable: String { t("Nachricht nicht verfügbar", "Message unavailable", "Сообщение недоступно") }
+    static var jumpToOriginal: String { t("Springt zur ursprünglichen Nachricht", "Jumps to the original message", "Переход к исходному сообщению") }
+    static func pinnedBanner(_ index: Int, of count: Int) -> String {
+        count > 1
+            ? t("Angepinnt \(index) von \(count)", "Pinned \(index) of \(count)", "Закреплено \(index) из \(count)")
+            : t("Angepinnte Nachricht", "Pinned message", "Закреплённое сообщение")
+    }
+    static var pinnedBannerHint: String { t("Springt zur Nachricht", "Jumps to the message", "Переход к сообщению") }
+    static var favorites: String { t("Favoriten", "Favorites", "Избранное") }
+    static var favoritesEmpty: String {
+        t(
+            "Noch keine Favoriten. Halte eine Nachricht gedrückt und wähle „Als Favorit speichern“. Nur du siehst deine Favoriten.",
+            "No favorites yet. Press and hold a message and choose “Save as favorite”. Only you can see your favorites.",
+            "Пока нет избранного. Удерживай сообщение и выбери «В избранное». Избранное видишь только ты."
+        )
+    }
+    static var favoritesPrivacy: String {
+        t("Nur du siehst deine Favoriten.", "Only you can see your favorites.", "Избранное видишь только ты.")
+    }
+    static var done: String { t("Fertig", "Done", "Готово") }
+    static var voiceRecord: String { t("Sprachnachricht aufnehmen", "Record voice message", "Записать голосовое сообщение") }
+    static var voiceRecordHint: String {
+        t(
+            "Gedrückt halten zum Aufnehmen, nach oben wischen zum Sperren, nach links zum Verwerfen.",
+            "Hold to record, swipe up to lock, swipe left to discard.",
+            "Удерживай для записи, смахни вверх, чтобы закрепить, влево — чтобы удалить."
+        )
+    }
+    static var voiceHoldToRecord: String {
+        t("Zum Aufnehmen gedrückt halten.", "Hold to record.", "Удерживай для записи.")
+    }
+    static var voiceMicrophoneDenied: String {
+        t(
+            "Pace darf das Mikrofon nicht nutzen. Du kannst es in den iOS-Einstellungen erlauben.",
+            "Pace isn't allowed to use the microphone. You can allow it in iOS Settings.",
+            "Pace не может использовать микрофон. Разреши это в настройках iOS."
+        )
+    }
+    static var voicePlay: String { t("Abspielen", "Play", "Воспроизвести") }
+    static var voicePause: String { t("Pause", "Pause", "Пауза") }
+    static var voicePosition: String { t("Position", "Position", "Позиция") }
+    static var voiceUnavailable: String {
+        t("Sprachnachricht konnte nicht geladen werden.", "Voice message couldn't be loaded.", "Не удалось загрузить голосовое сообщение.")
+    }
+    static func voiceRecording(_ time: String) -> String { t("Aufnahme läuft, \(time)", "Recording, \(time)", "Идёт запись, \(time)") }
+    static var voiceDiscard: String { t("Aufnahme verwerfen", "Discard recording", "Удалить запись") }
+    static var voiceStop: String { t("Aufnahme beenden", "Stop recording", "Остановить запись") }
+    static var voiceSend: String { t("Sprachnachricht senden", "Send voice message", "Отправить голосовое сообщение") }
+    static var voiceSlideToCancel: String { t("Zum Verwerfen wischen", "Slide to cancel", "Смахни для отмены") }
+    static var voiceLockHint: String { t("Nach oben wischen zum Sperren", "Swipe up to lock", "Смахни вверх, чтобы закрепить") }
     static var reportMessage: String { t("Nachricht melden", "Report message", "Пожаловаться на сообщение") }
     static var delete: String { t("Löschen", "Delete", "Удалить") }
     static var deleteTitle: String { t("Nachricht löschen?", "Delete message?", "Удалить сообщение?") }

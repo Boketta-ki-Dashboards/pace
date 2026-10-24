@@ -23,12 +23,26 @@ struct ChatSnapshotTests {
     /// Chat-Inhalt mit Eingabeleiste darunter, wie auf dem iPhone (ohne Scrollen).
     private func chatPage(_ chat: ChatViewModel, loader: PaceImageLoader? = nil) -> some View {
         VStack(spacing: 0) {
+            if let pin = chat.shownPin {
+                ChatPinBanner(pin: pin, index: 0, count: chat.pins.count, onTap: {})
+                    .padding(.horizontal, PaceSpacing.m)
+                    .padding(.top, PaceSpacing.m)
+            }
             ChatContent(viewModel: chat, isLazy: false)
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.vertical, PaceSpacing.m)
-            ChatInputBar(viewModel: chat, onPickMedia: {}, onSend: {})
+            ChatInputBar(
+                viewModel: chat,
+                recorder: ChatVoiceRecorder(),
+                player: ChatVoicePlayer(),
+                onPickMedia: {},
+                onSend: {},
+                onSendVoice: {},
+                onDiscardVoice: {}
+            )
         }
         .environment(\.paceImageLoader, loader)
+        .environment(ChatVoicePlayer())
     }
 
     @Test func chatList() async throws {
@@ -59,6 +73,18 @@ struct ChatSnapshotTests {
         await chat.sendText()
         chat.draftText = "Bis gleich"
         try Snapshot.render(chatPage(chat), name: "direct-chat", languages: languages)
+    }
+
+    /// Antwort mit Verweis, bearbeitete, angepinnte und favorisierte Nachricht, Sprachnachricht, Pin-Hinweis oben und
+    /// Antwort-Vorschau über der Eingabe.
+    @Test func messageActions() async throws {
+        let (list, _) = await ChatSnapshotData.actionsSetup()
+        let chat = list.chat(for: .direct(ChatSnapshotData.mia))
+        await chat.load()
+        if let question = chat.messages.first(where: { $0.text == "Laufen wir heute die große Runde?" }) {
+            chat.startReply(to: question)
+        }
+        try Snapshot.render(chatPage(chat), name: "chat-actions", languages: languages)
     }
 
     @Test func chatStates() async throws {
@@ -211,6 +237,35 @@ enum ChatSnapshotData {
                 ChatFixtures.message(in: directConversationID, from: nil, isOwn: true, text: "Cool, ich schick ihm gleich eine Anfrage.", at: Fixtures.date(2026, 10, 15, 20, 40)),
                 ChatFixtures.message(in: directConversationID, from: mia, text: "Laufen wir heute die große Runde?", at: at(18, 5)),
             ]
+        }
+        let list = makeList(repository)
+        await list.load()
+        return (list, repository)
+    }
+
+    @MainActor
+    static func actionsSetup() async -> (ChatListViewModel, ChatRepositoryStub) {
+        let conversation = ChatFixtures.direct(id: directConversationID, peer: mia, updatedAt: at(18, 12), canPin: true)
+        let meeting = ChatFixtures.message(
+            in: directConversationID, from: mia, text: "Treffpunkt: Samstag 9 Uhr am Bahnhof.", at: at(17, 50), isPinned: true
+        )
+        let question = ChatFixtures.message(in: directConversationID, from: mia, text: "Laufen wir heute die große Runde?", at: at(18, 5))
+        let reply = ChatFixtures.message(
+            in: directConversationID, from: nil, isOwn: true, text: "Klar, um 18:30 an der Brücke!", at: at(18, 8),
+            replyPreview: ChatReplyPreview(
+                id: question.id, sender: mia, kind: .text, text: question.text, mediaDuration: nil, isDeleted: false
+            ),
+            editedAt: at(18, 9)
+        )
+        let voice = ChatFixtures.message(
+            in: directConversationID, from: mia, kind: .voice, mediaPath: "\(directConversationID.uuidString.lowercased())/v.m4a",
+            at: at(18, 10), mediaDuration: .seconds(18), isFavorite: true
+        )
+        let repository = ChatRepositoryStub { state in
+            state.conversations = [conversation]
+            state.directConversations[mia.publicID] = conversation
+            state.messages[directConversationID] = [meeting, question, reply, voice]
+            state.pins[directConversationID] = [ChatPin(message: meeting, pinnedBy: mia, pinnedAt: at(17, 51))]
         }
         let list = makeList(repository)
         await list.load()

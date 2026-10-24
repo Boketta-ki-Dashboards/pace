@@ -233,6 +233,16 @@ public final class ChatViewModel {
         return uploadedMedia[reference.path]
     }
 
+    /// Audiodaten einer Sprachnachricht: gerade aufgenommen (ohne Übertragung) oder vom Server (mit Berechtigungs-
+    /// prüfung); `nil`, wenn sie nicht geladen werden konnten.
+    public func voiceData(for message: ChatMessage) async -> Data? {
+        guard message.kind == .voice, let reference = message.media else { return nil }
+        if let cached = uploadedMedia[reference.path] { return cached }
+        guard let media, let data = try? await media.data(for: reference) else { return nil }
+        uploadedMedia[reference.path] = data
+        return data
+    }
+
     public func dismissNotice() {
         notice = nil
     }
@@ -934,6 +944,13 @@ public final class ChatViewModel {
         jumpRequest = ChatJumpRequest(messageID: messageID)
     }
 
+    /// Die Ansicht hat zur Nachricht gescrollt und die Hervorhebung beendet.
+    public func finishJump(_ request: ChatJumpRequest) {
+        if jumpRequest == request {
+            jumpRequest = nil
+        }
+    }
+
     /// So viele ältere Seiten werden für einen Sprung höchstens nachgeladen.
     static let maximumJumpPages = 10
 
@@ -957,7 +974,7 @@ public final class ChatViewModel {
 }
 
 /// Aktion im Kontextmenü einer Nachricht.
-public enum ChatMessageAction: Equatable, Sendable {
+public enum ChatMessageAction: Hashable, Sendable {
     case reply
     case copy
     case edit

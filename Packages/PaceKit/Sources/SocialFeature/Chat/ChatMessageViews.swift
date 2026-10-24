@@ -165,7 +165,7 @@ struct ChatEntryRow: View {
         case .message(let message):
             ChatMessageContent(message: message, viewModel: viewModel, actions: actions)
         case .pending(let pending):
-            ChatPendingContent(pending: pending)
+            ChatPendingContent(pending: pending, replyAuthor: pending.replyTo.map { viewModel.replyAuthor(of: $0) })
         case .blocked(let message):
             ChatBlockedContent { actions.reveal(message.id) }
         }
@@ -193,14 +193,29 @@ struct ChatEntryRow: View {
 
 // MARK: - Inhalte
 
-/// Text, Bild, GIF oder geteiltes Profil – mit Kontextmenü (Kopieren, Melden, Blockieren, Löschen).
+/// Text, Bild, GIF, geteiltes Profil oder Sprachnachricht – mit Antwort-Verweis, Kennzeichen (angepinnt, Favorit,
+/// bearbeitet) und Kontextmenü (nur mögliche Aktionen).
 struct ChatMessageContent: View {
     let message: ChatMessage
     let viewModel: ChatViewModel
     let actions: ChatActions
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var isHighlighted: Bool {
+        viewModel.jumpRequest?.messageID == message.id
+    }
+
     var body: some View {
         VStack(alignment: message.isOwn ? .trailing : .leading, spacing: 4) {
+            if let reply = message.replyPreview {
+                ChatReplyReference(
+                    author: viewModel.replyAuthor(of: reply),
+                    preview: reply,
+                    isOwn: message.isOwn,
+                    onTap: reply.isDeleted ? nil : { actions.jumpTo(reply.id) }
+                )
+            }
             switch message.kind {
             case .text:
                 ChatTextBubble(text: message.text ?? "", isOwn: message.isOwn)
@@ -216,14 +231,23 @@ struct ChatMessageContent: View {
                     ChatTextBubble(text: ChatUIText.profileUnavailable, isOwn: message.isOwn, isPlaceholder: true)
                 }
             case .voice:
-                // Vorläufig als Hinweis mit Dauer; die Wiedergabe-Blase folgt mit der Sprachnachrichten-Oberfläche.
-                ChatTextBubble(
-                    text: ChatFormatting.content(kind: .voice, text: nil, duration: message.mediaDuration),
+                ChatVoiceBubble(
+                    id: message.id,
+                    duration: message.mediaDuration,
                     isOwn: message.isOwn,
-                    isPlaceholder: true
+                    load: { [viewModel, message] in await viewModel.voiceData(for: message) }
                 )
             }
+            if message.isPinned || message.isFavorite || message.isEdited {
+                ChatMessageMarks(isPinned: message.isPinned, isFavorite: message.isFavorite, isEdited: message.isEdited)
+            }
         }
+        .padding(isHighlighted ? 4 : 0)
+        .background(
+            PaceColor.accent.opacity(isHighlighted ? 0.18 : 0),
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+        )
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: isHighlighted)
         .opacity(viewModel.busyMessageIDs.contains(message.id) ? 0.5 : 1)
         .contextMenu { menu }
         .accessibilityElement(children: .combine)
@@ -260,16 +284,23 @@ struct ChatMessageContent: View {
         case .voice:
             description = ChatFormatting.content(kind: .voice, text: nil, duration: message.mediaDuration)
         }
-        return ChatUIText.messageAccessibility(sender: sender, content: description, time: viewModel.time(of: message.sentAt))
+        var content = description
+        if let reply = message.replyPreview {
+            content = ChatUIText.replyingTo(viewModel.replyAuthor(of: reply)) + ". " + content
+        }
+        if message.isEdited { content += ", " + ChatUIText.edited }
+        if message.isPinned { content += ", " + ChatUIText.pinnedLabel }
+        if message.isFavorite { content += ", " + ChatUIText.favoriteLabel }
+        return ChatUIText.messageAccessibility(sender: sender, content: content, time: viewModel.time(of: message.sentAt))
     }
 
     @ViewBuilder
     private var menu: some View {
-        if let text = message.text, !text.isEmpty {
+        ForEach(viewModel.actions(for: message), id: \.self) { action in
             Button {
-                UIPasteboard.general.string = text
+                actions.messageAction(action, message)
             } label: {
-                Label(ChatUIText.copy, systemImage: "doc.on.doc")
+                Label(Self.title(of: action), systemImage: Self.icon(of: action))
             }
         }
         if message.isOwn {
@@ -301,8 +332,42 @@ struct ChatMessageContent: View {
         }
     }
 
+    static func title(of action: ChatMessageAction) -> String {
+        switch action {
+        case .reply: ChatUIText.reply
+        case .copy: ChatUIText.copy
+        case .edit: ChatUIText.edit
+        case .favorite: ChatUIText.favorite
+        case .unfavorite: ChatUIText.unfavorite
+        case .pin: ChatUIText.pin
+        case .unpin: ChatUIText.unpin
+        }
+    }
+
+    static func icon(of action: ChatMessageAction) -> String {
+        switch action {
+        case .reply: "arrowshape.turn.up.left"
+        case .copy: "doc.on.doc"
+        case .edit: "pencil"
+        case .favorite: "star"
+        case .unfavorite: "star.slash"
+        case .pin: "pin"
+        case .unpin: "pin.slash"
+        }
+    }
+
     @ViewBuilder
     private var accessibilityMenu: some View {
+        if let reply = message.replyPreview, !reply.isDeleted {
+            Button(ChatUIText.jumpToOriginal) {
+                actions.jumpTo(reply.id)
+            }
+        }
+        ForEach(viewModel.actions(for: message), id: \.self) { action in
+            Button(Self.title(of: action)) {
+                actions.messageAction(action, message)
+            }
+        }
         if message.isOwn {
             Button(ChatUIText.delete) {
                 actions.confirm(.delete(message))
@@ -409,9 +474,13 @@ struct ChatBlockedContent: View {
 /// Eigene Nachricht, die noch gesendet wird (oder fehlgeschlagen ist).
 struct ChatPendingContent: View {
     let pending: PendingChatMessage
+    var replyAuthor: String?
 
     var body: some View {
-        Group {
+        VStack(alignment: .trailing, spacing: 4) {
+            if let reply = pending.replyTo, let replyAuthor {
+                ChatReplyReference(author: replyAuthor, preview: reply, isOwn: true, onTap: nil)
+            }
             switch pending.kind {
             case .image, .gif:
                 ChatMediaBubble(
@@ -421,7 +490,9 @@ struct ChatPendingContent: View {
                     accessibilityText: pending.kind == .gif ? ChatUIText.gif(from: nil) : ChatUIText.photo(from: nil),
                     isUploading: pending.status == .uploading
                 )
-            case .text, .profile, .voice:
+            case .voice:
+                ChatVoiceBubble(id: pending.clientID, duration: pending.mediaDuration, isOwn: true, load: nil)
+            case .text, .profile:
                 ChatTextBubble(text: pending.text ?? "", isOwn: true)
             }
         }
@@ -475,5 +546,131 @@ struct ChatPendingStatus: View {
             }
             .padding(.horizontal, PaceSpacing.xxs)
         }
+    }
+}
+
+// MARK: - Antworten, Kennzeichen, Pins
+
+/// Kompakter Verweis auf die beantwortete Nachricht über der Blase; Antippen springt hin.
+struct ChatReplyReference: View {
+    let author: String
+    let preview: ChatReplyPreview
+    let isOwn: Bool
+    let onTap: (() -> Void)?
+
+    var body: some View {
+        Button {
+            onTap?()
+        } label: {
+            HStack(spacing: PaceSpacing.xs) {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(PaceColor.accent)
+                    .frame(width: 3)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(author)
+                        .font(PaceFont.caption.weight(.semibold))
+                        .foregroundStyle(PaceColor.accent)
+                        .lineLimit(1)
+                    Text(ChatReplySnippet.text(for: preview))
+                        .font(PaceFont.caption)
+                        .italic(preview.isDeleted)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, PaceSpacing.xs)
+            .frame(maxWidth: 260, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .background(PaceColor.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(PaceColor.border, lineWidth: 1))
+        }
+        .buttonStyle(.pacePressable)
+        .disabled(onTap == nil)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Einzeiliger Inhalt einer beantworteten bzw. angepinnten Nachricht.
+enum ChatReplySnippet {
+    static func text(for preview: ChatReplyPreview) -> String {
+        guard !preview.isDeleted else { return ChatUIText.originalUnavailable }
+        return ChatFormatting.content(kind: preview.kind, text: preview.text, duration: preview.mediaDuration)
+    }
+
+    static func text(for message: ChatMessage) -> String {
+        ChatFormatting.content(kind: message.kind, text: message.text, duration: message.mediaDuration)
+    }
+}
+
+/// Dezente Kennzeichen unter einer Nachricht: angepinnt, Favorit (nur für dich), bearbeitet.
+struct ChatMessageMarks: View {
+    let isPinned: Bool
+    let isFavorite: Bool
+    let isEdited: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if isPinned {
+                Image(systemName: "pin.fill")
+            }
+            if isFavorite {
+                Image(systemName: "star.fill")
+            }
+            if isEdited {
+                Text(ChatUIText.edited)
+            }
+        }
+        .font(PaceFont.micro)
+        .foregroundStyle(PaceColor.textSecondary)
+        .padding(.horizontal, PaceSpacing.xxs)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Hinweis oben im Chat auf die angepinnte(n) Nachricht(en); Antippen springt hin und zeigt danach die nächste.
+struct ChatPinBanner: View {
+    let pin: ChatPin
+    let index: Int
+    let count: Int
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: PaceSpacing.s) {
+                Image(systemName: "pin.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(PaceColor.accent)
+                    .frame(width: 28, height: 28)
+                    .background(PaceColor.accent.opacity(0.14), in: Circle())
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(ChatUIText.pinnedBanner(index + 1, of: count))
+                        .font(PaceFont.caption.weight(.semibold))
+                        .foregroundStyle(PaceColor.accent)
+                        .lineLimit(1)
+                    Text(ChatReplySnippet.text(for: pin.message))
+                        .font(PaceFont.callout)
+                        .foregroundStyle(PaceColor.textPrimary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                if count > 1 {
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(PaceColor.textSecondary)
+                }
+            }
+            .padding(.horizontal, PaceSpacing.s)
+            .padding(.vertical, PaceSpacing.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(PaceColor.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(PaceColor.border, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pacePressable)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(ChatUIText.pinnedBannerHint)
     }
 }

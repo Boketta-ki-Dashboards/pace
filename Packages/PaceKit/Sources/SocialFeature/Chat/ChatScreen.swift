@@ -39,6 +39,12 @@ struct ChatActions {
     var reveal: (UUID) -> Void = { _ in }
     var dismissNotice: () -> Void = {}
     var confirm: (ChatDialog) -> Void = { _ in }
+    /// Antworten, Kopieren, Bearbeiten, Favorit, Anpinnen aus dem Kontextmenü.
+    var messageAction: (ChatMessageAction, ChatMessage) -> Void = { _, _ in }
+    /// Zur ursprünglichen Nachricht springen (Antwort-Verweis).
+    var jumpTo: (UUID) -> Void = { _ in }
+    /// Eigene Favoriten dieses Chats zeigen.
+    var openFavorites: () -> Void = {}
 }
 
 /// Inhalt eines Chats (Referenzbild 5) ohne Scrollen und Eingabeleiste: Kopf, Gruppen- bzw. Profilkopf, Hinweise und
@@ -99,6 +105,13 @@ struct ChatTitleBar: View {
     var body: some View {
         PaceSubpageHeader(backTitle: backTitle, title: viewModel.title) {
             HStack(spacing: PaceSpacing.xs) {
+                if viewModel.state == .loaded {
+                    Button(action: actions.openFavorites) {
+                        Image(systemName: "star")
+                    }
+                    .buttonStyle(.paceIcon)
+                    .accessibilityLabel(ChatUIText.favorites)
+                }
                 infoButton
                 settingsButton
             }
