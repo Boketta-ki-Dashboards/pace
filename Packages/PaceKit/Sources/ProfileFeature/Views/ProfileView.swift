@@ -71,6 +71,12 @@ public struct ProfileView: View {
             if let statistics = viewModel.statistics(for: statisticsRoute) {
                 StatisticsView(viewModel: statistics, backTitle: backTitle)
             }
+        case .activityHealth:
+            ActivityHealthPage(viewModel: viewModel, backTitle: backTitle)
+        case .calorieEstimation:
+            CalorieEstimationPage(settings: viewModel.bodyMetrics, backTitle: backTitle)
+        case .dataHelpLegal:
+            DataHelpLegalPage(backTitle: backTitle) { viewModel.open($0) }
         }
     }
 
@@ -311,86 +317,76 @@ struct ProfileContent: View {
 
     // MARK: Einstellungen
 
+    /// Zentrale Einstellungen in sieben Kategorien (wie eine native iOS-Einstellungsseite). Jede Kategorie öffnet genau
+    /// eine Seite; schon offene Seiten werden nicht erneut aufgelegt (``ProfileViewModel/open(_:)``).
     private var settingsSections: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.xs) {
-            ProfileSectionTitle(PaceLocalization.text(de: "Konto", en: "Account", ru: "Аккаунт"))
+            ProfileSectionTitle(PaceLocalization.text(de: "Einstellungen", en: "Settings", ru: "Настройки"))
             ProfileSettingsRow(
                 systemImage: "person.crop.circle",
                 title: ProfileRoute.account.title,
                 subtitle: PaceLocalization.text(
-                    de: "Name, Profilbild, Profil teilen",
-                    en: "Name, profile picture, share profile",
-                    ru: "Имя, фото профиля, ссылка на профиль"
+                    de: "Name, Benutzername, Profilbild, Konto",
+                    en: "Name, username, profile picture, account",
+                    ru: "Имя, имя пользователя, фото, аккаунт"
                 )
             ) { onOpen(.account) }
-            ProfileSettingsRow(
-                systemImage: "globe",
-                title: ProfileRoute.language.title,
-                value: viewModel.languageSummary
-            ) { onOpen(.language) }
-
-            ProfileSectionTitle(PaceLocalization.text(
-                de: "Privatsphäre & Mitteilungen",
-                en: "Privacy & notifications",
-                ru: "Конфиденциальность и уведомления"
-            ))
             ProfileSettingsRow(
                 systemImage: "hand.raised",
                 title: ProfileRoute.privacy.title,
                 subtitle: PaceLocalization.text(
-                    de: "Auffindbarkeit, blockierte Personen",
-                    en: "Discoverability, blocked people",
-                    ru: "Поиск профиля, заблокированные"
+                    de: "Sichtbarkeit, Rankings, blockierte Personen",
+                    en: "Visibility, rankings, blocked people",
+                    ru: "Видимость, рейтинги, заблокированные"
                 )
             ) { onOpen(.privacy) }
-            ProfileSettingsRow(
-                systemImage: "person.2",
-                title: ProfileRoute.social.title,
-                subtitle: PaceLocalization.text(
-                    de: "Anfragen, Einladungen, Chats",
-                    en: "Requests, invitations, chats",
-                    ru: "Запросы, приглашения, чаты"
-                )
-            ) { onOpen(.social) }
             ProfileSettingsRow(
                 systemImage: "bell",
                 title: ProfileRoute.notifications.title,
                 subtitle: PaceLocalization.text(
-                    de: "Tagesziel-Erinnerungen",
-                    en: "Daily goal reminders",
-                    ru: "Напоминания о дневной цели"
+                    de: "Tagesziel-Erinnerungen, Chat-Hinweise",
+                    en: "Daily goal reminders, chat notices",
+                    ru: "Напоминания о цели, уведомления чата"
                 ),
                 value: viewModel.notifications.reminderSummary
             ) { onOpen(.notifications) }
-
-            ProfileSectionTitle(PaceLocalization.text(de: "Daten & Hilfe", en: "Data & help", ru: "Данные и помощь"))
+            ProfileSettingsRow(
+                systemImage: "heart.text.square",
+                title: ProfileRoute.activityHealth.title,
+                subtitle: PaceLocalization.text(
+                    de: "Apple Health, Tagesziel, Kalorienschätzung",
+                    en: "Apple Health, daily goal, calorie estimate",
+                    ru: "«Здоровье», цель на день, оценка калорий"
+                )
+            ) { onOpen(.activityHealth) }
+            ProfileSettingsRow(
+                systemImage: "paintpalette",
+                title: ProfileRoute.appearance.title,
+                subtitle: PaceLocalization.text(
+                    de: "Hell, Dunkel, App-Icon, Sprache",
+                    en: "Light, dark, app icon, language",
+                    ru: "Светлая, тёмная, значок, язык"
+                ),
+                value: viewModel.languageSummary
+            ) { onOpen(.appearance) }
+            ProfileSettingsRow(
+                systemImage: "person.2",
+                title: ProfileRoute.social.title,
+                subtitle: PaceLocalization.text(
+                    de: "Anfragen, Einladungen, Chats, Gruppen",
+                    en: "Requests, invitations, chats, groups",
+                    ru: "Запросы, приглашения, чаты, группы"
+                )
+            ) { onOpen(.social) }
             ProfileSettingsRow(
                 systemImage: "lock.shield",
-                title: ProfileRoute.dataPrivacy.title,
+                title: ProfileRoute.dataHelpLegal.title,
                 subtitle: PaceLocalization.text(
-                    de: "Datenexport, Konto löschen",
-                    en: "Data export, delete account",
-                    ru: "Экспорт данных, удаление аккаунта"
+                    de: "Datenexport, Konto löschen, Hilfe, Rechtliches",
+                    en: "Data export, delete account, help, legal",
+                    ru: "Экспорт, удаление аккаунта, помощь, право"
                 )
-            ) { onOpen(.dataPrivacy) }
-            ProfileSettingsRow(
-                systemImage: "questionmark.circle",
-                title: ProfileRoute.help.title,
-                subtitle: PaceLocalization.text(
-                    de: "Häufige Fragen, Problem melden",
-                    en: "FAQ, report a problem",
-                    ru: "Частые вопросы, сообщить о проблеме"
-                )
-            ) { onOpen(.help) }
-            ProfileSettingsRow(
-                systemImage: "doc.text",
-                title: ProfileRoute.legal.title,
-                subtitle: PaceLocalization.text(
-                    de: "Datenschutzerklärung, Impressum",
-                    en: "Privacy policy, legal notice",
-                    ru: "Политика конфиденциальности, выходные данные"
-                )
-            ) { onOpen(.legal) }
+            ) { onOpen(.dataHelpLegal) }
         }
     }
 

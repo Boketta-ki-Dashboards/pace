@@ -180,7 +180,11 @@ public final class AppRouter {
             legacyGoal: dependencies.homePreferences.load()?.legacyStepGoal
         )
         let streak = StepStreakTracker(
-            history: ActivityHistoryStore(activityData: dependencies.activityData, live: home),
+            history: ActivityHistoryStore(
+                activityData: dependencies.activityData,
+                live: home,
+                bodyMetrics: BodyMetricsSettings(store: dependencies.bodyMetrics)
+            ),
             goals: goals,
             recordStore: dependencies.streakRecords
         )
@@ -225,6 +229,11 @@ public final class AppRouter {
             )
         )
         profile.openSocial = { [navigation] in navigation.openSocial() }
+        // Gruppen aus den Einstellungen: genau „Meine Gruppen“ im Social-Tab (Pfad ersetzt, keine Schleife).
+        profile.openSocialGroups = { [navigation, social] in
+            social.navigator.show(.groups)
+            navigation.openSocial()
+        }
         // Neue Chatnachricht, während Pace geöffnet ist: lokaler Hinweis (kein Push – dafür fehlt APNs).
         social.chats.onIncomingMessage = { [notifications = profile.notifications] conversation in
             let hint = ChatFormatting.incomingNotification(for: conversation)

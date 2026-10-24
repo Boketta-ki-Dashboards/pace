@@ -37,6 +37,7 @@ public struct UserDefaultsLocalAccountData: LocalAccountDataStoring {
         "pace.goals.steps": "stepGoalHistory",
         "pace.streak.record": "streakRecord",
         "pace.home.preferences": "homeLayout",
+        "pace.bodyMetrics.v1": "bodyMetrics",
     ]
 
     private let suiteName: String?

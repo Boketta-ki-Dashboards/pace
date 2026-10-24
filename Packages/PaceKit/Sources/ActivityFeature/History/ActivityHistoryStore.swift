@@ -28,6 +28,9 @@ public final class ActivityHistoryStore {
     public private(set) var state: State = .idle
     private var loaded: ActivityHistory?
 
+    /// Körperdaten für geschätzte aktive Kalorien (nur wo Apple Health keine gemessenen hat); `nil` ohne Schätzung.
+    public let bodyMetrics: BodyMetricsSettings?
+
     @ObservationIgnored private let loader: ActivitySummaryLoader
     @ObservationIgnored private let live: any ActivityOverviewSource
     @ObservationIgnored private let calendar: ActivityCalendar
@@ -41,8 +44,10 @@ public final class ActivityHistoryStore {
         live: any ActivityOverviewSource,
         calendar: ActivityCalendar = ActivityCalendar(),
         maximumAge: TimeInterval = 3_600,
+        bodyMetrics: BodyMetricsSettings? = nil,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
+        self.bodyMetrics = bodyMetrics
         loader = ActivitySummaryLoader(provider: activityData, calendar: calendar, now: now)
         self.live = live
         self.calendar = calendar
@@ -50,11 +55,13 @@ public final class ActivityHistoryStore {
         self.now = now
     }
 
-    /// Verlauf inklusive der live aktualisierten letzten 7 Tage; `nil`, solange nichts geladen ist.
+    /// Verlauf inklusive der live aktualisierten letzten 7 Tage; `nil`, solange nichts geladen ist. Tage ohne gemessene
+    /// aktive Kalorien bekommen – falls eingeschaltet – eine Schätzung (gemessene Werte bleiben unverändert).
     public var history: ActivityHistory? {
         guard let loaded else { return nil }
-        guard let overview = live.currentOverview else { return loaded }
-        return loaded.merging(overview.lastSevenDays.days)
+        let merged = live.currentOverview.map { loaded.merging($0.lastSevenDays.days) } ?? loaded
+        guard let metrics = bodyMetrics?.metrics, metrics.canEstimate else { return merged }
+        return merged.estimatingActiveEnergy(with: metrics)
     }
 
     /// Erster Tag, den der Verlauf abdeckt (Monatsanfang vor 12 Monaten).

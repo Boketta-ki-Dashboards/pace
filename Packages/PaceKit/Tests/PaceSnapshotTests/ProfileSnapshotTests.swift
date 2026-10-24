@@ -84,6 +84,39 @@ struct ProfileSnapshotTests {
         )
     }
 
+    /// Auftrag 4: Kategorie „Aktivität & Gesundheit“.
+    @Test func activityHealth() async throws {
+        let profile = try await makeProfile()
+        try Snapshot.render(
+            ActivityHealthPageContent(viewModel: profile, backTitle: backTitle).padding(PaceSpacing.m),
+            name: "profile-activity-health",
+            languages: [.german, .english, .russian]
+        )
+    }
+
+    /// Kalorienschätzung mit echten Textfeldern (im Fenster gerendert).
+    @Test func calorieEstimation() async throws {
+        let settings = BodyMetricsSettings(store: InMemoryBodyMetricsStore(
+            BodyMetrics(heightCentimeters: 182, weightKilograms: 74.5, isEstimationEnabled: true)
+        ))
+        let screen = NavigationStack {
+            ScrollView {
+                CalorieEstimationPageContent(settings: settings, backTitle: ProfileRoute.activityHealth.title)
+                    .padding(PaceSpacing.m)
+            }
+            .paceScreenBackground()
+        }
+        try await Snapshot.renderInWindow(screen, name: "profile-calorie-estimation")
+    }
+
+    @Test func dataHelpLegal() async throws {
+        try Snapshot.render(
+            DataHelpLegalPageContent(backTitle: backTitle).padding(PaceSpacing.m),
+            name: "profile-data-help-legal",
+            languages: [.german, .russian]
+        )
+    }
+
     @Test func language() async throws {
         let profile = try await makeProfile()
         try Snapshot.render(

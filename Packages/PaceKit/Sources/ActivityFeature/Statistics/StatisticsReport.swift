@@ -94,8 +94,10 @@ public struct StatisticsReport: Equatable, Sendable {
     public let anchor: LocalDate
     public let title: String
     public let subtitle: String?
-    /// Große Zahl ohne Einheit; `nil`, wenn die Kennzahl nicht verfügbar ist.
-    public let valueText: String?
+    /// Große Zahl ohne Einheit; `nil`, wenn die Kennzahl nicht verfügbar ist. Geschätzte Kalorien mit `≈`.
+    public private(set) var valueText: String?
+    /// Nur aktive Kalorien: „Gemessen“ bzw. „Geschätzte aktive Kalorien“ – die Herkunft ist immer eindeutig.
+    public private(set) var energySourceText: String?
     public let unitText: String
     /// z. B. `Ø 7.473 pro Tag` oder `von 10.000 Schritten · 87 %`.
     public let secondaryText: String?
@@ -108,7 +110,7 @@ public struct StatisticsReport: Equatable, Sendable {
     public let goalLine: Double?
     public let tiles: [Tile]
     public let bests: [Best]
-    public let notes: [String]
+    public private(set) var notes: [String]
     public let isMetricAvailable: Bool
     public let canShowPrevious: Bool
     public let canShowNext: Bool
@@ -160,10 +162,28 @@ public struct StatisticsReport: Equatable, Sendable {
     }
 
     public static func make(_ input: Input) -> StatisticsReport {
-        switch input.period {
+        let report = switch input.period {
         case .day: makeDay(input)
         case .week, .month: makeRange(input)
         }
+        return labelingActiveEnergy(report, input: input)
+    }
+
+    /// Aktive Kalorien: Herkunft kennzeichnen (gemessen/geschätzt), geschätzte Werte mit `≈` und Erklärung.
+    private static func labelingActiveEnergy(_ report: StatisticsReport, input: Input) -> StatisticsReport {
+        guard input.metric == .activeEnergy, report.valueText != nil else { return report }
+        let (first, last) = bounds(of: input.period, containing: input.anchor, calendar: input.calendar)
+        let days = input.history.summaries(from: first, through: min(last, input.today), calendar: input.calendar)
+        let isEstimated = days.contains { $0.activeEnergy.isEstimated }
+        var labeled = report
+        if isEstimated {
+            labeled.valueText = report.valueText.map { ActivityTexts.approximatelyPrefix + $0 }
+            labeled.energySourceText = ActivityTexts.estimatedActiveCalories
+            labeled.notes.append(ActivityTexts.activeEnergyEstimateNote)
+        } else {
+            labeled.energySourceText = ActivityTexts.measuredActiveCalories
+        }
+        return labeled
     }
 
     // MARK: - Woche und Monat
@@ -441,7 +461,17 @@ public struct StatisticsReport: Equatable, Sendable {
         }
         metricTile(.steps, StatisticsMetric.steps.title, summary.map { formatter.steps($0.competitionSteps) })
         metricTile(.distance, Texts.distance, summary?.walkingRunningDistanceMeters.map(formatter.distance(meters:)))
-        metricTile(.activeEnergy, Texts.activeCalories, summary?.activeEnergyKilocalories.map(formatter.energy(kilocalories:)))
+        if let energy = summary?.activeEnergy, let text = formatter.energy(energy) {
+            tiles.append(Tile(
+                kind: .activeEnergy,
+                title: Texts.activeCalories,
+                value: text,
+                detail: energy.isEstimated ? ActivityTexts.estimatedActiveCalories : ActivityTexts.measuredActiveCalories,
+                isAvailable: true
+            ))
+        } else {
+            metricTile(.activeEnergy, Texts.activeCalories, nil)
+        }
         metricTile(.flights, Texts.floors, summary?.flightsClimbed.map(formatter.flights))
         metricTile(.exercise, Texts.exerciseMinutes, summary?.exerciseMinutes.map(formatter.exerciseMinutes))
         if let summary {

@@ -197,18 +197,22 @@ public struct HomeActivityWidget: Equatable, Sendable {
     public let bestDayText: String?
     /// Höchster Wert der Woche (Skala für Balken); mindestens 1.
     public let maximum: Double
+    /// Aktive Kalorien: mindestens ein Tag ist geschätzt (Hinweis „Geschätzte aktive Kalorien“).
+    public let isEstimated: Bool
 
     public init(metric: HomeActivityMetric, overview: ActivityOverview, formatter: ActivityFormatter) {
         self.metric = metric
         let today = overview.today.date
-        let format: (Double) -> String = { value in
+        let summaries = overview.lastSevenDays.days.sorted { $0.date < $1.date }
+        // Aktive Kalorien: geschätzte Werte (ohne gemessene aus Apple Health) tragen ein „≈“.
+        isEstimated = metric == .activeEnergy && summaries.contains { $0.activeEnergy.isEstimated }
+        let format: (Double, Bool) -> String = { value, estimated in
             switch metric {
             case .steps: formatter.steps(Int(value.rounded()))
             case .distance: formatter.distance(meters: value)
-            case .activeEnergy: formatter.energy(kilocalories: value)
+            case .activeEnergy: (estimated ? ActivityTexts.approximatelyPrefix : "") + formatter.energy(kilocalories: value)
             }
         }
-        let summaries = overview.lastSevenDays.days.sorted { $0.date < $1.date }
         days = summaries.map { summary in
             let value = Self.value(of: metric, in: summary)
             return Day(
@@ -216,15 +220,17 @@ public struct HomeActivityWidget: Equatable, Sendable {
                 value: value,
                 letter: HomeFormat.weekdayLetter(summary.date, formatter: formatter),
                 isToday: summary.date == today,
-                valueText: value.map(format)
+                valueText: value.map { format($0, metric == .activeEnergy && summary.activeEnergy.isEstimated) }
             )
         }
         let values = days.compactMap(\.value)
-        todayText = Self.value(of: metric, in: overview.today).map(format)
-        totalText = values.isEmpty ? nil : format(values.reduce(0, +))
-        averageText = values.isEmpty ? nil : format(values.reduce(0, +) / Double(values.count))
+        let isTodayEstimated = metric == .activeEnergy && overview.today.activeEnergy.isEstimated
+        todayText = Self.value(of: metric, in: overview.today).map { format($0, isTodayEstimated) }
+        totalText = values.isEmpty ? nil : format(values.reduce(0, +), isEstimated)
+        averageText = values.isEmpty ? nil : format(values.reduce(0, +) / Double(values.count), isEstimated)
         if let best = days.filter({ $0.value != nil }).max(by: { ($0.value ?? 0) < ($1.value ?? 0) }), let value = best.value {
-            bestDayText = "\(formatter.weekdayShort(best.date)) · \(format(value))"
+            let bestSummary = summaries.first { $0.date == best.date }
+            bestDayText = "\(formatter.weekdayShort(best.date)) · \(format(value, metric == .activeEnergy && bestSummary?.activeEnergy.isEstimated == true))"
         } else {
             bestDayText = nil
         }
@@ -235,7 +241,7 @@ public struct HomeActivityWidget: Equatable, Sendable {
         switch metric {
         case .steps: Double(summary.competitionSteps)
         case .distance: summary.walkingRunningDistanceMeters
-        case .activeEnergy: summary.activeEnergyKilocalories
+        case .activeEnergy: summary.activeEnergy.kilocalories
         }
     }
 

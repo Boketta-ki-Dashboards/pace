@@ -22,9 +22,13 @@ public struct StepsTodaySummary: Equatable, Sendable {
     public let isGoalReached: Bool
     /// `nil`, wenn die Kennzahl nicht lesbar ist – dann wird sie nicht angezeigt (keine falsche 0).
     public let distanceText: String?
-    /// Aktive Kalorien oder „Nicht verfügbar“, wenn Apple Health für heute keine hat (nie eine falsche 0).
+    /// Aktive Kalorien (`324 kcal`, geschätzt `≈ 245 kcal`) oder „Nicht verfügbar“, wenn Apple Health für heute keine
+    /// hat und nicht geschätzt wird (nie eine falsche 0).
     public let energyText: String
     public let isEnergyAvailable: Bool
+    /// Herkunft unter dem Wert: „Aktive Kalorien“ (gemessen) bzw. „Geschätzte aktive Kalorien“.
+    public let energyCaption: String
+    public let isEnergyEstimated: Bool
     /// Für die großen Schrittkarten; `nil`, wenn nicht lesbar.
     public let flightsText: String?
     public let exerciseText: String?
@@ -34,15 +38,29 @@ public struct StepsTodaySummary: Equatable, Sendable {
     /// Hinweis, wenn heute Schritte in Apple Health nicht für Rankings zählen.
     public let manualStepsNote: String?
 
-    public init(today: DailyActivitySummary, goal: Int, formatter: ActivityFormatter) {
-        self.init(today: today, yesterday: nil, lastSevenDays: nil, goal: goal, formatter: formatter)
+    public init(today: DailyActivitySummary, goal: Int, formatter: ActivityFormatter, bodyMetrics: BodyMetrics = BodyMetrics()) {
+        self.init(
+            today: today.estimatingActiveEnergy(with: bodyMetrics),
+            yesterday: nil,
+            lastSevenDays: nil,
+            goal: goal,
+            formatter: formatter
+        )
     }
 
     /// - Parameter liveCompetitionSteps: Schritte von heute inklusive Live-Sensorwerten (nur Anzeige); ohne Angabe der
     ///   HealthKit-Wert.
-    public init(overview: ActivityOverview, goal: Int, formatter: ActivityFormatter, liveCompetitionSteps: Int? = nil) {
+    /// - Parameter bodyMetrics: Körperdaten für geschätzte Kalorien (nur ohne gemessene Werte).
+    public init(
+        overview: ActivityOverview,
+        goal: Int,
+        formatter: ActivityFormatter,
+        liveCompetitionSteps: Int? = nil,
+        bodyMetrics: BodyMetrics = BodyMetrics()
+    ) {
         self.init(
-            today: Self.today(overview.today, liveCompetitionSteps: liveCompetitionSteps),
+            // Erst die Live-Schritte, dann die Schätzung – sie passt so zur angezeigten Schrittzahl.
+            today: Self.today(overview.today, liveCompetitionSteps: liveCompetitionSteps).estimatingActiveEnergy(with: bodyMetrics),
             yesterday: overview.yesterday,
             lastSevenDays: overview.lastSevenDays,
             goal: goal,
@@ -95,8 +113,13 @@ public struct StepsTodaySummary: Equatable, Sendable {
                 ru: "Ещё \(remaining) до твоей цели"
             )
         distanceText = today.walkingRunningDistanceMeters.map { formatter.distance(meters: $0) }
-        energyText = today.activeEnergyKilocalories.map { formatter.energy(kilocalories: $0) } ?? ActivityTexts.notAvailable
-        isEnergyAvailable = today.activeEnergyKilocalories != nil
+        let energy = today.activeEnergy
+        energyText = formatter.energy(energy) ?? ActivityTexts.notAvailable
+        isEnergyAvailable = energy != .unavailable
+        isEnergyEstimated = energy.isEstimated
+        energyCaption = energy.isEstimated
+            ? ActivityTexts.estimatedActiveCalories
+            : PaceLocalization.text(de: "Aktive Kalorien", en: "Active calories", ru: "Активные калории")
         flightsText = today.flightsClimbed.map { formatter.flights($0) }
         exerciseText = today.exerciseMinutes.map { formatter.exerciseMinutes($0) }
         yesterdayText = yesterday.map { formatter.steps($0.competitionSteps) }

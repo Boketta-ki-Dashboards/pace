@@ -4,14 +4,14 @@ import SwiftUI
 
 // MARK: - Darstellung
 
-/// Darstellung: Automatisch/Hell/Dunkel und App-Icon.
+/// Darstellung & Sprache: Automatisch/Hell/Dunkel, App-Icon und der Weg zur Sprache.
 struct AppearancePage: View {
     let viewModel: ProfileViewModel
     let backTitle: String
 
     var body: some View {
         ProfileSubpage {
-            AppearancePageContent(viewModel: viewModel, backTitle: backTitle)
+            AppearancePageContent(viewModel: viewModel, backTitle: backTitle) { viewModel.open($0) }
         }
     }
 }
@@ -19,6 +19,7 @@ struct AppearancePage: View {
 struct AppearancePageContent: View {
     let viewModel: ProfileViewModel
     let backTitle: String
+    var onOpen: (ProfileRoute) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
@@ -73,6 +74,13 @@ struct AppearancePageContent: View {
                         ))
                 }
             }
+
+            // Sprache gehört zur Kategorie „Darstellung & Sprache“ – dieselbe Seite wie bisher.
+            ProfileSettingsRow(
+                systemImage: "globe",
+                title: ProfileRoute.language.title,
+                value: viewModel.languageSummary
+            ) { onOpen(.language) }
         }
     }
 }

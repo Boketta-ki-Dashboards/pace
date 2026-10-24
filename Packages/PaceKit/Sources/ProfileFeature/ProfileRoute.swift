@@ -23,16 +23,22 @@ public enum ProfileRoute: Hashable, Sendable {
     case legal
     case legalDocument(LegalDocument)
     case statistics(StatisticsRoute)
+    /// Aktivität & Gesundheit: Apple Health, Tagesziel, Kalorienschätzung.
+    case activityHealth
+    /// Kalorienschätzung: Körpergröße, Gewicht, Ein/Aus (nur auf dem Gerät).
+    case calorieEstimation
+    /// Daten, Hilfe & Rechtliches: Datenexport, Konto löschen, Hilfe, Feedback, Rechtliches.
+    case dataHelpLegal
 
     /// Titel der Seite (auch Zurück-Ziel der folgenden Seite).
     public var title: String {
         switch self {
         case .account: PaceLocalization.text(de: "Konto & Profil", en: "Account & profile", ru: "Аккаунт и профиль")
-        case .appearance: PaceLocalization.text(de: "Darstellung", en: "Appearance", ru: "Оформление")
+        case .appearance: PaceLocalization.text(de: "Darstellung & Sprache", en: "Appearance & language", ru: "Оформление и язык")
         case .language: PaceLocalization.text(de: "Sprache", en: "Language", ru: "Язык")
-        case .privacy: PaceLocalization.text(de: "Privatsphäre", en: "Privacy", ru: "Конфиденциальность")
+        case .privacy: PaceLocalization.text(de: "Privatsphäre & Sicherheit", en: "Privacy & security", ru: "Конфиденциальность и безопасность")
         case .notifications: PaceLocalization.text(de: "Mitteilungen", en: "Notifications", ru: "Уведомления")
-        case .social: PaceLocalization.text(de: "Social-Einstellungen", en: "Social settings", ru: "Настройки общения")
+        case .social: PaceLocalization.text(de: "Social & Gruppen", en: "Social & groups", ru: "Общение и группы")
         case .dataPrivacy: PaceLocalization.text(de: "Datenschutz & Daten", en: "Data & privacy", ru: "Данные и защита")
         case .deleteAccount: PaceLocalization.text(de: "Konto löschen", en: "Delete account", ru: "Удалить аккаунт")
         case .help: PaceLocalization.text(de: "Hilfe & Feedback", en: "Help & feedback", ru: "Помощь и отзывы")
@@ -40,6 +46,9 @@ public enum ProfileRoute: Hashable, Sendable {
         case .legal: PaceLocalization.text(de: "Rechtliches", en: "Legal", ru: "Правовая информация")
         case .legalDocument(let document): document.title
         case .statistics: PaceLocalization.text(de: "Statistik", en: "Statistics", ru: "Статистика")
+        case .activityHealth: PaceLocalization.text(de: "Aktivität & Gesundheit", en: "Activity & health", ru: "Активность и здоровье")
+        case .calorieEstimation: PaceLocalization.text(de: "Kalorienschätzung", en: "Calorie estimate", ru: "Оценка калорий")
+        case .dataHelpLegal: PaceLocalization.text(de: "Daten, Hilfe & Rechtliches", en: "Data, help & legal", ru: "Данные, помощь и право")
         }
     }
 }

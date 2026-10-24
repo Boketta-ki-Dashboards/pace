@@ -74,12 +74,13 @@ public enum StatisticsMetric: String, CaseIterable, Identifiable, Hashable, Send
         }
     }
 
-    /// Tageswert in der Rohheit der Gesundheitsdaten (Schritte, Meter, kcal); `nil`, wenn nicht lesbar.
+    /// Tageswert in der Rohheit der Gesundheitsdaten (Schritte, Meter, kcal); `nil`, wenn nicht lesbar. Aktive Kalorien:
+    /// gemessen, sonst – falls eingeschaltet – geschätzt (``DailyActivitySummary/activeEnergy``).
     public func value(of day: DailyActivitySummary) -> Double? {
         switch self {
         case .steps: Double(day.competitionSteps)
         case .distance: day.walkingRunningDistanceMeters
-        case .activeEnergy: day.activeEnergyKilocalories
+        case .activeEnergy: day.activeEnergy.kilocalories
         }
     }
 

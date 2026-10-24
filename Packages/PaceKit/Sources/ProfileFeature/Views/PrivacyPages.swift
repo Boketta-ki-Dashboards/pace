@@ -127,6 +127,18 @@ struct SocialSettingsPageContent: View {
                 }
             }
 
+            if let openGroups = viewModel.openSocialGroups {
+                ProfileSettingsRow(
+                    systemImage: "person.3",
+                    title: PaceLocalization.text(de: "Meine Gruppen", en: "My groups", ru: "Мои группы"),
+                    subtitle: PaceLocalization.text(
+                        de: "Einstellungen einer Gruppe findest du in der Gruppe selbst",
+                        en: "A group's settings are in the group itself",
+                        ru: "Настройки группы находятся в самой группе"
+                    )
+                ) { openGroups() }
+            }
+
             ProfileSettingsRow(
                 systemImage: "magnifyingglass",
                 title: PaceLocalization.text(de: "Auffindbarkeit", en: "Discoverability", ru: "Поиск профиля"),

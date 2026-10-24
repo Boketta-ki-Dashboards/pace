@@ -29,12 +29,14 @@ struct ImageDecodingTests {
     }
 
     @Test func longLargeGifsAreThinnedAndDownsampled() throws {
-        let image = try #require(PaceImageLoader.decode(try gif(frames: 200, side: 1_000)))
+        // 100 Bilder à 520 px: mehr als erlaubt und größer als die Grenze (klein genug, damit das Erzeugen schnell geht).
+        let image = try #require(PaceImageLoader.decode(try gif(frames: 100, side: 520)))
         let frames = try #require(image.images)
         #expect(frames.count <= PaceImageLoader.maximumAnimationFrames)
         #expect(frames.allSatisfy { max($0.size.width, $0.size.height) <= CGFloat(PaceImageLoader.maximumAnimationPixels) })
-        // Laufzeit bleibt (200 × 0,05 s = 10 s).
-        #expect(abs(image.duration - 10) < 0.5)
+        #expect(frames.count == 50)
+        // Laufzeit bleibt (100 × 0,05 s = 5 s).
+        #expect(abs(image.duration - 5) < 0.3)
         #expect(PaceImageLoader.byteCost(of: image) <= PaceImageLoader.maximumAnimationFrames * 480 * 480 * 4)
     }
 

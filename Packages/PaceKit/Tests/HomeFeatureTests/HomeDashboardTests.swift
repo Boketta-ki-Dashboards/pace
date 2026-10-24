@@ -47,6 +47,31 @@ struct StepsTodaySummaryTests {
         #expect(summary.manualStepsNote == "Manuell eingetragene Schritte zählen nicht für Rankings.")
     }
 
+    /// Ohne gemessene Kalorien und mit eingeschalteter Schätzung: „≈ … kcal“ und „Geschätzte aktive Kalorien“; gemessene
+    /// Werte bleiben „Aktive Kalorien“ ohne „≈“.
+    @Test func estimatedCaloriesAreClearlyMarked() {
+        let metrics = BodyMetrics(heightCentimeters: 180, weightKilograms: 75, isEstimationEnabled: true)
+        let missing = DailyActivitySummary(date: today, healthSteps: 8_000, competitionSteps: 8_000, walkingRunningDistanceMeters: 6_000)
+
+        let estimated = PaceLocalization.$languageOverride.withValue(.german) {
+            StepsTodaySummary(today: missing, goal: 10_000, formatter: formatter, bodyMetrics: metrics)
+        }
+        #expect(estimated.energyText == "≈ 225 kcal")
+        #expect(estimated.isEnergyEstimated)
+        #expect(estimated.energyCaption == "Geschätzte aktive Kalorien")
+        #expect(estimated.stepsText == "8.000")
+
+        let measured = DailyActivitySummary(
+            date: today, healthSteps: 8_000, competitionSteps: 8_000, walkingRunningDistanceMeters: 6_000, activeEnergyKilocalories: 324
+        )
+        let real = PaceLocalization.$languageOverride.withValue(.german) {
+            StepsTodaySummary(today: measured, goal: 10_000, formatter: formatter, bodyMetrics: metrics)
+        }
+        #expect(real.energyText == "324 kcal")
+        #expect(!real.isEnergyEstimated)
+        #expect(real.energyCaption == "Aktive Kalorien")
+    }
+
     @Test func weekRunsMondayToSundayWithFutureDaysEmpty() {
         let calendar = Fixtures.activityCalendar
         // Freitag, 16.10.2026: Montag 12. bis heute haben Werte, Sa/So liegen in der Zukunft.

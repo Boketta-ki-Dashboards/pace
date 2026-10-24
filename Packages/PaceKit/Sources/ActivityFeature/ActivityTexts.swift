@@ -5,6 +5,28 @@ import PaceCore
 public enum ActivityTexts {
     /// Hinweis, wenn Health- und Wettbewerbsschritte abweichen.
     /// Erklärung, wenn Apple Health für einen Tag keine aktiven Kalorien hat. Pace schätzt keine Kalorien selbst.
+    /// Vorangestellt bei geschätzten Werten, z. B. `≈ 245 kcal`.
+    public static let approximatelyPrefix = "≈ "
+
+    /// Kennzeichnung gemessener aktiver Kalorien (Apple Health).
+    public static var measuredActiveCalories: String {
+        PaceLocalization.text(de: "Gemessen", en: "Measured", ru: "Измерено")
+    }
+
+    /// Kennzeichnung geschätzter aktiver Kalorien.
+    public static var estimatedActiveCalories: String {
+        PaceLocalization.text(de: "Geschätzte aktive Kalorien", en: "Estimated active calories", ru: "Расчётные активные калории")
+    }
+
+    /// Erklärung der Schätzung (Statistik, Tagesdetails).
+    public static var activeEnergyEstimateNote: String {
+        PaceLocalization.text(
+            de: "≈ Geschätzte aktive Kalorien: Apple Health hat für diese Tage keine gemessenen Werte. Pace schätzt sie aus den automatisch erfassten Schritten bzw. der Strecke, deiner Größe und deinem Gewicht (Gehen auf ebener Strecke). Gemessene Werte haben immer Vorrang.",
+            en: "≈ Estimated active calories: Apple Health has no measured values for these days. Pace estimates them from your automatically recorded steps or distance, your height and your weight (walking on level ground). Measured values always take priority.",
+            ru: "≈ Расчётные активные калории: в «Здоровье» нет измеренных значений за эти дни. Pace оценивает их по автоматически записанным шагам или дистанции, твоему росту и весу (ходьба по ровной поверхности). Измеренные значения всегда имеют приоритет."
+        )
+    }
+
     public static var activeEnergyUnavailableNote: String {
         PaceLocalization.text(
             de: "Apple Health hat hierfür keine aktiven Kalorien. Ohne Apple Watch zeichnet das iPhone sie nur auf, wenn „Fitness-Tracking“ eingeschaltet ist und in der Health-App Angaben wie Größe und Gewicht hinterlegt sind – teils mit Verzögerung. Pace rechnet keine Kalorien aus Schritten hoch.",

@@ -172,8 +172,10 @@ public struct DayDetailsReport: Equatable, Sendable {
             tile(.distance, Texts.distance, summary?.walkingRunningDistanceMeters.map(formatter.distance(meters:))),
             tile(
                 .activeEnergy,
-                PaceLocalization.text(de: "Aktiv", en: "Active", ru: "Активность"),
-                summary?.activeEnergyKilocalories.map(formatter.energy(kilocalories:))
+                summary?.activeEnergy.isEstimated == true
+                    ? PaceLocalization.text(de: "Aktiv (geschätzt)", en: "Active (estimated)", ru: "Активность (расчёт)")
+                    : PaceLocalization.text(de: "Aktiv", en: "Active", ru: "Активность"),
+                summary.flatMap { formatter.energy($0.activeEnergy) }
             ),
             tile(.flights, Texts.floors, summary?.flightsClimbed.map(formatter.flights)),
             tile(.exercise, Texts.exerciseMinutes, summary?.exerciseMinutes.map(formatter.flights)),

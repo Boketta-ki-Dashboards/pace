@@ -15,6 +15,9 @@ public struct DailyActivitySummary: Equatable, Sendable {
     public let activeEnergyKilocalories: Double?
     public let flightsClimbed: Int?
     public let exerciseMinutes: Int?
+    /// Von Pace geschätzte aktive Kalorien – nur, wenn Apple Health keine gemessenen liefert und die Schätzung
+    /// eingeschaltet ist (``estimatingActiveEnergy(with:)``). Nie zusätzlich zu gemessenen Werten.
+    public let estimatedActiveEnergyKilocalories: Double?
 
     public init(
         date: LocalDate,
@@ -23,7 +26,8 @@ public struct DailyActivitySummary: Equatable, Sendable {
         walkingRunningDistanceMeters: Double? = nil,
         activeEnergyKilocalories: Double? = nil,
         flightsClimbed: Int? = nil,
-        exerciseMinutes: Int? = nil
+        exerciseMinutes: Int? = nil,
+        estimatedActiveEnergyKilocalories: Double? = nil
     ) {
         self.date = date
         self.healthSteps = healthSteps
@@ -32,6 +36,7 @@ public struct DailyActivitySummary: Equatable, Sendable {
         self.activeEnergyKilocalories = activeEnergyKilocalories
         self.flightsClimbed = flightsClimbed
         self.exerciseMinutes = exerciseMinutes
+        self.estimatedActiveEnergyKilocalories = estimatedActiveEnergyKilocalories
     }
 
     /// `true`, wenn sich Health- und Wettbewerbsschritte unterscheiden – in der Regel wegen manuell eingetragener Schritte.

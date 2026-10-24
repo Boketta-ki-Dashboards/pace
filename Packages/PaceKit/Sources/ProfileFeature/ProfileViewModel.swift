@@ -124,6 +124,8 @@ public final class ProfileViewModel {
     public let appVersion: String
     /// Wechselt in den Social-Tab (Anfragen, Einladungen); vom App-Rahmen gesetzt.
     @ObservationIgnored public var openSocial: (@MainActor () -> Void)?
+    /// Öffnet „Meine Gruppen“ im Social-Tab (Gruppeneinstellungen liegen in der jeweiligen Gruppe).
+    @ObservationIgnored public var openSocialGroups: (@MainActor () -> Void)?
 
     @ObservationIgnored private let store: ProfileStore
     @ObservationIgnored private let regions: any RegionRepository
@@ -191,6 +193,9 @@ public final class ProfileViewModel {
             onAccountDeleted: services.onAccountDeleted
         )
     }
+
+    /// Körperdaten und Kalorienschätzung (dieselbe Quelle wie Home, Statistik und Kalender).
+    public var bodyMetrics: BodyMetricsSettings? { streak?.history.bodyMetrics }
 
     // MARK: Navigation
 

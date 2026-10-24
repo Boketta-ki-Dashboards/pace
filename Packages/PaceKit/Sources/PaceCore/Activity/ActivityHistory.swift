@@ -35,6 +35,12 @@ public struct ActivityHistory: Equatable, Sendable {
         return calendar.days(from: lower, through: upper).compactMap(summary(for:))
     }
 
+    /// Alle Tage mit geschätzten aktiven Kalorien, wo Apple Health keine gemessenen liefert (siehe
+    /// ``DailyActivitySummary/estimatingActiveEnergy(with:)``).
+    public func estimatingActiveEnergy(with metrics: BodyMetrics) -> ActivityHistory {
+        ActivityHistory(days: days.values.map { $0.estimatingActiveEnergy(with: metrics) }, range: range, updatedAt: updatedAt)
+    }
+
     /// Ersetzt Tage durch neuere Werte (z. B. die live aktualisierten letzten 7 Tage) und erweitert den Zeitraum bis
     /// zum jüngsten dieser Tage (Tageswechsel). Ältere Tage außerhalb des Zeitraums werden ignoriert.
     public func merging(_ newer: [DailyActivitySummary]) -> ActivityHistory {

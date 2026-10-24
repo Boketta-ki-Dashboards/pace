@@ -171,6 +171,12 @@ struct StatisticsContent: View {
     private func summaryCard(_ report: StatisticsReport) -> some View {
         PaceCard {
             VStack(alignment: .leading, spacing: PaceSpacing.xs) {
+                // Aktive Kalorien: immer erkennbar, ob gemessen oder geschätzt.
+                if let source = report.energySourceText {
+                    Text(source)
+                        .font(PaceFont.caption.weight(.semibold))
+                        .foregroundStyle(PaceColor.textSecondary)
+                }
                 if let value = report.valueText {
                     HStack(alignment: .firstTextBaseline, spacing: PaceSpacing.xs) {
                         Text(value)

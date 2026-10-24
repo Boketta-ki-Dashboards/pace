@@ -22,6 +22,8 @@ public struct AppDependencies: Sendable {
     public let stepGoals: any StepGoalStoring
     /// Längste persönliche Serie (nur auf dem Gerät).
     public let streakRecords: any StepStreakRecordStoring
+    /// Körpergröße, Gewicht und Kalorienschätzung (private Gesundheitsdaten, nur auf dem Gerät).
+    public let bodyMetrics: any BodyMetricsStoring
     /// Wechsel des App-Icons (Profil → Darstellung).
     public let appIcons: any AppIconSetting
     /// Darstellung, Sprache und Erinnerungen (nur auf dem Gerät).
@@ -41,6 +43,7 @@ public struct AppDependencies: Sendable {
         homePreferences: any HomePreferencesStoring = UserDefaultsHomePreferencesStore(),
         stepGoals: any StepGoalStoring = UserDefaultsStepGoalStore(),
         streakRecords: any StepStreakRecordStoring = UserDefaultsStepStreakRecordStore(),
+        bodyMetrics: any BodyMetricsStoring = UserDefaultsBodyMetricsStore(),
         appIcons: any AppIconSetting = UnsupportedAppIconSetting(),
         preferences: any AppPreferencesStoring = UserDefaultsAppPreferencesStore(),
         notifications: any LocalNotificationScheduling = NoLocalNotifications(),
@@ -54,6 +57,7 @@ public struct AppDependencies: Sendable {
         self.homePreferences = homePreferences
         self.stepGoals = stepGoals
         self.streakRecords = streakRecords
+        self.bodyMetrics = bodyMetrics
         self.appIcons = appIcons
         self.preferences = preferences
         self.notifications = notifications

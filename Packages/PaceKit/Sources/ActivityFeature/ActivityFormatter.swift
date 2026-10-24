@@ -33,6 +33,15 @@ public struct ActivityFormatter: Sendable {
         "\(Int(kilocalories.rounded()).formatted(.number.locale(locale))) \(units.kilocalories)"
     }
 
+    /// `324 kcal` (gemessen) bzw. `≈ 245 kcal` (geschätzt); `nil`, wenn nicht verfügbar.
+    public func energy(_ reading: ActiveEnergy) -> String? {
+        switch reading {
+        case .measured(let value): energy(kilocalories: value)
+        case .estimated(let value): ActivityTexts.approximatelyPrefix + energy(kilocalories: value)
+        case .unavailable: nil
+        }
+    }
+
     /// `12`
     public func flights(_ value: Int) -> String {
         value.formatted(.number.locale(locale))

@@ -114,6 +114,11 @@ public final class HomeDashboardViewModel {
         activity.overview?.today.competitionSteps
     }
 
+    /// Körperdaten für geschätzte aktive Kalorien (nur auf dem Gerät; Standard: keine Schätzung).
+    var bodyMetrics: BodyMetrics {
+        streak.history.bodyMetrics?.metrics ?? BodyMetrics()
+    }
+
     /// „Deine Schritte heute“ – mit Live-Schritten vom Bewegungssensor, solange Pace offen ist.
     public var stepsToday: StepsTodaySummary? {
         activity.overview.map {
@@ -121,7 +126,8 @@ public final class HomeDashboardViewModel {
                 overview: $0,
                 goal: goals.goal(on: $0.today.date),
                 formatter: formatter,
-                liveCompetitionSteps: activity.liveCompetitionStepsToday
+                liveCompetitionSteps: activity.liveCompetitionStepsToday,
+                bodyMetrics: bodyMetrics
             )
         }
     }
@@ -194,7 +200,9 @@ public final class HomeDashboardViewModel {
 
     /// Aktivitäts-Widget; `nil`, solange keine Bewegungsdaten geladen sind.
     public func activityWidget(for module: HomeModule) -> HomeActivityWidget? {
-        activity.overview.map { HomeActivityWidget(metric: module.metric, overview: $0, formatter: formatter) }
+        activity.overview.map {
+            HomeActivityWidget(metric: module.metric, overview: $0.estimatingActiveEnergy(with: bodyMetrics), formatter: formatter)
+        }
     }
 
     /// Regionale Karten eines Widgets (immer alle gewählten Ebenen in einer Reihe).

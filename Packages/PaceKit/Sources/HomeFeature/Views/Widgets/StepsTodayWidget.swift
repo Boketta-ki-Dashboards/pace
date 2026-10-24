@@ -168,7 +168,7 @@ struct StepsTodayWidgetContent: View {
                     StepsMetricCell(
                         systemImage: "flame",
                         value: summary.energyText,
-                        caption: PaceLocalization.text(de: "Aktive Kalorien", en: "Active calories", ru: "Активные калории"),
+                        caption: summary.energyCaption,
                         showsChevron: true,
                         isMuted: !summary.isEnergyAvailable
                     )
