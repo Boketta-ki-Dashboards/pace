@@ -29,6 +29,12 @@ struct SocialDestination: View {
             } else {
                 SocialMissingPage(kind: .group)
             }
+        case .groupCalendar(let id):
+            if let calendar = viewModel.groupCalendar(groupID: id) {
+                GroupCalendarView(viewModel: calendar, onOpen: onOpen)
+            } else {
+                SocialMissingPage(kind: .group)
+            }
         case .groupSettings(let id):
             if let detail = viewModel.detail(groupID: id) {
                 GroupSettingsView(viewModel: detail, onOpen: onOpen, onGroupGone: onPopToRoot)

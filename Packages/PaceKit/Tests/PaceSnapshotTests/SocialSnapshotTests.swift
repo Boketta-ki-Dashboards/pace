@@ -76,6 +76,32 @@ struct SocialSnapshotTests {
         try Snapshot.render(page(UserProfileContent(model: profile, social: social)), name: "user-profile", languages: languages)
     }
 
+    /// Spitzname: Profil mit eigenem Spitznamen (Anzeigename darunter) und die Eingabe zum Ändern.
+    @Test func nickname() async throws {
+        let social = await SocialSnapshotData.social()
+        let profile = try #require(social.userProfile(for: SocialSnapshotData.leon))
+        await profile.load()
+        #expect(await profile.saveNickname("Laufpartner Leon"))
+        try Snapshot.render(page(UserProfileContent(model: profile, social: social)), name: "user-profile-nickname", languages: languages)
+        // Mit Navigationsleiste (Abbrechen/Speichern) – deshalb im Fenster gerendert.
+        try await Snapshot.renderInWindow(NicknameEditSheet(model: profile), name: "nickname-edit")
+    }
+
+    /// Gruppenkalender mit gesicherten und offenen Tagen, Tag ohne Daten, Zukunft und Tagesrangliste.
+    @Test func groupCalendar() async throws {
+        let repository = SocialRepositoryStub { $0.calendars[SocialSnapshotData.groupID] = SocialSnapshotData.calendar() }
+        let calendar = GroupCalendarViewModel(
+            groupID: SocialSnapshotData.groupID,
+            groupName: "Smoking red",
+            repository: repository,
+            calendar: Fixtures.activityCalendar,
+            now: { Fixtures.date(2026, 10, 16, 18) }
+        )
+        await calendar.load()
+        calendar.select(Fixtures.day(2026, 10, 14))
+        try Snapshot.render(page(GroupCalendarContent(viewModel: calendar)), name: "group-calendar", languages: languages)
+    }
+
     @Test func moreSocialPages() async throws {
         let social = await SocialSnapshotData.social()
         try Snapshot.render(page(GroupsContent(viewModel: social, inviteCode: .constant(""))), name: "social-groups")
@@ -98,6 +124,45 @@ struct SocialSnapshotTests {
 
 /// Beispieldaten im Stil der Referenzbilder (nur für Bilder).
 private enum SocialSnapshotData {
+    /// Gruppenkalender Oktober 2026 (6 Mitglieder, Ziel 8.000, benötigt 2): Werte nur für Bilder.
+    static func calendar() -> GroupCalendar {
+        let members = [me, leon, marie, gotscha, flavio, leo]
+        let days: [GroupCalendarDay] = (1...16).map { dayNumber in
+            let day = Fixtures.day(2026, 10, dayNumber)
+            let hasData = dayNumber != 15
+            let steps = members.enumerated().map { index, _ in hasData ? (dayNumber * 1_373 + index * 2_711) % 15_000 : 0 }
+            let order = steps.indices.sorted { steps[$0] == steps[$1] ? $0 < $1 : steps[$0] > steps[$1] }
+            let ranking = hasData ? order.enumerated().map { rank, index in
+                GroupCalendarEntry(
+                    rank: rank + 1,
+                    profile: members[index],
+                    competitionSteps: steps[index],
+                    reached: steps[index] >= 8_000,
+                    isCurrentUser: index == 0
+                )
+            } : []
+            let reached = ranking.filter(\.reached).count
+            return GroupCalendarDay(
+                day: day,
+                dailyGoal: 8_000,
+                memberCount: members.count,
+                requiredCount: 2,
+                reachedCount: reached,
+                secured: reached >= 2,
+                hasData: hasData,
+                isToday: dayNumber == 16,
+                ranking: ranking
+            )
+        }
+        return GroupCalendar(
+            groupID: groupID,
+            timeZone: "Europe/Berlin",
+            groupToday: Fixtures.day(2026, 10, 16),
+            firstGroupDay: Fixtures.day(2026, 10, 1),
+            days: days
+        )
+    }
+
     static let groupID = UUID(uuidString: "60000000-0000-4000-8000-000000000001")!
 
     static func profile(_ index: Int, _ name: String, _ username: String) -> SocialProfile {

@@ -849,6 +849,17 @@ enum SocialText {
         )
     }
 
+    // MARK: Gruppenkalender
+
+    static var groupCalendar: String { PaceLocalization.text(de: "Gruppenkalender", en: "Group calendar", ru: "Календарь группы") }
+    static var groupCalendarSubtitle: String {
+        PaceLocalization.text(
+            de: "Tagesbeste, Ranglisten und Flamme je Tag",
+            en: "Best of the day, rankings and flame for each day",
+            ru: "Лучшие дня, рейтинги и огонь по дням"
+        )
+    }
+
     // MARK: Spitznamen
 
     static var nickname: String { PaceLocalization.text(de: "Spitzname", en: "Nickname", ru: "Прозвище") }

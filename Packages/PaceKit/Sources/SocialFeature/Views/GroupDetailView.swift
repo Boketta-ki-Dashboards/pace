@@ -188,6 +188,7 @@ struct GroupDetailContent: View {
 
     // MARK: Navigation
 
+    @ViewBuilder
     private var navigationCards: some View {
         HStack(spacing: PaceSpacing.xs) {
             navigationCard(SocialText.groupChat, systemImage: "bubble.left.and.bubble.right") {
@@ -200,6 +201,37 @@ struct GroupDetailContent: View {
                 onOpen(.groupSettings(group.id))
             }
         }
+        // Eigene Zeile, damit die drei Karten wie in der Referenz bleiben.
+        Button {
+            onOpen(.groupCalendar(group.id))
+        } label: {
+            HStack(spacing: PaceSpacing.s) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(PaceColor.accent)
+                    .frame(width: 28)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(SocialText.groupCalendar)
+                        .font(PaceFont.headline)
+                        .foregroundStyle(PaceColor.textPrimary)
+                    Text(SocialText.groupCalendarSubtitle)
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(PaceColor.textSecondary)
+                    .accessibilityHidden(true)
+            }
+            .padding(PaceSpacing.m)
+            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+            .paceCardBackground(cornerRadius: PaceRadius.tile)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pacePressable)
     }
 
     private func navigationCard(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {

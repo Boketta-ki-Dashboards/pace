@@ -84,6 +84,7 @@ public final class SocialViewModel {
     @ObservationIgnored private var loadErrorNotice: Notice?
     /// Eine Detailansicht je Gruppe: Details, Mitglieder und Einstellungen teilen sich denselben Stand.
     @ObservationIgnored private var groupDetails: [UUID: GroupDetailViewModel] = [:]
+    @ObservationIgnored private var groupCalendars: [UUID: GroupCalendarViewModel] = [:]
 
     /// - Parameters:
     ///   - repository: `nil`, wenn kein Backend konfiguriert ist.
@@ -567,6 +568,19 @@ public final class SocialViewModel {
     /// Nach Verlassen oder Löschen: Die nächste Ansicht dieser Gruppe beginnt neu.
     func discardDetail(for groupID: UUID) {
         groupDetails[groupID] = nil
+        groupCalendars[groupID] = nil
+    }
+
+    /// Gruppenkalender einer Gruppe, in der man Mitglied ist; `nil` ohne Backend bzw. unbekannte Gruppe.
+    public func groupCalendar(groupID: UUID) -> GroupCalendarViewModel? {
+        guard let repository else { return nil }
+        if let cached = groupCalendars[groupID] { return cached }
+        guard let group = groups.first(where: { $0.id == groupID }) else { return nil }
+        let viewModel = GroupCalendarViewModel(
+            groupID: group.id, groupName: group.name, repository: repository, calendar: calendar, now: now
+        )
+        groupCalendars[groupID] = viewModel
+        return viewModel
     }
 
     /// ViewModel für das Profil eines Freundes (nur Namen und Wettbewerbsschritte).

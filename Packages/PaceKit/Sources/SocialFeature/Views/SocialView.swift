@@ -14,6 +14,7 @@ public enum SocialRoute: Hashable, Sendable {
     case groups
     case groupMembers(UUID)
     case groupSettings(UUID)
+    case groupCalendar(UUID)
     case friendsRanking
     case settings
     case shareProfile(SocialProfile)
