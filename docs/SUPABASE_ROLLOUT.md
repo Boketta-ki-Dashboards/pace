@@ -142,7 +142,7 @@ Danach:
 # Auftrag 3: drei neue Migrationen (Spitznamen, Nachrichtenaktionen, Gruppenkalender)
 
 > **Status: NICHT ausgeführt – Freigabe durch den Nutzer nötig.** Die drei Migrationen sind nur lokal (Docker:
-> pgTAP 908 Prüfungen, `db lint`, `db advisors`, Realtime-Skript, Swift-Unit- und Integrationstests) gelaufen.
+> pgTAP 965 Prüfungen, `db lint`, `db advisors`, Realtime-Skript, Swift-Unit- und Integrationstests) gelaufen.
 > Ziel ist ausschließlich das Pace-Projekt `bnkrenfvfiaapsbkeejq`. Die sechs Migrationen aus dem ersten Teil
 > (`20261018100000` … `20261019100400`) sind laut Nutzer bereits produktiv eingespielt und bleiben unverändert.
 

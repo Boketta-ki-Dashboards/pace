@@ -403,9 +403,11 @@ supabase test db   # u. a. 06_social_friends, 07_social_groups, 08_social_group_
   Einladungen (auch Rückzug bei Austritt bzw. Entfernen der einladenden Person), Eigentümerwechsel, Entfernen,
   letzte Person, Profillöschung, Löschen, alle Gruppen-Limits.
 - **14** – Spitznamen: Rechte, Validierung, Ausgabe an allen Stellen, Privatsphäre (fremde Spitznamen nie
-  sichtbar), Rate Limit, Aufräumen bei Ende der Freundschaft, Blockieren und Kontolöschung.
+  sichtbar, auch nicht im Meldungs-Schnappschuss), Rate Limit, Aufräumen bei Ende der Freundschaft, Blockieren und
+  Kontolöschung.
 - **16** – Gruppenkalender: Rechte, Zeitraumgrenzen (42 Tage, Gründung … heute), historische Mitglieder und Ziele,
-  ⌈n/3⌉, Gleichstände, leere Tage, Spitznamen, Blockierte, Übereinstimmung mit `social_group_days`.
+  ⌈n/3⌉, Gleichstände, leere Tage, Spitznamen, Blockierte (aktuelle sichtbar, Ex-Mitglieder, die mich blockiert
+  haben, anonymisiert), Tage vor dem eigenen Beitritt, Übereinstimmung mit `social_group_days`.
 - **08** – Rundung 1/2/3/4/6/10/12/20, laufender Tag, Lücke, `best_streak`, Zieländerung ab morgen,
   Beitritt/Austritt an einem Tag, überlappende Perioden, verspätete Synchronisation, Tage ohne Mitglieder,
   Zeitzonen (Kiritimati/Pago Pago) und Sommer-/Winterzeit (29.03.2026, 26.10.2025).

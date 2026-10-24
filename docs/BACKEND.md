@@ -520,13 +520,21 @@ Ereignisse in **einem** Kanal (`RealtimeEvents.stream(topic:events:)`); `message
 
 ### Tests (Auftrag 3)
 
-- **pgTAP:** `14_friend_nicknames` (59), `15_chat_message_actions` (111), `16_group_calendar` (33); bestehende
-  Tests 04, 06, 07, 09, 11, 12, 13 an die neuen Felder angepasst – zusammen 16 Dateien, 908 Prüfungen.
+- **pgTAP:** `14_friend_nicknames` (64), `15_chat_message_actions` (152), `16_group_calendar` (40); bestehende
+  Tests 04, 06, 07, 09, 11, 12 (59), 13 an die neuen Felder bzw. die engere Lese-Policy für Chat-Medien angepasst –
+  zusammen 16 Dateien, 965 Prüfungen. Abgedeckt u. a.: verborgene Pins als Platzhalter und Höchstzahl, gelöschte
+  Nachrichten weder anpinnbar noch Favorit, Favoriten-Höchstzahl, Rate Limits für Favoriten und Pins, Echtzeit an
+  `user:<public_id>` beim Bearbeiten, Chat-Medien nur für Uploader bzw. über sichtbare Nachrichten (Bild, GIF,
+  Audio, Ordnerliste), Meldungs-Schnappschuss ohne Spitznamen, anonymisierte Ex-Mitglieder im Kalender.
+- **Wettlauf Pin/Favorit gegen Löschen:** nicht in pgTAP (eine Sitzung), sondern mit zwei parallelen Sitzungen gegen
+  die lokale Datenbank geprüft: Kein Pin/Favorit bleibt an einer gelöschten Nachricht hängen.
 - **Realtime-Skript:** prüft zusätzlich `message_updated` und `pins_changed` (ohne Inhalt, nicht für Fremde).
 - **Swift:** `PaceBackendTests/MessageActionsNicknameCalendarTests.swift` (Request-Körper, Dekodierung mit und ohne
   neue Felder, Fehler-Tokens, Audio-Upload), `PaceBackendIntegrationTests/…/MessageActionsIntegrationTests.swift`
   (Spitzname privat, Antworten/Bearbeiten/Favoriten/Pins, Audio nur für Teilnehmer, Gruppenkalender gegen
-  `groupDays`), `PaceCoreTests/SocialChatContractTests.swift`, `SocialFeatureTests/ChatVoiceFormattingTests.swift`.
+  `groupDays`), `MediaAccountIntegrationTests.chatMediaIsOnlyReadableThroughVisibleMessages` (Download und
+  `createSignedURL` direkt gegen Storage: vor dem Senden nur Uploader, danach Teilnehmer, nach dem Löschen nur
+  Uploader), `PaceCoreTests/SocialChatContractTests.swift`, `SocialFeatureTests/ChatVoiceFormattingTests.swift`.
 
 ## Regionsdaten: Quelle und Aktualisierung
 
