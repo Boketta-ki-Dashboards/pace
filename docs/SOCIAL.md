@@ -295,10 +295,16 @@ Person, die sie vergeben hat (`nickname` in allen Profilausgaben, Rankings und E
   `secured`, `open` (heute, noch nicht gesichert), `missed`.
 - Kennzahlen kommen unverändert aus `private.group_day_stats` – dieselbe Berechnung wie Streak, `social_group` und
   `social_group_days` (Mitglieder laut Mitgliedschaftsperioden zum Tagesende, historisches Ziel, ⌈n/3⌉).
-- Die Tagesrangliste enthält alle Mitglieder dieses Tages (auch später Ausgetretene, auch Blockierte wie im
-  Gruppenranking) mit den Wettbewerbsschritten des Tages; Reihenfolge wie alle Social-Rankings
-  (`private.social_step_ranking`: Schritte, wer zuerst, `public_id` – Plätze eindeutig). `best` = Platz 1 mit mehr
-  als 0 Schritten (Indikator in der Kalenderzelle).
+- Die Tagesrangliste enthält alle Mitglieder dieses Tages (auch später Ausgetretene) mit den Wettbewerbsschritten
+  des Tages; Reihenfolge wie alle Social-Rankings (`private.social_step_ranking`: Schritte, wer zuerst,
+  `public_id` – Plätze eindeutig). `best` = Platz 1 mit mehr als 0 Schritten (Indikator in der Kalenderzelle).
+- Blockierungen: Aktuelle Mitglieder stehen wie im Gruppenranking immer in der Liste. **Ehemalige Mitglieder, die
+  mich blockiert haben, sind anonymisiert:** Zeile mit Platz, Schritten und `reached`, aber alle Profilfelder
+  `null` (wie `can_view_profile`, das ihr Profil für mich verbirgt). So bleiben `member_count` = Zeilenzahl und
+  `reached_count` = Zeilen mit `reached`. App: `GroupCalendarEntry.profile == nil` (`isHidden`), Anzeige über
+  `shownName` („Ehemaliges Mitglied“), ohne Bild und ohne Profil-Link; `id` ist der Platz.
+- Mitglieder sehen alle Tage ab der Gründung, auch vor ihrem eigenen Beitritt (Gruppenhistorie, wie Streak und
+  `social_group_days`).
 - App: `SocialRepository.groupCalendar(groupID:from:to:)` → `GroupCalendar`; Monatsansicht mit Montag als
   Wochenbeginn über `GroupCalendarRules.monthGrid(containing:calendar:)` (4–6 Wochen, passt in einen Abruf).
 

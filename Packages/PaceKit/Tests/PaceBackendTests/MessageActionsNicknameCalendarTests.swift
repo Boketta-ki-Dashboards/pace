@@ -422,8 +422,10 @@ struct MessageActionsNicknameCalendarTests {
               "nickname":null,"rank":2,"competition_steps":0,"reached":false,"is_current_user":true},
              {"public_id":"bbbbbbbb-0000-4000-8000-000000000002","username":"mia","display_name":"Mia","avatar_path":null,
               "nickname":"Mimi","rank":1,"competition_steps":9000,"reached":true,"is_current_user":false}]},
-          {"day":"2026-10-22","daily_goal":8000,"member_count":3,"required_count":1,"reached_count":0,"secured":false,
-           "has_data":false,"is_today":false,"ranking":[]}
+          {"day":"2026-10-22","daily_goal":8000,"member_count":1,"required_count":1,"reached_count":0,"secured":false,
+           "has_data":false,"is_today":false,"ranking":[
+             {"public_id":null,"username":null,"display_name":null,"avatar_path":null,"nickname":null,
+              "rank":1,"competition_steps":0,"reached":false,"is_current_user":false}]}
          ]}
         """#))
         let from = LocalDate(year: 2026, month: 9, day: 28)
@@ -439,9 +441,15 @@ struct MessageActionsNicknameCalendarTests {
         #expect(calendar.days.map(\.day) == [LocalDate(year: 2026, month: 10, day: 22), LocalDate(year: 2026, month: 10, day: 23)])
         let today = try #require(calendar.day(LocalDate(year: 2026, month: 10, day: 23)))
         #expect(today.ranking.map(\.rank) == [1, 2])
-        #expect(today.best?.profile.shownName == "Mimi")
-        #expect(today.currentUserEntry?.profile.username == "leon")
+        #expect(today.best?.profile?.shownName == "Mimi")
+        #expect(today.currentUserEntry?.profile?.username == "leon")
         #expect(today.secured && today.isToday && today.hasData)
+        // Ehemaliges Mitglied, das mich blockiert hat: Zeile ohne Profil.
+        let hidden = try #require(calendar.day(LocalDate(year: 2026, month: 10, day: 22))?.ranking.first)
+        #expect(hidden.profile == nil)
+        #expect(hidden.isHidden)
+        #expect(hidden.id == 1)
+        #expect(today.ranking.map(\.isHidden) == [false, false])
         #expect(calendar.state(of: LocalDate(year: 2026, month: 10, day: 23)) == .secured)
         #expect(calendar.state(of: LocalDate(year: 2026, month: 10, day: 22)) == .noData)
         #expect(calendar.state(of: LocalDate(year: 2026, month: 10, day: 12)) == .beforeGroup)

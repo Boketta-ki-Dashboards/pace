@@ -174,11 +174,11 @@ struct MessageActionsIntegrationTests {
         #expect(today.reachedCount == 1)
         #expect(today.secured)
         #expect(today.dailyGoal == 8_000)
-        #expect(today.ranking.map(\.profile.publicID) == [anna.publicID, ben.publicID])
+        #expect(today.ranking.map(\.profile?.publicID) == [anna.publicID, ben.publicID])
         #expect(today.ranking.map(\.competitionSteps) == [9_000, 4_000])
         #expect(today.ranking.map(\.reached) == [true, false])
-        #expect(today.ranking.last?.profile.shownName == "Benni")
-        #expect(today.currentUserEntry?.profile.publicID == anna.publicID)
+        #expect(today.ranking.last?.profile?.shownName == "Benni")
+        #expect(today.currentUserEntry?.profile?.publicID == anna.publicID)
         #expect(calendar.state(of: berlin.adding(-1, to: IntegrationUser.today)) == .beforeGroup)
         #expect(calendar.state(of: berlin.adding(1, to: IntegrationUser.today)) == .future)
 
@@ -190,7 +190,7 @@ struct MessageActionsIntegrationTests {
 
         // Ben sieht Annas Spitznamen nicht; Fremde bekommen keinen Kalender.
         let bensCalendar = try await ben.social.groupCalendar(groupID: group.id, from: grid.lowerBound, to: grid.upperBound)
-        #expect(bensCalendar.days.first?.ranking.allSatisfy { $0.profile.nickname == nil } == true)
+        #expect(bensCalendar.days.first?.ranking.allSatisfy { $0.profile?.nickname == nil } == true)
         await #expect(throws: SocialError.notFound) {
             try await outsider.social.groupCalendar(groupID: group.id, from: grid.lowerBound, to: grid.upperBound)
         }

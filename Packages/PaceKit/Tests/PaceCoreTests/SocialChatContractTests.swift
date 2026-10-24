@@ -192,6 +192,19 @@ struct GroupCalendarContractTests {
         #expect(groupCalendar.day(Fixtures.day(2026, 10, 14))?.currentUserEntry == zero)
     }
 
+    /// Ehemalige Mitglieder, die mich blockiert haben, kommen ohne Profil (Zählwerte bleiben).
+    @Test func hiddenCalendarEntriesHaveNoProfile() {
+        let hidden = GroupCalendarEntry(rank: 2, profile: nil, competitionSteps: 6_000, reached: true, isCurrentUser: false)
+        let mia = GroupCalendarEntry(rank: 1, profile: ChatFixtures.mia, competitionSteps: 9_000, reached: true, isCurrentUser: false)
+        #expect(hidden.isHidden)
+        #expect(!mia.isHidden)
+        #expect(hidden.id == 2)
+        #expect(mia.id == 1)
+        #expect(mia.shownName == ChatFixtures.mia.shownName)
+        #expect(hidden.shownName == GroupCalendarEntry.hiddenMemberName)
+        #expect(!hidden.shownName.isEmpty)
+    }
+
     @Test func socialStubFiltersTheCalendarAndSetsNicknames() async throws {
         let groupID = UUID()
         let mia = ChatFixtures.mia
