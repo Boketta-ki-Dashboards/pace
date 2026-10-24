@@ -222,6 +222,11 @@ public final class ChatViewModel {
         group.map { ChatFormatting.streakStatus(reached: $0.todayReachedCount, required: $0.todayRequiredCount, complete: $0.todayComplete) }
     }
 
+    /// Zeitpunkt in Listen (heute Uhrzeit, gestern, Wochentag, Datum) – z. B. in der Favoritenliste.
+    public func listTimestamp(of date: Date) -> String {
+        ChatFormatting.listTimestamp(date, now: now(), calendar: calendar)
+    }
+
     /// Uhrzeit einer Nachricht in der App-Sprache.
     public func time(of date: Date) -> String {
         ChatFormatting.time(date, calendar: calendar)

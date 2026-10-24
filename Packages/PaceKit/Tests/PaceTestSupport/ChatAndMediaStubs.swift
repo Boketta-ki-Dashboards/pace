@@ -166,6 +166,7 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
 
     public func editMessage(_ messageID: UUID, text: String) async throws -> ChatMessage {
         try checkAction("editMessage")
+        await gate.pass("editMessage")
         guard let valid = ChatRules.validText(text) else { throw SocialError.invalidMessage }
         return try state.withLock { state in
             for key in state.messages.keys {

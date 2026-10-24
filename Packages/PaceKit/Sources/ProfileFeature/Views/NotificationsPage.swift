@@ -120,7 +120,8 @@ struct NotificationsPageContent: View {
                     Task { await viewModel.setReminderEnabled(enabled) }
                 }
                 if viewModel.reminder.isEnabled {
-                    ForEach(viewModel.reminder.times) { time in
+                    // Stabile Zeilen (Position statt Uhrzeit), damit die Zeitauswahl beim Ändern nicht neu aufgebaut wird.
+                    ForEach(Array(viewModel.reminder.times.enumerated()), id: \.offset) { _, time in
                         reminderTimeRow(time)
                     }
                     if viewModel.reminder.canAddTime {

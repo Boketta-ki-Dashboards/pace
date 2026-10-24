@@ -70,7 +70,7 @@ struct ChatFavoritesSheet: View {
                             .foregroundStyle(PaceColor.textPrimary)
                             .lineLimit(1)
                         Spacer(minLength: 0)
-                        Text(viewModel.time(of: message.sentAt))
+                        Text(viewModel.listTimestamp(of: message.sentAt))
                             .font(PaceFont.caption)
                             .monospacedDigit()
                             .foregroundStyle(PaceColor.textSecondary)

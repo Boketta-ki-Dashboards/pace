@@ -195,6 +195,44 @@ struct GroupCalendarViewModelTests {
         #expect(repository.state.withLock { $0.calendarRequests.count } == 2)
     }
 
+    @Test func reopeningRefreshesOldDataAndANewDayStartsOver() async {
+        let clock = Locked(now)
+        let repository = SocialRepositoryStub { $0.calendars[self.groupID] = self.makeCalendar() }
+        let viewModel = GroupCalendarViewModel(
+            groupID: groupID, groupName: "Smoking red", repository: repository,
+            calendar: Fixtures.activityCalendar, now: { clock.withLock { $0 } }
+        )
+        await viewModel.appear()
+        viewModel.select(Fixtures.day(2026, 10, 14))
+
+        // Zwei Minuten später: Stand aus dem Speicher.
+        clock.withLock { $0 = now.addingTimeInterval(120) }
+        await viewModel.appear()
+        #expect(repository.state.withLock { $0.calendarRequests.count } == 1)
+        #expect(viewModel.selectedDay == Fixtures.day(2026, 10, 14))
+
+        // Zehn Minuten später: neu geladen, Auswahl bleibt.
+        clock.withLock { $0 = now.addingTimeInterval(600) }
+        await viewModel.appear()
+        #expect(repository.state.withLock { $0.calendarRequests.count } == 2)
+        #expect(viewModel.selectedDay == Fixtures.day(2026, 10, 14))
+
+        // Am nächsten Tag: neu im laufenden Monat, heute ausgewählt (der Server meldet den neuen Gruppentag).
+        repository.state.withLock { state in
+            let old = self.makeCalendar()
+            state.calendars[self.groupID] = GroupCalendar(
+                groupID: old.groupID, timeZone: old.timeZone, groupToday: Fixtures.day(2026, 10, 17),
+                firstGroupDay: old.firstGroupDay,
+                days: old.days + [self.day(17, reached: 0, isToday: true)]
+            )
+        }
+        clock.withLock { $0 = Fixtures.date(2026, 10, 17, 8) }
+        await viewModel.appear()
+        #expect(repository.state.withLock { $0.calendarRequests.count } == 3)
+        #expect(viewModel.today == Fixtures.day(2026, 10, 17))
+        #expect(viewModel.selectedDay == Fixtures.day(2026, 10, 17))
+    }
+
     @Test func missingServerSupportIsExplained() async {
         let (viewModel, _) = make(error: .unavailable)
 

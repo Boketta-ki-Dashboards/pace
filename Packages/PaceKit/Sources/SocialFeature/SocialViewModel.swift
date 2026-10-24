@@ -540,7 +540,18 @@ public final class SocialViewModel {
         ranking = ranking.map { entry in
             entry.publicUserID == profile.publicID ? entry.withNickname(profile.nickname) : entry
         }
-        Task { [chats] in await chats.profileDidChange() }
+        // Gespeicherte Gruppendetails und Gruppenkalender kennen den alten Namen – im Hintergrund neu laden.
+        let details = Array(groupDetails.values)
+        let calendars = Array(groupCalendars.values)
+        Task { [chats] in
+            await chats.profileDidChange()
+            for detail in details {
+                await detail.load()
+            }
+            for calendar in calendars {
+                await calendar.load(force: true)
+            }
+        }
     }
 
     public func dismissNotice() {

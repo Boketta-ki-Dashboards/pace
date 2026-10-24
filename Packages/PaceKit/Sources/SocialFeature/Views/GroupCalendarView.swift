@@ -11,7 +11,7 @@ struct GroupCalendarView: View {
         GroupCalendarContent(viewModel: viewModel, onOpenProfile: { onOpen(.profile($0)) })
             .socialSubpageScroll()
             .refreshable { [viewModel] in await viewModel.load(force: true) }
-            .task { [viewModel] in await viewModel.load() }
+            .task { [viewModel] in await viewModel.appear() }
     }
 }
 

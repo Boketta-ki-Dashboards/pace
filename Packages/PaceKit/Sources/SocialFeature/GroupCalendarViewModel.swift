@@ -46,6 +46,12 @@ public final class GroupCalendarViewModel {
     @ObservationIgnored private let calendar: ActivityCalendar
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var loadingMonth: LocalDate?
+    /// Wann jeder Monat geladen wurde und an welchem Tag (Gerät) zuletzt – für das Auffrischen beim Erscheinen.
+    @ObservationIgnored private var loadedAt: [LocalDate: Date] = [:]
+    @ObservationIgnored private var lastLoadDay: LocalDate?
+
+    /// Älter darf ein gespeicherter Monat beim erneuten Öffnen nicht sein (heutige Rangliste ändert sich laufend).
+    static let maximumAge: TimeInterval = 5 * 60
 
     public init(
         groupID: UUID,
@@ -145,6 +151,25 @@ public final class GroupCalendarViewModel {
 
     // MARK: Laden und Navigation
 
+    /// Beim Erscheinen: gespeicherten Monat nutzen, aber neu laden, wenn er älter als ``maximumAge`` ist; hat inzwischen
+    /// ein neuer Tag begonnen, beginnt der Kalender neu im laufenden Monat (heute ausgewählt).
+    public func appear() async {
+        let currentDay = calendar.day(containing: now())
+        if let lastLoadDay, lastLoadDay != currentDay {
+            months = [:]
+            loadedAt = [:]
+            selectedDay = nil
+            displayedMonth = calendar.startOfMonth(containing: currentDay)
+            await load(force: true)
+            return
+        }
+        if let stamp = loadedAt[displayedMonth], now().timeIntervalSince(stamp) > Self.maximumAge {
+            await load(force: true)
+        } else {
+            await load()
+        }
+    }
+
     /// Lädt den angezeigten Monat (einmal je Monat; `force` lädt neu, z. B. „Erneut versuchen“ oder Ziehen).
     public func load(force: Bool = false) async {
         let month = displayedMonth
@@ -160,6 +185,8 @@ public final class GroupCalendarViewModel {
         do {
             let loaded = try await repository.groupCalendar(groupID: groupID, from: grid.lowerBound, to: grid.upperBound)
             months[month] = loaded
+            loadedAt[month] = now()
+            lastLoadDay = calendar.day(containing: now())
             guard displayedMonth == month else { return }
             state = .loaded
             selectDefaultDayIfNeeded()

@@ -424,3 +424,175 @@ struct ChatHiddenPinTests {
         #expect(repository.state.withLock { $0.pins[conversation.id] }?.isEmpty == true)
     }
 }
+
+/// Befunde der unabhängigen Prüfung: Verlauf ohne Lücken, Bearbeitungen älterer Nachrichten, sicheres Verwerfen,
+/// gesperrtes Abbrechen beim Speichern, verborgene Pins, ehrliche Fehler beim Sprung.
+@MainActor
+struct ChatReviewFixTests {
+    private let base = Fixtures.date(2026, 10, 16, 18)
+
+    private func makeChat(
+        _ repository: ChatRepositoryStub,
+        conversation: ConversationSummary,
+        media: MediaRepositoryStub? = nil
+    ) async -> ChatViewModel {
+        let ticker = ManualTicker()
+        let list = ChatListViewModel(
+            repository: repository,
+            media: media,
+            calendar: Fixtures.activityCalendar,
+            now: { [base] in base },
+            sleep: { try await ticker.sleep($0) }
+        )
+        await list.load()
+        let chat = list.chat(for: ChatTarget(conversation))
+        await chat.load()
+        return chat
+    }
+
+    private func history(_ count: Int, in conversation: ConversationSummary, endingMinutesAgo offset: Double = 0) -> [ChatMessage] {
+        (0..<count).map { index in
+            ChatFixtures.message(
+                in: conversation.id,
+                from: ChatFixtures.mia,
+                text: "Nachricht \(index)",
+                at: base.addingTimeInterval(Double(index - count) * 60 - offset * 60)
+            )
+        }
+    }
+
+    @Test func manyNewMessagesLeaveNoGap() async {
+        let conversation = ChatFixtures.direct()
+        let old = history(10, in: conversation, endingMinutesAgo: 100)
+        let repository = ChatRepositoryStub { state in
+            state.conversations = [conversation]
+            state.messages[conversation.id] = old
+        }
+        let chat = await makeChat(repository, conversation: conversation)
+        #expect(chat.messages.count == 10)
+
+        // Während der Chat zu war: 50 neue Nachrichten.
+        let new = (0..<50).map { index in
+            ChatFixtures.message(in: conversation.id, from: ChatFixtures.mia, text: "Neu \(index)", at: base.addingTimeInterval(Double(index - 50) * 10))
+        }
+        for message in new { repository.store(message) }
+        await chat.refresh()
+
+        // Keine Lücke: Der alte Stand wurde verworfen, ältere lassen sich nachladen.
+        #expect(chat.messages.map(\.id) == new.suffix(40).map(\.id))
+        #expect(chat.hasOlderMessages)
+        await chat.loadOlder()
+        #expect(chat.messages.count == 60)
+        #expect(Set(chat.messages.map(\.id)) == Set((old + new).map(\.id)))
+    }
+
+    @Test func editsOfOlderLoadedMessagesAreRefreshed() async throws {
+        let conversation = ChatFixtures.direct()
+        let messages = history(45, in: conversation)
+        let repository = ChatRepositoryStub { state in
+            state.conversations = [conversation]
+            state.messages[conversation.id] = messages
+        }
+        let chat = await makeChat(repository, conversation: conversation)
+        await chat.loadOlder()
+        #expect(chat.messages.count == 45)
+
+        // Jemand bearbeitet die älteste Nachricht (außerhalb der neuesten Seite).
+        let oldest = messages[0]
+        repository.state.withLock { state in
+            state.messages[conversation.id]?[0] = ChatFixtures.message(
+                id: oldest.id, in: conversation.id, from: ChatFixtures.mia, text: "Geändert", at: oldest.sentAt, editedAt: base
+            )
+        }
+        await chat.refresh()
+        await chat.refreshOlderLoadedMessages()
+
+        let refreshed = try #require(chat.messages.first { $0.id == oldest.id })
+        #expect(refreshed.text == "Geändert")
+        #expect(refreshed.isEdited)
+        #expect(chat.messages.count == 45)
+    }
+
+    @Test func discardKeepsTheFileWhenTheMessageArrivedAfterAll() async throws {
+        let conversation = ChatFixtures.direct()
+        let media = MediaRepositoryStub()
+        let repository = ChatRepositoryStub { state in
+            state.conversations = [conversation]
+            state.sendError = .network
+        }
+        let chat = await makeChat(repository, conversation: conversation, media: media)
+        await chat.sendVoice(Data(repeating: 3, count: 256), duration: .seconds(5))
+        let failed = try #require(chat.pending.first)
+        let path = try #require(failed.mediaPath)
+
+        // Die Antwort ging verloren – gespeichert hat der Server die Nachricht trotzdem.
+        repository.store(ChatFixtures.message(
+            in: conversation.id, from: nil, isOwn: true, kind: .voice, mediaPath: path, clientID: failed.clientID,
+            at: base, mediaDuration: .seconds(5)
+        ))
+        repository.state.withLock { $0.sendError = nil }
+
+        chat.discard(failed.clientID)
+
+        try await waitUntil { chat.messages.contains { $0.clientID == failed.clientID } }
+        #expect(media.state.withLock { $0.deleted }.isEmpty)
+    }
+
+    @Test func cancellingIsLockedWhileAnEditIsSaved() async throws {
+        let conversation = ChatFixtures.direct()
+        let own = ChatFixtures.message(in: conversation.id, from: nil, isOwn: true, text: "Alt", at: base)
+        let repository = ChatRepositoryStub { state in
+            state.conversations = [conversation]
+            state.messages[conversation.id] = [own]
+        }
+        let chat = await makeChat(repository, conversation: conversation)
+        chat.draftText = "Mein Entwurf"
+        chat.startEditing(own)
+        chat.draftText = "Neu"
+        repository.gate.close("editMessage")
+        let saving = Task { await chat.sendText() }
+        try await waitUntil { repository.gate.waitingCount("editMessage") == 1 }
+
+        #expect(chat.isSavingEdit)
+        chat.cancelEditing()
+        #expect(chat.editingMessage == own) // gesperrt
+        repository.gate.open("editMessage")
+        await saving.value
+
+        #expect(chat.editingMessage == nil)
+        #expect(chat.draftText == "Mein Entwurf")
+        #expect(chat.messages.first?.text == "Neu")
+    }
+
+    @Test func tappingAHiddenPinDoesNotLoadTheWholeHistory() async throws {
+        let conversation = ChatFixtures.group(canPin: true)
+        let messages = history(45, in: conversation)
+        let placeholder = ChatFixtures.message(in: conversation.id, from: nil, at: base.addingTimeInterval(-90_000))
+        let repository = ChatRepositoryStub { state in
+            state.conversations = [conversation]
+            state.messages[conversation.id] = messages
+            state.pins[conversation.id] = [ChatPin(message: placeholder, pinnedBy: nil, pinnedAt: base, isHidden: true)]
+        }
+        let chat = await makeChat(repository, conversation: conversation)
+        let calls = repository.callCount("messages")
+
+        await chat.openShownPin()
+
+        #expect(repository.callCount("messages") == calls)
+        #expect(chat.notice == ChatNotice(text: ChatTexts.messageUnavailable, isError: false))
+    }
+
+    @Test func jumpNamesNetworkErrorsHonestly() async {
+        let conversation = ChatFixtures.direct()
+        let repository = ChatRepositoryStub { state in
+            state.conversations = [conversation]
+            state.messages[conversation.id] = history(45, in: conversation)
+        }
+        let chat = await makeChat(repository, conversation: conversation)
+        repository.state.withLock { $0.error = .network }
+
+        await chat.jump(to: UUID())
+
+        #expect(chat.notice == ChatNotice(text: ChatTexts.olderFailed, isError: true))
+    }
+}
