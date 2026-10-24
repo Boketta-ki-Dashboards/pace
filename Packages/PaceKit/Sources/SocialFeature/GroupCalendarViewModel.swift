@@ -290,9 +290,9 @@ public final class GroupCalendarViewModel {
         }
         if let best = cell.best {
             parts.append(PaceLocalization.text(
-                de: "Tagesbeste: \(best.profile.shownName), \(PaceLocalization.steps(best.competitionSteps))",
-                en: "Best of the day: \(best.profile.shownName), \(PaceLocalization.steps(best.competitionSteps))",
-                ru: "Лучший дня: \(best.profile.shownName), \(PaceLocalization.steps(best.competitionSteps))"
+                de: "Tagesbeste: \(best.shownName), \(PaceLocalization.steps(best.competitionSteps))",
+                en: "Best of the day: \(best.shownName), \(PaceLocalization.steps(best.competitionSteps))",
+                ru: "Лучший дня: \(best.shownName), \(PaceLocalization.steps(best.competitionSteps))"
             ))
         }
         return parts.joined(separator: ", ")

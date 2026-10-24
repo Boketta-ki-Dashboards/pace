@@ -120,6 +120,11 @@ struct MessageActionsIntegrationTests {
         let reference = try await anna.media.upload(audio, contentType: MediaRules.voiceContentType, to: .chat(conversationID: direct.id))
         #expect(reference.bucket == .chatMedia)
         #expect(reference.path.hasSuffix(".m4a"))
+        // Vor dem Senden liest nur Anna die Datei (Vorschau), Ben noch nicht.
+        #expect(try await anna.media.data(for: reference) == audio)
+        await #expect(throws: (any Error).self) {
+            try await ben.media.data(for: reference)
+        }
 
         let voice = try await anna.chat.send(.voice(mediaPath: reference.path, duration: .milliseconds(3_200)), to: direct.id)
         #expect(voice.kind == .voice)
@@ -174,11 +179,11 @@ struct MessageActionsIntegrationTests {
         #expect(today.reachedCount == 1)
         #expect(today.secured)
         #expect(today.dailyGoal == 8_000)
-        #expect(today.ranking.map(\.profile.publicID) == [anna.publicID, ben.publicID])
+        #expect(today.ranking.map(\.profile?.publicID) == [anna.publicID, ben.publicID])
         #expect(today.ranking.map(\.competitionSteps) == [9_000, 4_000])
         #expect(today.ranking.map(\.reached) == [true, false])
-        #expect(today.ranking.last?.profile.shownName == "Benni")
-        #expect(today.currentUserEntry?.profile.publicID == anna.publicID)
+        #expect(today.ranking.last?.profile?.shownName == "Benni")
+        #expect(today.currentUserEntry?.profile?.publicID == anna.publicID)
         #expect(calendar.state(of: berlin.adding(-1, to: IntegrationUser.today)) == .beforeGroup)
         #expect(calendar.state(of: berlin.adding(1, to: IntegrationUser.today)) == .future)
 
@@ -190,7 +195,7 @@ struct MessageActionsIntegrationTests {
 
         // Ben sieht Annas Spitznamen nicht; Fremde bekommen keinen Kalender.
         let bensCalendar = try await ben.social.groupCalendar(groupID: group.id, from: grid.lowerBound, to: grid.upperBound)
-        #expect(bensCalendar.days.first?.ranking.allSatisfy { $0.profile.nickname == nil } == true)
+        #expect(bensCalendar.days.first?.ranking.allSatisfy { $0.profile?.nickname == nil } == true)
         await #expect(throws: SocialError.notFound) {
             try await outsider.social.groupCalendar(groupID: group.id, from: grid.lowerBound, to: grid.upperBound)
         }

@@ -1,7 +1,7 @@
 -- Pace: Nachrichtenaktionen – Sprachnachrichten, Antworten, Bearbeiten, Favoriten, Pins; Rechte, Privatsphäre,
 -- Echtzeit-Hinweise und Storage-Zugriff auf Audio.
 begin;
-select plan(111);
+select plan(152);
 
 -- =============================================================================================================
 -- Struktur
@@ -74,6 +74,7 @@ values ('af000000-0000-4000-8000-000000000001', 'af000000-0000-4000-8000-0000000
 
 create temporary table t_r (name text primary key, result jsonb) on commit drop;
 grant select, insert, update on t_r to authenticated;
+grant select on t_r to service_role;
 create function pg_temp.r(p_name text) returns jsonb language sql stable as $$
   select r.result from t_r r where r.name = p_name;
 $$;
@@ -281,6 +282,7 @@ select pg_temp.as_user(1);
 select pg_temp.send('e1', pg_temp.id('direct'), 'text', 'Bis spöter');
 reset role;
 delete from realtime.messages m where m.topic = 'chat:' || pg_temp.id('direct');
+delete from realtime.messages m where m.topic in ('user:' || pg_temp.pid(1), 'user:' || pg_temp.pid(2));
 set local role authenticated;
 select pg_temp.as_user(1);
 select isnt(public.chat_edit_message(pg_temp.id('e1'), 'Bis später')->>'edited_at', null, 'Bearbeiten liefert edited_at');
@@ -297,6 +299,13 @@ select ok(
   exists (select 1 from realtime.messages m where m.topic = 'chat:' || (select (result->>'id') from t_r where name = 'direct')
             and m.event = 'message_updated' and m.private),
   'Echtzeit: message_updated an chat:<conversation_id>'
+);
+select is(
+  (select array_agg(distinct m.topic order by m.topic) from realtime.messages m
+    where m.event = 'conversation' and m.private and m.payload->>'event' = 'message_updated'
+      and m.topic in ('user:' || pg_temp.pid(1), 'user:' || pg_temp.pid(2))),
+  array['user:' || pg_temp.pid(1), 'user:' || pg_temp.pid(2)],
+  'Echtzeit: conversation an user:<public_id> beider Teilnehmer (Chatliste)'
 );
 select ok(
   not exists (select 1 from realtime.messages m where m.payload::text like '%Bis sp%'),
@@ -427,23 +436,63 @@ select is(
 );
 select ok(exists (select 1 from realtime.messages m where m.event = 'pins_changed'), 'Echtzeit: pins_changed nach dem Löschen');
 set local role authenticated;
+select pg_temp.as_user(1);
+select throws_ok(format('select public.chat_set_pinned(%L, true)', pg_temp.id('c1')), 'P0001', 'not_found', 'gelöschte Nachricht: nicht anpinnbar');
+select pg_temp.as_user(3);
+select throws_ok(format('select public.chat_set_favorite(%L, true)', pg_temp.id('c1')), 'P0001', 'not_found', 'gelöschte Nachricht: kein Favorit');
 
--- Blockierte Absender: Pins anderer bleiben, sind für die blockierende Person aber verborgen.
+-- Blockierte Absender: Der Pin bleibt und zählt zur Höchstzahl. Wer anpinnen darf, sieht ihn als Platzhalter ohne
+-- Inhalt und Absender und kann ihn lösen; alle anderen, die den Absender blockiert haben, sehen ihn nicht.
 select pg_temp.as_user(1);
 select pg_temp.send('anna_pin', pg_temp.id('group'), 'text', 'Annas Hinweis');
 select pg_temp.as_user(3);
 select pg_temp.send('cara_pin', pg_temp.id('group'), 'text', 'Caras Hinweis');
 select pg_temp.as_user(1);
-select lives_ok(format('select public.chat_set_pinned(%L, true)', pg_temp.id('cara_pin')), 'Owner pinnt caras Nachricht');
+select is(jsonb_array_length(public.chat_set_pinned(pg_temp.id('cara_pin'), true)), 4, 'Owner pinnt caras Nachricht (4 Pins)');
 select lives_ok(format('select public.social_block_user(%L)', pg_temp.pid(3)), 'anna blockiert cara');
-select ok(
-  not exists (select 1 from jsonb_array_elements(public.chat_pins(pg_temp.id('group'))) e where e->'message'->>'id' = pg_temp.id('cara_pin')::text),
-  'blockierende Person sieht den Pin nicht'
-);
 select is(
-  jsonb_array_length(public.chat_set_pinned(pg_temp.id('cara_pin'), false)) >= 0, true,
-  'Owner kann den verborgenen Pin trotzdem lösen'
+  (select e - 'pinned_at' || jsonb_build_object('message', (e->'message') - 'created_at')
+     from jsonb_array_elements(public.chat_pins(pg_temp.id('group'))) e where e->'message'->>'id' = pg_temp.id('cara_pin')::text),
+  jsonb_build_object(
+    'pinned_by', null,
+    'message', jsonb_build_object(
+      'id', pg_temp.id('cara_pin'), 'conversation_id', pg_temp.id('group'), 'client_id', null, 'sender', null,
+      'is_own', false, 'kind', 'text', 'body', null, 'media_path', null, 'media_duration_ms', null,
+      'shared_profile', null, 'reply_to', null, 'edited_at', null, 'is_favorite', false, 'is_pinned', true,
+      'is_deleted', true)),
+  'Owner sieht den verborgenen Pin als Platzhalter: id, Art, is_deleted – ohne Inhalt und Absender'
 );
+select ok(
+  public.chat_pins(pg_temp.id('group'))::text not like '%Caras Hinweis%'
+  and public.chat_pins(pg_temp.id('group'))::text not like '%cara_c%',
+  'Platzhalter verrät weder Text noch Absender'
+);
+select is(jsonb_array_length(public.chat_set_pinned(pg_temp.id('p5'), true)), 5, 'fünfter Pin: Owner sieht alle 5 (einer als Platzhalter)');
+select throws_ok(
+  format('select public.chat_set_pinned(%L, true)', pg_temp.id('p6')),
+  'P0001', 'pin_limit_reached', 'verborgener Pin zählt zur Höchstzahl'
+);
+select pg_temp.as_user(6);
+select lives_ok(format('select public.social_block_user(%L)', pg_temp.pid(3)), 'fritz (Mitglied ohne Anpinn-Recht) blockiert cara');
+select is(
+  (select array_agg(e->'message'->>'id' order by e->'message'->>'id') from jsonb_array_elements(public.chat_pins(pg_temp.id('group'))) e),
+  (select array_agg(pg_temp.id(n)::text order by pg_temp.id(n)::text) from unnest(array['p2', 'p3', 'p4', 'p5']) n),
+  'Mitglied ohne Anpinn-Recht: verborgener Pin fehlt ganz (kein Platzhalter)'
+);
+select pg_temp.as_user(1);
+select is(
+  (select array_agg(e->'message'->>'id' order by e->'message'->>'id') from jsonb_array_elements(public.chat_set_pinned(pg_temp.id('cara_pin'), false)) e),
+  (select array_agg(pg_temp.id(n)::text order by pg_temp.id(n)::text) from unnest(array['p2', 'p3', 'p4', 'p5']) n),
+  'Owner löst den verborgenen Pin über die ID des Platzhalters'
+);
+reset role;
+select is(
+  (select count(*)::int from public.chat_message_pins pn where pn.message_id = (select (result->>'id')::uuid from t_r where name = 'cara_pin')),
+  0, 'verborgener Pin ist wirklich entfernt'
+);
+set local role authenticated;
+select pg_temp.as_user(1);
+select is(jsonb_array_length(public.chat_set_pinned(pg_temp.id('p6'), true)), 5, 'danach ist wieder Platz für einen Pin');
 select pg_temp.as_user(2);
 select ok(
   not exists (select 1 from jsonb_array_elements(public.chat_pins(pg_temp.id('group'))) e where e->'message'->>'id' = pg_temp.id('cara_pin')::text),
@@ -498,13 +547,152 @@ insert into t_r select 'export', public.account_export();
 select is(
   (select jsonb_build_object('favorites', jsonb_array_length(result->'chat_message_favorites'), 'pins', jsonb_array_length(result->'chat_message_pins'))
      from t_r where name = 'export'),
-  jsonb_build_object('favorites', 1, 'pins', 4),
+  jsonb_build_object('favorites', 1, 'pins', 6),
   'Export: eigene Favoriten und von mir gesetzte Pins'
 );
 select ok(
   (select bool_and(e ? 'reply_to_id' and e ? 'edited_at' and e ? 'media_duration_ms')
      from t_r, jsonb_array_elements(result->'chat_messages') e where name = 'export'),
   'Export: Nachrichten mit reply_to_id, edited_at, media_duration_ms'
+);
+
+-- =============================================================================================================
+-- Storage: Lesen nur für die hochladende Person oder über eine sichtbare Nachricht (Bilder, GIFs, Audio)
+-- =============================================================================================================
+
+-- Privatchat (inzwischen schreibgeschützt): bild.jpg und kurz.aac hat anna hochgeladen, aber nie gesendet;
+-- sprache.m4a gehört zur Sprachnachricht 'voice'.
+select pg_temp.as_user(1);
+select ok(
+  pg_temp.visible(pg_temp.id('direct') || '/bild.jpg') and pg_temp.visible(pg_temp.id('direct') || '/kurz.aac'),
+  'hochladende Person liest eigene, nie gesendete Dateien (Bild, Audio)'
+);
+select pg_temp.as_user(2);
+select ok(not pg_temp.visible(pg_temp.id('direct') || '/bild.jpg'), 'Bild ohne Nachricht: für das Gegenüber nicht lesbar');
+select ok(not pg_temp.visible(pg_temp.id('direct') || '/kurz.aac'), 'Audio ohne Nachricht: für das Gegenüber nicht lesbar');
+select ok(pg_temp.visible(pg_temp.id('direct') || '/sprache.m4a'), 'Audio einer sichtbaren Nachricht: lesbar (auch schreibgeschützt)');
+
+-- Gruppe: emma (von anna blockiert) schickt ein GIF, ben ein Bild.
+select pg_temp.as_user(5);
+select lives_ok(format('select pg_temp.upload(%L, %L)', pg_temp.id('group') || '/emma.gif', 'image/gif'), 'emma lädt ein GIF hoch');
+select pg_temp.send('emma_gif', pg_temp.id('group'), 'gif', null, pg_temp.id('group') || '/emma.gif');
+select pg_temp.as_user(2);
+select lives_ok(format('select pg_temp.upload(%L, %L)', pg_temp.id('group') || '/ben.jpg', 'image/jpeg'), 'ben lädt ein Bild hoch');
+select ok(not pg_temp.visible(pg_temp.id('group') || '/gruppe.m4a'), 'Gruppe: nie gesendete Audiodatei anderer nicht lesbar');
+select pg_temp.send('ben_img', pg_temp.id('group'), 'image', null, pg_temp.id('group') || '/ben.jpg');
+select ok(pg_temp.visible(pg_temp.id('group') || '/emma.gif'), 'GIF einer sichtbaren Nachricht: Mitglied liest');
+select pg_temp.as_user(1);
+select ok(pg_temp.visible(pg_temp.id('group') || '/ben.jpg'), 'Bild einer sichtbaren Nachricht: Mitglied liest');
+select ok(not pg_temp.visible(pg_temp.id('group') || '/emma.gif'), 'Absender von mir blockiert: Datei nicht lesbar');
+select pg_temp.as_user(6);
+select ok(not pg_temp.visible(pg_temp.id('group') || '/ben.jpg'), 'ehemaliges Mitglied: Datei nicht lesbar');
+select pg_temp.as_user(4);
+select ok(
+  not pg_temp.visible(pg_temp.id('group') || '/ben.jpg') and not pg_temp.visible(pg_temp.id('group') || '/emma.gif'),
+  'Nicht-Mitglied: Dateien nicht lesbar'
+);
+
+-- Gelöschte (auch gemeldete) Nachrichten: Die Datei liest nur noch die hochladende Person bzw. die Moderation.
+select pg_temp.as_user(2);
+select is(
+  public.chat_delete_message(pg_temp.id('ben_img'))->>'media_path', pg_temp.id('group') || '/ben.jpg',
+  'ben löscht seine Bildnachricht'
+);
+select ok(pg_temp.visible(pg_temp.id('group') || '/ben.jpg'), 'gelöschte Nachricht: hochladende Person liest die Datei weiter');
+select ok(not pg_temp.visible(pg_temp.id('group') || '/beweis.m4a'), 'gemeldete, gelöschte Sprachnachricht: meldende Person liest nicht mehr');
+select pg_temp.as_user(1);
+select ok(not pg_temp.visible(pg_temp.id('group') || '/ben.jpg'), 'gelöschte Nachricht: andere lesen die Datei nicht mehr');
+select ok(pg_temp.visible(pg_temp.id('group') || '/beweis.m4a'), 'gemeldete Sprachnachricht: hochladende Person liest weiter');
+set local role service_role;
+select ok(pg_temp.visible(pg_temp.id('group') || '/beweis.m4a'), 'gemeldete Sprachnachricht: Moderation (service_role) liest');
+set local role authenticated;
+
+-- Auflisten des Ordners zeigt nur, was man lesen darf.
+select pg_temp.as_user(1);
+select is(
+  (select array_agg(o.name::text order by o.name) from storage.objects o
+    where o.bucket_id = 'chat-media' and o.name like pg_temp.id('group') || '/%'),
+  array[pg_temp.id('group') || '/beweis.m4a', pg_temp.id('group') || '/gruppe.m4a'],
+  'Ordnerliste anna: nur eigene Dateien (GIF der blockierten Person und gelöschtes Bild fehlen)'
+);
+select pg_temp.as_user(2);
+select is(
+  (select array_agg(o.name::text order by o.name) from storage.objects o
+    where o.bucket_id = 'chat-media' and o.name like pg_temp.id('group') || '/%'),
+  array[pg_temp.id('group') || '/ben.jpg', pg_temp.id('group') || '/emma.gif'],
+  'Ordnerliste ben: eigene Datei und Dateien sichtbarer Nachrichten'
+);
+
+-- =============================================================================================================
+-- Grenzen: höchstens 1000 Favoriten, Rate Limits für Favoriten (60/min) und Pins (30/min)
+-- =============================================================================================================
+
+create function pg_temp.toggle_favorite(p_message uuid, p_times int) returns int language plpgsql as $$
+begin
+  for i in 1..p_times loop
+    perform public.chat_set_favorite(p_message, true);
+    perform public.chat_set_favorite(p_message, false);
+  end loop;
+  return p_times;
+end;
+$$;
+create function pg_temp.toggle_pin(p_message uuid, p_times int) returns int language plpgsql as $$
+begin
+  for i in 1..p_times loop
+    perform public.chat_set_pinned(p_message, false);
+    perform public.chat_set_pinned(p_message, true);
+  end loop;
+  return p_times;
+end;
+$$;
+
+-- cara hat 999 Favoriten (Nachrichten von anna in der Gruppe); der 1000. geht, der 1001. nicht.
+reset role;
+with filler as (
+  insert into public.chat_messages (conversation_id, sender_id, client_id, kind, body)
+  select (select (result->>'id')::uuid from t_r where name = 'group'), 'af000000-0000-4000-8000-000000000001',
+         gen_random_uuid(), 'text', 'Füller ' || n
+    from generate_series(1, 999) n
+  returning id
+)
+insert into public.chat_message_favorites (user_id, message_id)
+select 'af000000-0000-4000-8000-000000000003', f.id from filler f;
+set local role authenticated;
+select pg_temp.as_user(3);
+select lives_ok(format('select public.chat_set_favorite(%L, true)', pg_temp.id('p2')), '1000. Favorit erlaubt');
+select throws_ok(
+  format('select public.chat_set_favorite(%L, true)', pg_temp.id('p3')),
+  'P0001', 'favorite_limit_reached', '1001. Favorit: favorite_limit_reached'
+);
+select lives_ok(format('select public.chat_set_favorite(%L, true)', pg_temp.id('p2')), 'vorhandenen Favoriten erneut setzen: kein Fehler am Limit');
+select lives_ok(format('select public.chat_set_favorite(%L, false)', pg_temp.id('p2')), 'Entfernen geht am Limit');
+select lives_ok(format('select public.chat_set_favorite(%L, true)', pg_temp.id('p3')), 'danach wieder Platz');
+
+-- Rate Limit Favoriten: 60 Markierungen je Minute (Entfernen zählt nicht).
+reset role;
+delete from private.rate_limit_events e where e.user_id = 'af000000-0000-4000-8000-000000000002' and e.action = 'chat_favorite';
+set local role authenticated;
+select pg_temp.as_user(2);
+select is(pg_temp.toggle_favorite(pg_temp.id('p4'), 60), 60, '60 Markierungen je Minute erlaubt (Entfernen dazwischen zählt nicht)');
+select throws_ok(
+  format('select public.chat_set_favorite(%L, true)', pg_temp.id('p4')),
+  'P0001', 'rate_limited', '61. Markierung: rate_limited'
+);
+select lives_ok(format('select public.chat_set_favorite(%L, false)', pg_temp.id('p4')), 'Entfernen trotz Rate Limit');
+
+-- Rate Limit Pins: 30 Änderungen je Minute (Anpinnen und Lösen zählen).
+reset role;
+delete from private.rate_limit_events e where e.user_id = 'af000000-0000-4000-8000-000000000001' and e.action = 'chat_pin';
+set local role authenticated;
+select pg_temp.as_user(1);
+select is(pg_temp.toggle_pin(pg_temp.id('p6'), 15), 15, '30 Pin-Änderungen je Minute erlaubt');
+select throws_ok(
+  format('select public.chat_set_pinned(%L, false)', pg_temp.id('p6')),
+  'P0001', 'rate_limited', '31. Pin-Änderung: rate_limited'
+);
+select is(
+  jsonb_array_length(public.chat_pins(pg_temp.id('group'))), 5,
+  'abgelehnte Änderung lässt die Pins unverändert'
 );
 
 select * from finish();

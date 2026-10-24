@@ -14,14 +14,18 @@
 --   an chat:<conversation_id> (und conversation an user:<public_id>) – weiterhin ohne Inhalt.
 -- * Favoriten (chat_message_favorites): privat je Person, höchstens 1000; nie für andere sichtbar.
 -- * Anpinnen (chat_message_pins): höchstens 5 je Unterhaltung. Gruppenchat: nur der Gruppen-Owner; Privatchat:
---   beide Teilnehmer, solange sie schreiben dürfen. Echtzeit-Hinweis pins_changed an chat:<conversation_id>.
+--   beide Teilnehmer, solange sie schreiben dürfen. Echtzeit-Hinweis pins_changed an chat:<conversation_id>. Pins
+--   auf Nachrichten, die für mich verborgen sind (Absender von mir blockiert), zählen weiter zur Höchstzahl; wer
+--   anpinnen darf, bekommt sie als Platzhalter ohne Inhalt und Absender (is_deleted: true) und kann sie lösen.
 -- * Gelöschte Nachrichten verlieren Pins, Favoriten und ihre Dauer (Trigger).
 -- * Sprachnachrichten: kind 'voice', Datei (AAC in .m4a bzw. .aac) im Bucket chat-media unter <conversation_id>/,
 --   vom Absender hochgeladen (audio/mp4, audio/x-m4a oder audio/aac), Dauer 1 ms – 5 min (media_duration_ms).
---   Lesen/Schreiben/Löschen der Dateien wie bei Bildern; Beweissicherung gemeldeter Sprachnachrichten über
+--   Schreiben/Löschen der Dateien wie bei Bildern; Beweissicherung gemeldeter Sprachnachrichten über
 --   reports.evidence_path (media_path) wie bei Chat-Bildern. Bilder und GIFs müssen jetzt ausdrücklich einen
 --   image/*-Typ haben.
--- * Fehler-Tokens: not_found, not_allowed, read_only, invalid_message, invalid_input, limit_reached,
+-- * Storage-Lesen (alle Chat-Medien): die hochladende Person immer, alle anderen nur Dateien sichtbarer, nicht
+--   gelöschter Nachrichten (Policy pace_chat_media_select ersetzt, siehe Abschnitt „Storage: Lesen …“).
+-- * Fehler-Tokens: not_found, not_allowed, read_only, invalid_message, invalid_input, favorite_limit_reached,
 --   pin_limit_reached, rate_limited.
 -- =============================================================================================================
 
@@ -114,11 +118,18 @@ revoke all on table public.chat_message_pins from anon, authenticated;
 -- Storage: Sprachnachrichten im Bucket chat-media
 -- ---------------------------------------------------------------------------------------------------------------
 
--- Gleiche Größengrenze (10 MB), zusätzlich AAC-Audio (Aufnahme in der App als AAC in .m4a).
-update storage.buckets
-   set allowed_mime_types = array['image/jpeg', 'image/png', 'image/gif', 'image/heic', 'image/webp',
-                                  'audio/mp4', 'audio/x-m4a', 'audio/aac']
- where id = 'chat-media';
+-- Gleiche Größengrenze (10 MB), zusätzlich AAC-Audio (Aufnahme in der App als AAC in .m4a). Vereinigung statt
+-- Überschreiben: Bisherige (auch von Hand ergänzte) Typen bleiben in ihrer Reihenfolge, fehlende Audio-Typen kommen
+-- hinten dazu, nichts doppelt. allowed_mime_types = null heißt in Supabase „alle Typen erlaubt“ – dann bleibt es so.
+update storage.buckets b
+   set allowed_mime_types = b.allowed_mime_types || array(
+         select t
+           from unnest(array['audio/mp4', 'audio/x-m4a', 'audio/aac']) with ordinality as a(t, n)
+          where t <> all (b.allowed_mime_types)
+          order by n
+       )
+ where b.id = 'chat-media'
+   and b.allowed_mime_types is not null;
 
 -- Ordner (Unterhaltung) einer Chat-Datei: wie pace_access.object_folder, zusätzlich mit Audio-Endungen. Profil- und
 -- Gruppenbilder prüfen weiter nur Bildendungen.
@@ -136,19 +147,9 @@ $$;
 revoke all on function pace_access.chat_media_folder(text) from public, anon;
 grant execute on function pace_access.chat_media_folder(text) to authenticated;
 
--- Ersetzen die Fassungen aus 20261019100300_storage_realtime_access.sql (gleiche Regeln, Ordner mit Audio-Endungen).
--- Die Policies verweisen auf dieselben Funktionen und bleiben unverändert.
-create or replace function pace_access.can_read_chat_media(p_name text)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select auth.uid() is not null
-     and private.can_read_conversation(pace_access.chat_media_folder(p_name), auth.uid());
-$$;
-
+-- Ersetzt die Fassung aus 20261019100300_storage_realtime_access.sql (gleiche Regel, Ordner mit Audio-Endungen).
+-- Die Insert-Policy verweist auf dieselbe Funktion und bleibt unverändert. Lesen: siehe „Storage: Lesen nur
+-- sichtbarer Medien“ weiter unten.
 create or replace function pace_access.can_write_chat_media(p_name text)
 returns boolean
 language sql
@@ -357,29 +358,107 @@ begin
 end;
 $$;
 
--- Angepinnte, für p_me sichtbare Nachrichten einer Unterhaltung, zuletzt angepinnte zuerst.
+-- Angepinnte Nachrichten einer Unterhaltung, zuletzt angepinnte zuerst. Für p_me sichtbare vollständig. Verborgene
+-- (gelöscht oder von einer Person, die p_me blockiert hat) zählen weiter zur Höchstzahl der Unterhaltung; wer
+-- anpinnen darf, bekommt sie deshalb als Platzhalter, um sie lösen zu können: gleiche Felder wie eine Nachricht, aber
+-- ohne Inhalt und Absender (nur id, conversation_id, kind, created_at, is_pinned, is_deleted = true; pinned_by null).
+-- Alle anderen sehen verborgene Pins gar nicht.
 create function private.chat_pins_json(p_conversation_id uuid, p_me uuid)
 returns jsonb
 language sql
 stable
 set search_path = ''
 as $$
+  with pins as (
+    select pn.message_id, pn.pinned_by, pn.pinned_at, m as message, private.chat_message_visible(m, p_me) as visible
+      from public.chat_message_pins pn
+      join public.chat_messages m on m.id = pn.message_id
+     where pn.conversation_id = p_conversation_id
+  )
   select coalesce(
            jsonb_agg(
-             jsonb_build_object(
-               'message', private.chat_message_json(m, p_me),
-               'pinned_by', (select private.profile_json(pb) from public.profiles pb where pb.id = pn.pinned_by),
-               'pinned_at', pn.pinned_at
-             ) order by pn.pinned_at desc, pn.message_id
+             case when p.visible then
+               jsonb_build_object(
+                 'message', private.chat_message_json(p.message, p_me),
+                 'pinned_by', (select private.profile_json(pb) from public.profiles pb where pb.id = p.pinned_by),
+                 'pinned_at', p.pinned_at
+               )
+             else
+               jsonb_build_object(
+                 'message', jsonb_build_object(
+                   'id', (p.message).id,
+                   'conversation_id', (p.message).conversation_id,
+                   'client_id', null,
+                   'sender', null,
+                   'is_own', false,
+                   'kind', (p.message).kind,
+                   'body', null,
+                   'media_path', null,
+                   'media_duration_ms', null,
+                   'shared_profile', null,
+                   'reply_to', null,
+                   'edited_at', null,
+                   'is_favorite', false,
+                   'is_pinned', true,
+                   'created_at', (p.message).created_at,
+                   'is_deleted', true
+                 ),
+                 'pinned_by', null,
+                 'pinned_at', p.pinned_at
+               )
+             end
+             order by p.pinned_at desc, p.message_id
            ),
            '[]'::jsonb
          )
-    from public.chat_message_pins pn
-    join public.chat_messages m on m.id = pn.message_id
-   where pn.conversation_id = p_conversation_id
-     and private.chat_message_visible(m, p_me);
+    from pins p
+   where p.visible or private.can_pin_conversation(p_conversation_id, p_me);
 $$;
 revoke all on function private.chat_pins_json(uuid, uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Storage: Lesen nur sichtbarer Medien (Bilder, GIFs, Sprachnachrichten)
+-- ---------------------------------------------------------------------------------------------------------------
+
+-- Bisher durfte jede Person, die die Unterhaltung lesen kann, jede Datei im Ordner <conversation_id>/ lesen und per
+-- Storage-list auflisten – auch nie gesendete Uploads, Dateien gelöschter (z. B. gemeldeter) Nachrichten und Medien
+-- von Personen, die sie blockiert hat. Jetzt: Die hochladende Person liest ihre eigenen Dateien immer (Vorschau vor
+-- dem Senden, Insert … returning der Storage-API); alle anderen nur, wenn eine für sie sichtbare, nicht gelöschte
+-- Nachricht genau diesen media_path in derselben Unterhaltung trägt (private.chat_message_visible) und sie die
+-- Unterhaltung lesen dürfen. chat_delete_message setzt media_path auf null – danach liest nur noch die hochladende
+-- Person. Beweise gemeldeter Nachrichten sichtet die Moderation mit Projektrechten (Dashboard/service_role, ohne
+-- RLS). Ältere App-Versionen laden ohnehin nur Medien sichtbarer Nachrichten (bzw. eigene Uploads) – für sie ändert
+-- sich nichts. Signierte URLs (createSignedURL) prüft Storage über dieselbe Policy.
+
+-- Policy-Prüfung je Datei (auch beim Auflisten eines Ordners): Nachricht über den Pfad finden.
+create index chat_messages_media_path_idx on public.chat_messages (media_path) where media_path is not null;
+
+-- Ersetzt die Fassung aus 20261019100300_storage_realtime_access.sql (Rechte bleiben: nur authenticated).
+create or replace function pace_access.can_read_chat_media(p_name text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select auth.uid() is not null
+     and private.can_read_conversation(pace_access.chat_media_folder(p_name), auth.uid())
+     and exists (
+       select 1
+         from public.chat_messages m
+        where m.media_path = p_name
+          and m.conversation_id = pace_access.chat_media_folder(p_name)
+          and private.chat_message_visible(m, auth.uid())
+     );
+$$;
+
+drop policy if exists pace_chat_media_select on storage.objects;
+create policy pace_chat_media_select on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'chat-media'
+    and (owner_id = (select auth.uid())::text or pace_access.can_read_chat_media(name))
+  );
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- Trigger: gelöschte Nachrichten
@@ -656,7 +735,13 @@ begin
     return;
   end if;
 
-  select * into v_message from public.chat_messages m where m.id = p_message_id;
+  -- Die Nachricht bis zum Ende der Transaktion gegen paralleles Löschen sperren (for share): chat_delete_message
+  -- wartet dann, bis der Favorit steht, und sein Trigger entfernt ihn wieder. Läuft das Löschen schon, wartet diese
+  -- Abfrage und findet die Nachricht danach nicht mehr (deleted_at is null wird neu geprüft).
+  select * into v_message
+    from public.chat_messages m
+   where m.id = p_message_id and m.deleted_at is null
+     for share;
   if not found
      or not private.chat_message_visible(v_message, v_me)
      or not private.can_read_conversation(v_message.conversation_id, v_me) then
@@ -668,7 +753,7 @@ begin
 
   perform private.lock_users(array[v_me]);
   if (select count(*) from public.chat_message_favorites f where f.user_id = v_me) >= 1000 then
-    raise exception 'limit_reached';
+    raise exception 'favorite_limit_reached';
   end if;
   perform private.consume_rate_limit(v_me, 'chat_favorite', 60, interval '1 minute');
 
@@ -681,7 +766,7 @@ $$;
 revoke all on function public.chat_set_favorite(uuid, boolean) from public, anon;
 grant execute on function public.chat_set_favorite(uuid, boolean) to authenticated;
 comment on function public.chat_set_favorite(uuid, boolean) is
-  'Pace: Nachricht privat als Favorit markieren bzw. entfernen (idempotent). Nur sichtbare Nachrichten lesbarer Unterhaltungen; max. 1000 Favoriten, 60 je Minute.';
+  'Pace: Nachricht privat als Favorit markieren bzw. entfernen (idempotent). Nur sichtbare Nachrichten lesbarer Unterhaltungen; max. 1000 Favoriten (favorite_limit_reached), 60 je Minute.';
 
 create function public.chat_favorites(p_conversation_id uuid)
 returns jsonb
@@ -736,12 +821,24 @@ begin
     raise exception 'invalid_input';
   end if;
 
-  select * into v_message from public.chat_messages m where m.id = p_message_id;
+  if p_pinned then
+    -- Anpinnen nur nicht gelöschte Nachrichten, bis zum Ende der Transaktion gegen paralleles Löschen gesperrt
+    -- (for share): chat_delete_message wartet dann, bis der Pin steht, und sein Trigger entfernt ihn wieder. Läuft
+    -- das Löschen schon, wartet diese Abfrage und findet die Nachricht danach nicht mehr (deleted_at is null wird
+    -- neu geprüft) – so bleibt kein Pin an einer gelöschten Nachricht hängen.
+    select * into v_message
+      from public.chat_messages m
+     where m.id = p_message_id and m.deleted_at is null
+       for share;
+  else
+    -- Lösen auch, wenn die Nachricht für mich verborgen ist (z. B. blockierter Absender).
+    select * into v_message from public.chat_messages m where m.id = p_message_id;
+  end if;
   if not found then
     raise exception 'not_found';
   end if;
   v_conversation := private.require_conversation(v_message.conversation_id, v_me);
-  -- Anpinnen nur sichtbare Nachrichten; Lösen auch, wenn sie für mich verborgen ist (z. B. blockierter Absender).
+  -- Anpinnen nur Nachrichten, die ich sehe (geprüft nach der Sperre).
   if p_pinned and not private.chat_message_visible(v_message, v_me) then
     raise exception 'not_found';
   end if;
@@ -752,8 +849,10 @@ begin
     raise exception 'read_only';
   end if;
 
-  -- Pins einer Unterhaltung nacheinander ändern (Höchstzahl). „no key update“ blockiert das Senden nicht.
-  perform 1 from public.conversations c where c.id = v_conversation.id for no key update;
+  -- Pins einer Unterhaltung nacheinander ändern (Höchstzahl prüfen, dann einfügen). Advisory-Lock je Unterhaltung
+  -- statt einer Zeilensperre auf conversations: Eine Sperre „for no key update“ kollidierte mit dem
+  -- UPDATE conversations (last_message_at) im Insert-Trigger von chat_send – Senden müsste warten.
+  perform pg_advisory_xact_lock(hashtextextended('pace.chat_pins:' || v_conversation.id::text, 0));
 
   if p_pinned then
     if not exists (
@@ -804,7 +903,7 @@ $$;
 revoke all on function public.chat_pins(uuid) from public, anon;
 grant execute on function public.chat_pins(uuid) to authenticated;
 comment on function public.chat_pins(uuid) is
-  'Pace: angepinnte Nachrichten einer lesbaren Unterhaltung ({message, pinned_by, pinned_at}), zuletzt angepinnte zuerst.';
+  'Pace: angepinnte Nachrichten einer lesbaren Unterhaltung ({message, pinned_by, pinned_at}), zuletzt angepinnte zuerst. Verborgene Nachrichten (gelöscht bzw. Absender blockiert) nur für Personen, die anpinnen dürfen, als Platzhalter ohne Inhalt und Absender (message.is_deleted = true).';
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- Datenschutz: Auskunft mit Antworten, Bearbeitungen, Sprachnachrichten, Favoriten und Pins

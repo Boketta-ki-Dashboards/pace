@@ -12,7 +12,8 @@
 --   Profilansicht, Gruppen-Einladungen, Chat (Absender, Gegenüber, geteilte Profile) den eigenen Spitznamen. Die
 --   Rankings (Freunde, Gruppe, Region) und die Einladungsliste bauen ihre Einträge selbst und ergänzen nickname
 --   ausdrücklich. Fremde Spitznamen gibt der Server nie aus: Gelesen wird ausschließlich owner_id = auth.uid().
--- * account_export enthält die eigenen Spitznamen (friend_nicknames).
+-- * account_export enthält die eigenen Spitznamen (friend_nicknames). social_report legt den Schnappschuss einer
+--   Meldung ohne nickname ab (der Spitzname der meldenden Person ist privat).
 -- * Fehler-Tokens: not_found (keine aktuelle Freundschaft), invalid_nickname, rate_limited.
 -- =============================================================================================================
 
@@ -409,6 +410,93 @@ begin
      where i.invitee_id = v_me
        and i.status = 'pending'
   );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Meldungen: Schnappschuss ohne den privaten Spitznamen der meldenden Person
+-- ---------------------------------------------------------------------------------------------------------------
+
+-- Ersetzt die Fassung aus 20261019100400_moderation_account.sql unverändert bis auf - 'nickname': profile_json
+-- liefert seit dieser Migration den Spitznamen des Aufrufers (hier der meldenden Person). Der ist privat und gehört
+-- nicht in reports.target_snapshot, den das Moderationsteam liest.
+create or replace function public.social_report(p_target_type text, p_target_id uuid, p_reason text, p_details text default null)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_me uuid := private.require_profile();
+  v_details text := nullif(btrim(coalesce(p_details, ''), E' \t\n\r'), '');
+  v_snapshot jsonb;
+  v_target_user uuid;
+  v_message public.chat_messages%rowtype;
+begin
+  if p_target_id is null then
+    raise exception 'not_found';
+  end if;
+
+  case p_target_type
+    when 'user' then
+      -- Jede bekannte Person außer mir selbst (auch nach einer Blockierung, z. B. wegen Belästigung davor).
+      select p.id, private.profile_json(p) - 'nickname' into v_target_user, v_snapshot
+        from public.profiles p
+       where p.public_id = p_target_id;
+      if v_target_user is null or v_target_user = v_me then
+        raise exception 'not_found';
+      end if;
+    when 'message' then
+      -- Nur Nachrichten anderer in Unterhaltungen, die ich lesen darf.
+      select * into v_message from public.chat_messages m where m.id = p_target_id and m.deleted_at is null;
+      if not found
+         or v_message.sender_id is not distinct from v_me
+         or not private.can_read_conversation(v_message.conversation_id, v_me) then
+        raise exception 'not_found';
+      end if;
+      v_snapshot := jsonb_build_object(
+        'conversation_id', v_message.conversation_id,
+        'kind', v_message.kind,
+        'body', v_message.body,
+        'media_path', v_message.media_path,
+        'sender', (select private.profile_json(s) - 'nickname' from public.profiles s where s.id = v_message.sender_id),
+        'created_at', v_message.created_at
+      );
+    when 'group' then
+      -- Gruppen, in denen ich Mitglied bin oder in die ich eingeladen wurde.
+      if private.group_role(p_target_id, v_me) is null
+         and not exists (
+           select 1 from public.group_invitations i
+            where i.group_id = p_target_id and i.invitee_id = v_me and i.status = 'pending'
+         ) then
+        raise exception 'not_found';
+      end if;
+      select jsonb_build_object('name', g.name, 'description', g.description, 'image_path', g.image_path)
+        into v_snapshot
+        from public.groups g
+       where g.id = p_target_id;
+    else
+      raise exception 'invalid_input';
+  end case;
+
+  if p_reason is null
+     or p_reason not in ('spam', 'harassment', 'inappropriate', 'impersonation', 'other')
+     or (v_details is not null and char_length(v_details) > 1000) then
+    raise exception 'invalid_input';
+  end if;
+
+  -- Erneutes Melden desselben Ziels, solange die Meldung offen ist, ist unschädlich und zählt nicht.
+  if exists (
+    select 1 from public.reports r
+     where r.reporter_id = v_me and r.target_type = p_target_type and r.target_id = p_target_id and r.status = 'open'
+  ) then
+    return;
+  end if;
+  perform private.consume_rate_limit(v_me, 'report', 10, interval '24 hours');
+
+  insert into public.reports (reporter_id, target_type, target_id, reason, details, target_snapshot)
+  values (v_me, p_target_type, p_target_id, p_reason, v_details, coalesce(v_snapshot, '{}'::jsonb))
+  on conflict (reporter_id, target_type, target_id) where status = 'open' do nothing;
 end;
 $$;
 

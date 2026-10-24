@@ -292,6 +292,31 @@ struct MessageActionsNicknameCalendarTests {
             == .object(["p_conversation_id": .string(Self.conversationID.uuidString)]))
     }
 
+    /// Verborgene Pins (gelöscht bzw. Absender blockiert) bekommt nur, wer anpinnen darf – als Platzhalter zum Lösen.
+    @Test func hiddenPinsDecodeAsPlaceholders() async throws {
+        let harness = BackendTestHarness()
+        harness.stub("POST", "/rest/v1/rpc/chat_pins", .json(#"""
+        [{"message":\#(Self.voiceMessageJSON),"pinned_by":null,"pinned_at":"2026-10-23T09:11:00Z"},
+         {"message":{"id":"eeeeeeee-0000-4000-8000-000000000009","conversation_id":"dddddddd-0000-4000-8000-000000000001",
+                     "client_id":null,"sender":null,"is_own":false,"kind":"image","body":null,"media_path":null,
+                     "media_duration_ms":null,"shared_profile":null,"reply_to":null,"edited_at":null,"is_favorite":false,
+                     "is_pinned":true,"created_at":"2026-10-23T08:00:00Z","is_deleted":true},
+          "pinned_by":null,"pinned_at":"2026-10-23T09:10:00Z"}]
+        """#))
+
+        let pins = try await harness.backend.chat.pins(conversationID: Self.conversationID)
+
+        #expect(pins.map(\.isHidden) == [false, true])
+        let hidden = try #require(pins.last)
+        #expect(hidden.id == Self.replyID)
+        #expect(hidden.message.conversationID == Self.conversationID)
+        #expect(hidden.message.kind == .image)
+        #expect(hidden.message.sender == nil)
+        #expect(hidden.message.text == nil)
+        #expect(hidden.message.media == nil)
+        #expect(hidden.pinnedBy == nil)
+    }
+
     @Test func invalidEditTextIsRejectedWithoutARequest() async {
         let harness = BackendTestHarness()
 
@@ -320,6 +345,21 @@ struct MessageActionsNicknameCalendarTests {
 
         await #expect(throws: testCase.error) {
             try await harness.backend.chat.setPinned(Self.messageID, isPinned: true)
+        }
+    }
+
+    @Test(arguments: [
+        TokenCase(function: "chat_set_favorite", token: "favorite_limit_reached", error: .favoriteLimitReached),
+        TokenCase(function: "chat_set_favorite", token: "limit_reached", error: .limitReached),
+        TokenCase(function: "chat_set_favorite", token: "rate_limited", error: .rateLimited),
+        TokenCase(function: "chat_set_favorite", token: "not_found", error: .notFound),
+    ])
+    func favoriteErrorTokensAreMapped(_ testCase: TokenCase) async {
+        let harness = BackendTestHarness()
+        harness.stub("POST", "/rest/v1/rpc/\(testCase.function)", .postgrestError(status: 400, code: "P0001", message: testCase.token))
+
+        await #expect(throws: testCase.error) {
+            try await harness.backend.chat.setFavorite(Self.messageID, isFavorite: true)
         }
     }
 
@@ -397,8 +437,10 @@ struct MessageActionsNicknameCalendarTests {
               "nickname":null,"rank":2,"competition_steps":0,"reached":false,"is_current_user":true},
              {"public_id":"bbbbbbbb-0000-4000-8000-000000000002","username":"mia","display_name":"Mia","avatar_path":null,
               "nickname":"Mimi","rank":1,"competition_steps":9000,"reached":true,"is_current_user":false}]},
-          {"day":"2026-10-22","daily_goal":8000,"member_count":3,"required_count":1,"reached_count":0,"secured":false,
-           "has_data":false,"is_today":false,"ranking":[]}
+          {"day":"2026-10-22","daily_goal":8000,"member_count":1,"required_count":1,"reached_count":0,"secured":false,
+           "has_data":false,"is_today":false,"ranking":[
+             {"public_id":null,"username":null,"display_name":null,"avatar_path":null,"nickname":null,
+              "rank":1,"competition_steps":0,"reached":false,"is_current_user":false}]}
          ]}
         """#))
         let from = LocalDate(year: 2026, month: 9, day: 28)
@@ -414,9 +456,15 @@ struct MessageActionsNicknameCalendarTests {
         #expect(calendar.days.map(\.day) == [LocalDate(year: 2026, month: 10, day: 22), LocalDate(year: 2026, month: 10, day: 23)])
         let today = try #require(calendar.day(LocalDate(year: 2026, month: 10, day: 23)))
         #expect(today.ranking.map(\.rank) == [1, 2])
-        #expect(today.best?.profile.shownName == "Mimi")
-        #expect(today.currentUserEntry?.profile.username == "leon")
+        #expect(today.best?.profile?.shownName == "Mimi")
+        #expect(today.currentUserEntry?.profile?.username == "leon")
         #expect(today.secured && today.isToday && today.hasData)
+        // Ehemaliges Mitglied, das mich blockiert hat: Zeile ohne Profil.
+        let hidden = try #require(calendar.day(LocalDate(year: 2026, month: 10, day: 22))?.ranking.first)
+        #expect(hidden.profile == nil)
+        #expect(hidden.isHidden)
+        #expect(hidden.id == 1)
+        #expect(today.ranking.map(\.isHidden) == [false, false])
         #expect(calendar.state(of: LocalDate(year: 2026, month: 10, day: 23)) == .secured)
         #expect(calendar.state(of: LocalDate(year: 2026, month: 10, day: 22)) == .noData)
         #expect(calendar.state(of: LocalDate(year: 2026, month: 10, day: 12)) == .beforeGroup)

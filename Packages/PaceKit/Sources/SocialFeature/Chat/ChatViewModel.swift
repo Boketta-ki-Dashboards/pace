@@ -893,6 +893,20 @@ public final class ChatViewModel {
         }
     }
 
+    /// Löst einen Pin direkt – auch einen verborgenen (Nachricht gelöscht oder von jemandem, den du blockiert hast), der
+    /// nur als Platzhalter ankommt, aber weiter zur Höchstzahl zählt.
+    public func unpin(_ pin: ChatPin) async {
+        guard canPin, let repository, !busyMessageIDs.contains(pin.id) else { return }
+        busyMessageIDs.insert(pin.id)
+        defer { busyMessageIDs.remove(pin.id) }
+        do {
+            applyPins(try await repository.setPinned(pin.id, isPinned: false))
+            notice = ChatNotice(text: ChatTexts.unpinned, isError: false)
+        } catch {
+            notice = ChatNotice(text: ChatTexts.message(for: error), isError: true)
+        }
+    }
+
     /// Angepinnte Nachrichten vom Server (beim Laden und nach einem Echtzeit-Hinweis). Ohne Unterstützung auf dem
     /// Server bleibt die Liste leer.
     func loadPins() async {

@@ -131,15 +131,21 @@ Wiedergabe) baut der Hauptstrang darauf auf. Bis dahin zeigt der Verlauf Sprachn
 - **Bearbeiten:** `editMessage(_:text:)` nur für eigene Textnachrichten (`ChatMessage.canEdit`); Antwort mit
   `editedAt` („Bearbeitet“, `isEdited`). Andere Teilnehmer bekommen `ChatConversationEvent.messageUpdated`.
 - **Favoriten:** `setFavorite(_:isFavorite:)`, `favorites(conversationID:)` (Übersicht in den Chat-Einstellungen);
-  `ChatMessage.isFavorite` gilt nur für mich. `withFavorite(_:)` für sofortiges Umschalten.
+  `ChatMessage.isFavorite` gilt nur für mich. `withFavorite(_:)` für sofortiges Umschalten. Höchstens
+  `ChatRules.maximumFavorites` (1000, sonst `favoriteLimitReached` mit eigenem Text); Entfernen geht immer.
 - **Anpinnen:** `ConversationSummary.canPin` (Gruppe: Owner; Privatchat: beide mit Schreibrecht),
   `setPinned(_:isPinned:)` → alle Pins, `pins(conversationID:)` → `[ChatPin]` (zuletzt angepinnte zuerst),
   `ChatMessage.isPinned`; höchstens `ChatRules.maximumPinnedMessages` (5, sonst `pinLimitReached`), Nicht-Owner
-  `notAllowed`. Änderungen kommen als `ChatConversationEvent.pinsChanged`.
+  `notAllowed`. Änderungen kommen als `ChatConversationEvent.pinsChanged`. Pins auf Nachrichten, die für mich
+  verborgen sind (Absender blockiert), zählen weiter zur Höchstzahl: Wer anpinnen darf, bekommt sie als
+  `ChatPin.isHidden` (Platzhalter ohne Text, Medien, Absender und `pinnedBy`) und löst sie mit
+  `setPinned(pin.id, isPinned: false)`; Anzeige z. B. „Nachricht nicht verfügbar“, ohne Sprung (im Verlauf fehlt sie).
+  Wer nicht anpinnen darf, bekommt verborgene Pins gar nicht.
 - **Echtzeit:** `conversationActivity(in:)` liefert `.message`, `.messageUpdated`, `.pinsChanged` über einen Kanal
   (endet sofort ohne Realtime → Polling wie bisher). `messageEvents(in:)` bleibt für neue/gelöschte Nachrichten.
 - **Sprachnachrichten:** Aufnahme als AAC in `.m4a`, Upload `media.upload(data, contentType:
-  MediaRules.voiceContentType, to: .chat(conversationID:))` (privat im Bucket `chat-media`, nur Teilnehmer),
+  MediaRules.voiceContentType, to: .chat(conversationID:))` (privat im Bucket `chat-media`; lesen darf die
+  hochladende Person sofort, alle anderen erst über die gesendete, sichtbare Nachricht – gilt auch für Bilder/GIFs),
   danach `ChatMessageDraft.voice(mediaPath:duration:replyTo:)`. Dauer 1 ms bis `ChatRules.maximumVoiceDuration`
   (5 min, `ChatRules.validVoiceMilliseconds`), Datei ≤ 10 MB. Am besten erst nach der Vorschau beim Senden
   hochladen; wurde schon hochgeladen und dann verworfen, die Datei mit `media.delete(_:)` entfernen (kein

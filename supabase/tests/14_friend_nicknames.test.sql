@@ -1,6 +1,6 @@
 -- Pace: Spitznamen für Freunde – Rechte, Validierung, Ausgabe an allen Stellen, Privatsphäre, Aufräumen.
 begin;
-select plan(59);
+select plan(64);
 
 -- =============================================================================================================
 -- Struktur
@@ -222,6 +222,32 @@ select is(
   (select array_agg(e->>'nickname' order by e->>'nickname') from t_out, jsonb_array_elements(result->'friend_nicknames') e where name = 'export'),
   array['Die Nora', 'Maxi', 'Pia 🏃', 'Rosi'], 'Export: eigene Spitznamen'
 );
+
+-- Meldungen: Der Schnappschuss (nur für das Moderationsteam) enthält nicht den privaten Spitznamen der meldenden Person.
+select lives_ok(format('select public.social_report(%L, %L, %L)', 'user', pg_temp.pid(2), 'spam'), 'lena meldet max');
+select lives_ok(
+  format('select public.social_report(%L, %L, %L)', 'message',
+         (select e->>'id' from jsonb_array_elements(public.chat_messages('de000000-0000-4000-8000-000000000001')) e where e->>'body' = 'Hallo Lena'),
+         'harassment'),
+  'lena meldet eine Nachricht von max'
+);
+reset role;
+select is(
+  (select r.target_snapshot from public.reports r where r.reporter_id = pg_temp.uid(1) and r.target_type = 'user'),
+  jsonb_build_object('public_id', pg_temp.pid(2), 'username', 'max_m', 'display_name', 'Max', 'avatar_path', null),
+  'Meldung einer Person: Schnappschuss ohne nickname'
+);
+select is(
+  (select r.target_snapshot->'sender' from public.reports r where r.reporter_id = pg_temp.uid(1) and r.target_type = 'message'),
+  jsonb_build_object('public_id', pg_temp.pid(2), 'username', 'max_m', 'display_name', 'Max', 'avatar_path', null),
+  'Meldung einer Nachricht: Absender ohne nickname'
+);
+select ok(
+  not exists (select 1 from public.reports r where r.reporter_id = pg_temp.uid(1) and r.target_snapshot::text like '%Maxi%'),
+  'kein Spitzname in Meldungen'
+);
+set local role authenticated;
+select pg_temp.as_user(1);
 
 -- Einladung von max an rosa: rosa sieht ihren eigenen Spitznamen für max.
 select pg_temp.as_user(6);

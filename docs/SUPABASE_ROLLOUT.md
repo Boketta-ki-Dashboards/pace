@@ -142,7 +142,7 @@ Danach:
 # Auftrag 3: drei neue Migrationen (Spitznamen, Nachrichtenaktionen, Gruppenkalender)
 
 > **Status: NICHT ausgeführt – Freigabe durch den Nutzer nötig.** Die drei Migrationen sind nur lokal (Docker:
-> pgTAP 908 Prüfungen, `db lint`, `db advisors`, Realtime-Skript, Swift-Unit- und Integrationstests) gelaufen.
+> pgTAP 965 Prüfungen, `db lint`, `db advisors`, Realtime-Skript, Swift-Unit- und Integrationstests) gelaufen.
 > Ziel ist ausschließlich das Pace-Projekt `bnkrenfvfiaapsbkeejq`. Die sechs Migrationen aus dem ersten Teil
 > (`20261018100000` … `20261019100400`) sind laut Nutzer bereits produktiv eingespielt und bleiben unverändert.
 
@@ -151,7 +151,7 @@ Danach:
 | # | Migration | Inhalt | Voraussetzung |
 |---|---|---|---|
 | 7 | `20261023100000_friend_nicknames.sql` | Tabelle `friend_nicknames`, `social_set_friend_nickname`, `nickname` in Profil-/Ranking-/Einladungsausgaben, `account_export` mit Spitznamen | 1–6 produktiv |
-| 8 | `20261023100100_chat_message_actions.sql` | Spalten `reply_to_id`, `edited_at`, `media_duration_ms` und Art `voice` in `chat_messages`; Tabellen `chat_message_favorites`, `chat_message_pins`; `chat_send` mit zwei neuen Parametern (Standard `null`), `chat_edit_message`, `chat_set_favorite`, `chat_favorites`, `chat_set_pinned`, `chat_pins`; Bucket `chat-media` mit `audio/mp4`, `audio/x-m4a`, `audio/aac` | 7 |
+| 8 | `20261023100100_chat_message_actions.sql` | Spalten `reply_to_id`, `edited_at`, `media_duration_ms` und Art `voice` in `chat_messages`; Tabellen `chat_message_favorites`, `chat_message_pins`; `chat_send` mit zwei neuen Parametern (Standard `null`), `chat_edit_message`, `chat_set_favorite`, `chat_favorites`, `chat_set_pinned`, `chat_pins`; Bucket `chat-media` mit `audio/mp4`, `audio/x-m4a`, `audio/aac` (Vereinigung); Storage-Policy `pace_chat_media_select` ersetzt (Lesen nur Uploader bzw. sichtbare Nachricht), Index `chat_messages_media_path_idx` | 7 |
 | 9 | `20261023100200_group_calendar.sql` | `social_group_calendar` | 7 |
 
 Alle drei sind **additiv**: neue Tabellen, nullable Spalten ohne Standardwert (sofort, ohne Umschreiben der Tabelle),
@@ -159,7 +159,11 @@ neue Funktionen, ersetzte Funktionen mit gleicher Signatur. Die Prüfregeln von 
 valid` neu angelegt und anschließend validiert (kurze Sperre, bestehende Zeilen erfüllen sie: Obermengen bzw. nur
 neue Spalten). Einzige Signaturänderung: `chat_send` (alte Fassung entfernt, neue mit zwei zusätzlichen
 Parametern **mit Standardwert**) – ältere App-Versionen rufen sie mit den bisherigen Parametern auf und laufen
-unverändert. Keine Daten werden gelöscht. Neue Antwortfelder ignorieren ältere Versionen.
+unverändert. Keine Daten werden gelöscht. Neue Antwortfelder ignorieren ältere Versionen. Die Storage-Policy
+`pace_chat_media_select` wird enger (Lesen nur für die hochladende Person bzw. über eine sichtbare Nachricht); ältere
+Versionen laden ohnehin nur solche Medien. Der neue Index `chat_messages_media_path_idx` wird ohne `concurrently`
+angelegt (Migration in einer Transaktion) und sperrt Schreibzugriffe auf `chat_messages` kurz – bei der aktuellen
+Datenmenge unkritisch.
 
 ## B. Vorbereitung
 
@@ -214,13 +218,19 @@ select proname, has_function_privilege('anon', oid, 'execute') as anon,
 select file_size_limit, allowed_mime_types from storage.buckets where id = 'chat-media';
 -- erwartet: 10485760, … image/webp, audio/mp4, audio/x-m4a, audio/aac
 
+-- Lese-Policy für Chat-Medien: hochladende Person oder sichtbare Nachricht
+select polname, pg_get_expr(polqual, polrelid) from pg_policy
+ where polrelid = 'storage.objects'::regclass and polname = 'pace_chat_media_select';
+-- erwartet: … owner_id = (SELECT auth.uid())::text OR pace_access.can_read_chat_media(name) …
+
 -- Bestehende Nachrichten unverändert gültig
 select count(*) from public.chat_messages where kind not in ('text', 'image', 'gif', 'profile');   -- direkt danach 0
 ```
 
 Danach *Database → Advisors* (keine neuen Warnungen) und mit zwei Konten in der App: Spitzname setzen (nur bei
 mir sichtbar), Antworten, eigene Nachricht bearbeiten (erscheint beim anderen als „Bearbeitet“), Favorit, Pin
-(Gruppe nur Owner), Sprachnachricht senden und beim anderen abspielen, Gruppenkalender öffnen.
+(Gruppe nur Owner), Sprachnachricht senden und beim anderen abspielen, Bild senden und beim anderen laden,
+Gruppenkalender öffnen.
 
 ## F. Rücknahme
 

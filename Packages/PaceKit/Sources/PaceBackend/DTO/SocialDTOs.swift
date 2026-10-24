@@ -510,15 +510,17 @@ struct GroupCalendarDayRow: Decodable {
     }
 }
 
-/// Zeile der Tagesrangliste: Profilfelder (wie `SocialProfileRow`) plus Platz, Schritte, erreicht.
+/// Zeile der Tagesrangliste: Profilfelder (wie `SocialProfileRow`) plus Platz, Schritte, erreicht. Profilfelder `null`:
+/// ehemaliges Mitglied, das mich blockiert hat (anonymisiert).
 struct GroupCalendarEntryRow: Decodable {
-    let profile: SocialProfileRow
+    let profile: SocialProfileRow?
     let rank: Int
     let competitionSteps: Int
     let reached: Bool
     let isCurrentUser: Bool
 
     enum CodingKeys: String, CodingKey {
+        case publicID = "public_id"
         case rank
         case competitionSteps = "competition_steps"
         case reached
@@ -526,8 +528,8 @@ struct GroupCalendarEntryRow: Decodable {
     }
 
     init(from decoder: Decoder) throws {
-        profile = try SocialProfileRow(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        profile = try container.decodeIfPresent(UUID.self, forKey: .publicID) == nil ? nil : SocialProfileRow(from: decoder)
         rank = try container.decode(Int.self, forKey: .rank)
         competitionSteps = try container.decode(Int.self, forKey: .competitionSteps)
         reached = try container.decode(Bool.self, forKey: .reached)
@@ -537,7 +539,7 @@ struct GroupCalendarEntryRow: Decodable {
     var entry: GroupCalendarEntry {
         GroupCalendarEntry(
             rank: rank,
-            profile: profile.profile,
+            profile: profile?.profile,
             competitionSteps: competitionSteps,
             reached: reached,
             isCurrentUser: isCurrentUser

@@ -142,7 +142,7 @@ struct GroupCalendarViewModelTests {
 
         viewModel.select(Fixtures.day(2026, 10, 14))
         let selected = try #require(viewModel.selected)
-        #expect(selected.ranking.map(\.profile.shownName) == ["Leo", "Mimi", "Niklas"])
+        #expect(selected.ranking.map(\.shownName) == ["Leo", "Mimi", "Niklas"])
         #expect(selected.currentUserEntry?.competitionSteps == 6_230)
 
         let texts = PaceLocalization.$languageOverride.withValue(.german) {

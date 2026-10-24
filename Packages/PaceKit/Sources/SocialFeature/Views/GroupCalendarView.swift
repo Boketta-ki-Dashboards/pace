@@ -209,8 +209,8 @@ struct GroupCalendarContent: View {
 
     private func rankingRow(_ entry: GroupCalendarEntry, isBest: Bool) -> some View {
         Button {
-            if !entry.isCurrentUser {
-                onOpenProfile(entry.profile)
+            if !entry.isCurrentUser, let profile = entry.profile {
+                onOpenProfile(profile)
             }
         } label: {
             HStack(spacing: PaceSpacing.s) {
@@ -219,8 +219,14 @@ struct GroupCalendarContent: View {
                     .monospacedDigit()
                     .foregroundStyle(PaceColor.textSecondary)
                     .frame(minWidth: 28, alignment: .trailing)
-                PaceAvatar(name: entry.profile.shownName, seed: entry.profile.publicID.uuidString, size: 32, image: entry.profile.avatar)
-                Text(entry.isCurrentUser ? GroupCalendarTexts.you(entry.profile.shownName) : entry.profile.shownName)
+                PaceAvatar(
+                    name: entry.shownName,
+                    seed: entry.profile?.publicID.uuidString ?? "hidden-\(entry.rank)",
+                    size: 32,
+                    image: entry.profile?.avatar
+                )
+                Text(entry.isCurrentUser ? GroupCalendarTexts.you(entry.shownName) : entry.shownName)
+                    .italic(entry.isHidden)
                     .font(entry.isCurrentUser ? PaceFont.headline : PaceFont.body)
                     .foregroundStyle(PaceColor.textPrimary)
                     .lineLimit(1)
@@ -250,7 +256,7 @@ struct GroupCalendarContent: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.pacePressable)
-        .disabled(entry.isCurrentUser)
+        .disabled(entry.isCurrentUser || entry.isHidden)
         .accessibilityElement(children: .combine)
     }
 }

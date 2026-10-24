@@ -398,3 +398,29 @@ struct ChatMessageActionsTests {
         #expect(media.state.withLock { $0.deleted } == [MediaReference(bucket: .chatMedia, path: path)])
     }
 }
+
+/// Verborgene Pins (Nachricht gelöscht oder Absender blockiert) lassen sich lösen, obwohl man sie nicht im Verlauf sieht.
+@MainActor
+struct ChatHiddenPinTests {
+    @Test func hiddenPinCanBeUnpinned() async throws {
+        let base = Fixtures.date(2026, 10, 16, 18)
+        let conversation = ChatFixtures.group(canPin: true)
+        let placeholder = ChatFixtures.message(in: conversation.id, from: nil, at: base.addingTimeInterval(-600))
+        let repository = ChatRepositoryStub { state in
+            state.conversations = [conversation]
+            state.messages[conversation.id] = [placeholder]
+            state.pins[conversation.id] = [ChatPin(message: placeholder, pinnedBy: nil, pinnedAt: base, isHidden: true)]
+        }
+        let list = ChatListViewModel(repository: repository, media: nil, calendar: Fixtures.activityCalendar, now: { base })
+        await list.load()
+        let chat = list.chat(for: ChatTarget(conversation))
+        await chat.load()
+        let pin = try #require(chat.shownPin)
+        #expect(pin.isHidden)
+
+        await chat.unpin(pin)
+
+        #expect(chat.pins.isEmpty)
+        #expect(repository.state.withLock { $0.pins[conversation.id] }?.isEmpty == true)
+    }
+}

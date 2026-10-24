@@ -333,7 +333,7 @@ mit dem Access Token. Dateinamen sind zufällig (`<Ordner>/<UUID>.<Endung>`), Ü
 |---|---|---|---|---|
 | `avatars` | 5 MB | Fremde nur das **aktuelle** Profilbild (`profiles.avatar_path`), nicht wenn die Besitzerin sie blockiert hat; die Besitzerin ihren ganzen Ordner | nur Ordner der eigenen `public_id` | nur eigener Ordner, außer Dateien unter offener Meldung |
 | `group-images` | 5 MB | Mitglieder und Personen mit offener Einladung | owner der Gruppe (Ordner = `group_id`) | owner oder wer die Datei hochgeladen hat |
-| `chat-media` | 10 MB | wer die Unterhaltung lesen darf | wer in ihr senden darf (Ordner = `conversation_id`) | wer die Datei hochgeladen hat, außer Dateien unter offener Meldung |
+| `chat-media` | 10 MB | wer die Unterhaltung lesen darf (ab 20261023100100: die hochladende Person immer, alle anderen nur Dateien sichtbarer, nicht gelöschter Nachrichten – siehe unten) | wer in ihr senden darf (Ordner = `conversation_id`) | wer die Datei hochgeladen hat, außer Dateien unter offener Meldung |
 
 Erlaubte Formate (`allowed_mime_types`, wie `MediaRules`): `image/jpeg`, `image/png`, `image/gif`, `image/heic`,
 `image/webp`. Die Policies rufen `security definer`-Funktionen im Schema `pace_access` auf (nicht über die Data API
@@ -420,7 +420,7 @@ sechs Parameter) funktionieren unverändert. Neue Felder in den Antworten ignori
 
 | Migration | Inhalt |
 |---|---|
-| `20261023100000_friend_nicknames.sql` | `friend_nicknames`, `social_set_friend_nickname`, `nickname` in `profile_json`, Rankings (Freunde, Gruppe, Region) und Einladungen; `account_export` mit eigenen Spitznamen |
+| `20261023100000_friend_nicknames.sql` | `friend_nicknames`, `social_set_friend_nickname`, `nickname` in `profile_json`, Rankings (Freunde, Gruppe, Region) und Einladungen; `account_export` mit eigenen Spitznamen; `social_report` ohne Spitznamen im Schnappschuss |
 | `20261023100100_chat_message_actions.sql` | `chat_messages.reply_to_id`/`edited_at`/`media_duration_ms`, Art `voice`; `chat_send` (Antwort, Sprachnachricht), `chat_edit_message`, `chat_set_favorite`/`chat_favorites`, `chat_set_pinned`/`chat_pins`; `chat_message_favorites`, `chat_message_pins`; Bucket `chat-media` mit AAC-Audio; Echtzeit `message_updated`, `pins_changed` |
 | `20261023100200_group_calendar.sql` | `social_group_calendar` |
 
@@ -448,8 +448,9 @@ ergänzen `nickname` ausdrücklich (`social_friend_ranking`, `social_group_ranki
 `leaderboard_neighborhood`); `social_group_invitations` liefert `inviter_nickname`, `chat_conversations`
 `last_message.sender_nickname`. `title` bzw. `display_name`/`sender_name` bleiben der echte Anzeigename (ältere
 App-Versionen); die App zeigt `shownName`/`shownTitle`/`shownSenderName`. Fremde Spitznamen gibt der Server nie aus.
-Hinweis: Der Schnappschuss einer Meldung (`reports.target_snapshot`, nur für das Moderationsteam) enthält über
-`profile_json` ggf. den eigenen Spitznamen der meldenden Person.
+Meldungen: `social_report` (in dieser Migration ersetzt, sonst unverändert) entfernt `nickname` aus dem
+Schnappschuss (`reports.target_snapshot`, nur für das Moderationsteam) – der private Spitzname der meldenden Person
+gelangt nicht in die Moderation.
 
 ### RPCs
 
@@ -458,11 +459,11 @@ Hinweis: Der Schnappschuss einer Meldung (`reports.target_snapshot`, nur für da
 | `social_set_friend_nickname(p_public_id, p_nickname)` | eigenen Spitznamen für einen **aktuellen Freund** setzen (Leerraum zusammengefasst), leer/`null` entfernt; Antwort = Profil mit `nickname`. `not_found` ohne Freundschaft, `invalid_nickname`, 30 je 10 min |
 | `chat_send(…, p_reply_to_id = null, p_media_duration_ms = null)` | zusätzlich Antworten (nur auf sichtbare, nicht gelöschte Nachricht **derselben** Unterhaltung, sonst `not_found`) und `voice` (eigene, hochgeladene Datei im Ordner der Unterhaltung mit `audio/mp4`, `audio/x-m4a` oder `audio/aac`, Dauer 1–300 000 ms, sonst `invalid_input`). Bilder müssen jetzt `image/*`, GIFs `image/gif` sein. Eine Dauer bei anderen Arten → `invalid_input` |
 | `chat_edit_message(p_message_id, p_text)` | eigene, nicht gelöschte **Textnachricht** bearbeiten (Regeln wie Senden, `invalid_message`); andere Arten `invalid_input`, fremde/gelöschte `not_found`, ohne Schreibrecht `read_only`; gleicher Text ändert nichts; setzt `edited_at`; 30 je Minute; Echtzeit `message_updated` |
-| `chat_set_favorite(p_message_id, p_favorite)` | privaten Favoriten setzen (nur sichtbare Nachrichten lesbarer Unterhaltungen, sonst `not_found`; max. 1000 → `limit_reached`; 60 je Minute) bzw. entfernen (immer, idempotent) |
+| `chat_set_favorite(p_message_id, p_favorite)` | privaten Favoriten setzen (nur sichtbare Nachrichten lesbarer Unterhaltungen, sonst `not_found`; max. 1000 → `favorite_limit_reached`; 60 je Minute) bzw. entfernen (immer, idempotent) |
 | `chat_favorites(p_conversation_id)` | eigene Favoriten einer lesbaren Unterhaltung (Form wie `chat_messages`), neueste zuerst, max. 500 |
 | `chat_set_pinned(p_message_id, p_pinned)` | anpinnen/lösen (idempotent), Antwort = alle Pins. Gruppenchat nur Owner (`not_allowed`), Privatchat beide mit Schreibrecht (`read_only`); max. 5 (`pin_limit_reached`); 30 Änderungen je Minute; Lösen auch für verborgene Nachrichten; Echtzeit `pins_changed` |
-| `chat_pins(p_conversation_id)` | `[{message, pinned_by, pinned_at}]`, zuletzt angepinnte zuerst; ohne gelöschte und ohne Nachrichten von Personen, die ich blockiert habe |
-| `social_group_calendar(p_group_id, p_first_day, p_last_day)` | nur aktuelle Mitglieder (`not_found`); höchstens 42 Tage (`invalid_date`); begrenzt auf Gründung … heute (Gruppenzeitzone). Antwort `{group_id, time_zone, group_today, first_group_day, days:[{day, daily_goal, member_count, required_count, reached_count, secured, has_data, is_today, ranking:[Profil + rank, competition_steps, reached, is_current_user]}]}` – Kennzahlen aus `private.group_day_stats` (identisch mit Streak und `social_group_days`), Rangliste über `private.social_step_ranking` |
+| `chat_pins(p_conversation_id)` | `[{message, pinned_by, pinned_at}]`, zuletzt angepinnte zuerst. Verborgene Nachrichten (gelöscht bzw. von Personen, die ich blockiert habe) zählen weiter zur Höchstzahl: Wer anpinnen darf (`can_pin`), bekommt sie als Platzhalter (`message` mit `id`, `conversation_id`, `kind`, `created_at`, `is_pinned`, `is_deleted: true`, Inhalt/Absender `null`; `pinned_by: null`) und kann sie lösen; alle anderen sehen sie nicht |
+| `social_group_calendar(p_group_id, p_first_day, p_last_day)` | nur aktuelle Mitglieder (`not_found`); höchstens 42 Tage (`invalid_date`); begrenzt auf Gründung … heute (Gruppenzeitzone). Antwort `{group_id, time_zone, group_today, first_group_day, days:[{day, daily_goal, member_count, required_count, reached_count, secured, has_data, is_today, ranking:[Profil + rank, competition_steps, reached, is_current_user]}]}` – Kennzahlen aus `private.group_day_stats` (identisch mit Streak und `social_group_days`), Rangliste über `private.social_step_ranking`; ehemalige Mitglieder, die mich blockiert haben, ohne Profilfelder (`null`), Zählwerte bleiben; Tage ab Gründung auch vor dem eigenen Beitritt |
 
 Neue JSON-Felder in bestehenden Antworten: Nachricht (`chat_messages`, `chat_send`, …) `media_duration_ms`,
 `reply_to` (`{id, sender, kind, text ≤ 200 Zeichen, media_duration_ms, is_deleted}`; gelöschtes oder verborgenes
@@ -472,16 +473,28 @@ Ranking-Einträge `nickname`; Einladungen `inviter_nickname`; Auskunft `friend_n
 `chat_message_pins`, Nachrichten mit `reply_to_id`, `edited_at`, `media_duration_ms`.
 
 Neue Fehler-Tokens: `invalid_nickname` → `SocialError.invalidNickname`, `pin_limit_reached` →
-`SocialError.pinLimitReached` (vor `limit_reached` geprüft).
+`SocialError.pinLimitReached`, `favorite_limit_reached` → `SocialError.favoriteLimitReached` (beide vor
+`limit_reached` geprüft).
 
 ### Sprachnachrichten (Speicher)
 
-- Bucket `chat-media`: `allowed_mime_types` zusätzlich `audio/mp4`, `audio/x-m4a`, `audio/aac`; Grenze bleibt
+- Bucket `chat-media`: `allowed_mime_types` zusätzlich `audio/mp4`, `audio/x-m4a`, `audio/aac` (Vereinigung mit
+  den vorhandenen Typen, Reihenfolge bleibt, nichts doppelt; `null` = alle erlaubt bleibt unverändert); Grenze bleibt
   10 MB (5 Minuten AAC liegen weit darunter), die Dauer begrenzt der Server auf 5 Minuten.
 - Pfade `<conversation_id>/<UUID>.m4a` (bzw. `.aac`). `pace_access.chat_media_folder` akzeptiert dafür zusätzlich
   die Audio-Endungen; `can_read_chat_media`/`can_write_chat_media` nutzen sie – gleiche Regeln wie für Bilder
-  (lesen: wer die Unterhaltung lesen darf; schreiben: wer senden darf; löschen: wer hochgeladen hat). Profil- und
+  (schreiben: wer senden darf; löschen: wer hochgeladen hat; lesen: siehe nächster Punkt). Profil- und
   Gruppenbilder bleiben bei Bildendungen.
+- **Lesen aller Chat-Medien (Bilder, GIFs, Audio):** Die Policy `pace_chat_media_select` wird ersetzt
+  (`drop policy if exists` + `create policy`). Lesen darf die hochladende Person (`owner_id`) immer – Vorschau vor
+  dem Senden, Löschen nach dem Löschen der Nachricht, `insert … returning` der Storage-API. Alle anderen nur, wenn
+  eine für sie sichtbare (`private.chat_message_visible`: nicht gelöscht, Absender nicht von ihnen blockiert),
+  Nachricht derselben Unterhaltung genau diesen `media_path` trägt und sie die Unterhaltung lesen dürfen. Das gilt
+  für Download, Ordnerliste (`list`) und signierte URLs (`createSignedURL` prüft dieselbe Policy). Nie gesendete
+  Uploads, Dateien gelöschter (auch gemeldeter) Nachrichten und Medien blockierter Absender sind damit für andere
+  Teilnehmer nicht mehr lesbar. Beweise sichtet die Moderation mit Projektrechten (Dashboard bzw. `service_role`,
+  ohne RLS). Neuer Index `chat_messages_media_path_idx` für die Prüfung je Datei. Ältere App-Versionen laden nur
+  Medien sichtbarer Nachrichten bzw. eigene Uploads – für sie ändert sich nichts.
 - Beweissicherung wie bei Chat-Bildern: Eine gemeldete Sprachnachricht hält ihre Datei über
   `reports.evidence_path` (= `media_path` im Schnappschuss); `chat_delete_message` gibt sie dann nicht zur Löschung
   frei, die Delete-Policy sperrt sie.
@@ -507,13 +520,21 @@ Ereignisse in **einem** Kanal (`RealtimeEvents.stream(topic:events:)`); `message
 
 ### Tests (Auftrag 3)
 
-- **pgTAP:** `14_friend_nicknames` (59), `15_chat_message_actions` (111), `16_group_calendar` (33); bestehende
-  Tests 04, 06, 07, 09, 11, 12, 13 an die neuen Felder angepasst – zusammen 16 Dateien, 908 Prüfungen.
+- **pgTAP:** `14_friend_nicknames` (64), `15_chat_message_actions` (152), `16_group_calendar` (40); bestehende
+  Tests 04, 06, 07, 09, 11, 12 (59), 13 an die neuen Felder bzw. die engere Lese-Policy für Chat-Medien angepasst –
+  zusammen 16 Dateien, 965 Prüfungen. Abgedeckt u. a.: verborgene Pins als Platzhalter und Höchstzahl, gelöschte
+  Nachrichten weder anpinnbar noch Favorit, Favoriten-Höchstzahl, Rate Limits für Favoriten und Pins, Echtzeit an
+  `user:<public_id>` beim Bearbeiten, Chat-Medien nur für Uploader bzw. über sichtbare Nachrichten (Bild, GIF,
+  Audio, Ordnerliste), Meldungs-Schnappschuss ohne Spitznamen, anonymisierte Ex-Mitglieder im Kalender.
+- **Wettlauf Pin/Favorit gegen Löschen:** nicht in pgTAP (eine Sitzung), sondern mit zwei parallelen Sitzungen gegen
+  die lokale Datenbank geprüft: Kein Pin/Favorit bleibt an einer gelöschten Nachricht hängen.
 - **Realtime-Skript:** prüft zusätzlich `message_updated` und `pins_changed` (ohne Inhalt, nicht für Fremde).
 - **Swift:** `PaceBackendTests/MessageActionsNicknameCalendarTests.swift` (Request-Körper, Dekodierung mit und ohne
   neue Felder, Fehler-Tokens, Audio-Upload), `PaceBackendIntegrationTests/…/MessageActionsIntegrationTests.swift`
   (Spitzname privat, Antworten/Bearbeiten/Favoriten/Pins, Audio nur für Teilnehmer, Gruppenkalender gegen
-  `groupDays`), `PaceCoreTests/SocialChatContractTests.swift`, `SocialFeatureTests/ChatVoiceFormattingTests.swift`.
+  `groupDays`), `MediaAccountIntegrationTests.chatMediaIsOnlyReadableThroughVisibleMessages` (Download und
+  `createSignedURL` direkt gegen Storage: vor dem Senden nur Uploader, danach Teilnehmer, nach dem Löschen nur
+  Uploader), `PaceCoreTests/SocialChatContractTests.swift`, `SocialFeatureTests/ChatVoiceFormattingTests.swift`.
 
 ## Regionsdaten: Quelle und Aktualisierung
 

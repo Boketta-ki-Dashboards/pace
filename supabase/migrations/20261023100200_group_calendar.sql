@@ -14,8 +14,15 @@
 --   secured = Flamme gesichert.
 -- * ranking: alle Mitglieder des Tages (auch später ausgetretene) mit ihren Wettbewerbsschritten dieses Tages,
 --   Reihenfolge wie in allen Social-Rankings (private.social_step_ranking: Schritte absteigend, wer den Wert zuerst
---   hatte, public_id – Plätze sind eindeutig), reached und nickname (eigener Spitzname). Blockierte Personen
---   bleiben wie im Gruppenranking enthalten – sonst stimmten Zählung und Liste nicht überein.
+--   hatte, public_id – Plätze sind eindeutig), reached und nickname (eigener Spitzname). Eine Zeile je Mitglied des
+--   Tages, damit member_count = Zeilenzahl und reached_count = Zeilen mit reached bleiben.
+-- * Blockierungen: Aktuelle Mitglieder erscheinen wie im Gruppenranking immer (auch bei einer Blockierung in einer
+--   der beiden Richtungen). Ehemalige Mitglieder, die den Aufrufer blockiert haben, erscheinen anonymisiert: Zeile
+--   mit Platz, Schritten und reached, aber public_id, username, display_name, avatar_path und nickname null (wie
+--   private.can_view_profile, das solche Profile für den Aufrufer verbirgt).
+-- * Gruppenhistorie: Mitglieder sehen alle Tage ab der Gründung, auch vor ihrem eigenen Beitritt (wie die Streak
+--   und social_group_days) – ehemalige Mitglieder gehören zur Geschichte der Gruppe (can_view_profile erlaubt
+--   ihre Profile allen aktuellen Mitgliedern, außer bei einer Blockierung, siehe oben).
 -- * has_data: Mindestens ein Mitglied des Tages hat für diesen Tag Schritte synchronisiert.
 -- =============================================================================================================
 
@@ -79,7 +86,13 @@ begin
                'ranking', (
                  select coalesce(
                           jsonb_agg(
-                            private.profile_json(p) || jsonb_build_object(
+                            case
+                              when gm.user_id is null and private.has_blocked(r.user_id, v_me) then
+                                -- Ehemaliges Mitglied, das mich blockiert hat: anonymisiert (Zählwerte bleiben).
+                                jsonb_build_object('public_id', null, 'username', null, 'display_name', null,
+                                                   'avatar_path', null, 'nickname', null)
+                              else private.profile_json(p)
+                            end || jsonb_build_object(
                               'rank', r.rank,
                               'competition_steps', r.competition_steps,
                               'reached', coalesce(r.competition_steps >= d.daily_goal, false),
@@ -90,6 +103,7 @@ begin
                         )
                    from private.social_step_ranking(d.member_ids, d.day, d.day) r
                    join public.profiles p on p.id = r.user_id
+                   left join public.group_members gm on gm.group_id = p_group_id and gm.user_id = r.user_id
                )
              ) order by d.day
            )
@@ -110,4 +124,4 @@ $$;
 revoke all on function public.social_group_calendar(uuid, date, date) from public, anon;
 grant execute on function public.social_group_calendar(uuid, date, date) to authenticated;
 comment on function public.social_group_calendar(uuid, date, date) is
-  'Pace: Gruppenkalender für Mitglieder – je Gruppentag (höchstens 42, begrenzt auf Gründung … heute) Ziel, Mitglieder, benötigt (⌈n/3⌉), erreicht, gesichert, has_data, is_today und Tagesrangliste (wie social_group_days/Streak).';
+  'Pace: Gruppenkalender für Mitglieder – je Gruppentag (höchstens 42, begrenzt auf Gründung … heute) Ziel, Mitglieder, benötigt (⌈n/3⌉), erreicht, gesichert, has_data, is_today und Tagesrangliste (wie social_group_days/Streak). Ehemalige Mitglieder, die den Aufrufer blockiert haben, ohne Profilfelder (null).';

@@ -196,6 +196,9 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
                 return
             }
             guard state.messages.values.contains(where: { $0.contains { $0.id == messageID } }) else { throw SocialError.notFound }
+            guard state.favoriteIDs.contains(messageID) || state.favoriteIDs.count < ChatRules.maximumFavorites else {
+                throw SocialError.favoriteLimitReached
+            }
             state.favoriteIDs.insert(messageID)
             Self.update(&state, messageID) { $0.withFavorite(true) }
         }

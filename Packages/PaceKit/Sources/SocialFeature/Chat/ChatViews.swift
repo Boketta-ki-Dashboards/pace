@@ -75,9 +75,17 @@ public struct ChatView: View {
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.xs)
             if let pin = viewModel.shownPin {
-                ChatPinBanner(pin: pin, index: viewModel.pins.firstIndex(of: pin) ?? 0, count: viewModel.pins.count) { [viewModel] in
-                    Task { await viewModel.openShownPin() }
-                }
+                ChatPinBanner(
+                    pin: pin,
+                    index: viewModel.pins.firstIndex(of: pin) ?? 0,
+                    count: viewModel.pins.count,
+                    onTap: { [viewModel] in
+                        Task { await viewModel.openShownPin() }
+                    },
+                    onUnpin: viewModel.canPin ? { [viewModel] in
+                        Task { await viewModel.unpin(pin) }
+                    } : nil
+                )
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.xs)
             }

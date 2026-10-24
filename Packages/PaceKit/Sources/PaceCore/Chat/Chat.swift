@@ -236,15 +236,23 @@ public struct ChatMessage: Equatable, Sendable, Identifiable {
 
 /// Eine angepinnte Nachricht (Hinweis oben im Chat; Antippen springt zur Nachricht).
 public struct ChatPin: Equatable, Sendable, Identifiable {
+    /// Die Nachricht. Bei `isHidden` nur ein Platzhalter: ID, Unterhaltung, Art und Sendezeitpunkt – ohne Text,
+    /// Medien und Absender.
     public let message: ChatMessage
-    /// Wer angepinnt hat; `nil`, wenn das Konto gelöscht wurde.
+    /// Wer angepinnt hat; `nil`, wenn das Konto gelöscht wurde (und immer bei `isHidden`).
     public let pinnedBy: SocialProfile?
     public let pinnedAt: Date
+    /// Die Nachricht ist für mich verborgen (gelöscht oder von einer Person, die ich blockiert habe). Solche Pins
+    /// zählen weiter zu `ChatRules.maximumPinnedMessages`; nur wer anpinnen darf (`ConversationSummary.canPin`),
+    /// bekommt sie – zum Lösen über `ChatRepository.setPinned(_:isPinned:)` mit `message.id`. Anzeige z. B. als
+    /// „Nachricht nicht verfügbar“, ohne Sprung in den Verlauf (dort fehlt sie).
+    public let isHidden: Bool
 
-    public init(message: ChatMessage, pinnedBy: SocialProfile?, pinnedAt: Date) {
+    public init(message: ChatMessage, pinnedBy: SocialProfile?, pinnedAt: Date, isHidden: Bool = false) {
         self.message = message
         self.pinnedBy = pinnedBy
         self.pinnedAt = pinnedAt
+        self.isHidden = isHidden
     }
 
     public var id: UUID { message.id }
@@ -311,6 +319,8 @@ public enum ChatRules {
     public static let maximumVoiceDuration: Duration = .seconds(300)
     /// Höchstzahl angepinnter Nachrichten je Unterhaltung (wie auf dem Server).
     public static let maximumPinnedMessages = 5
+    /// Höchstzahl eigener Favoriten über alle Unterhaltungen (wie auf dem Server, sonst `favoriteLimitReached`).
+    public static let maximumFavorites = 1_000
     /// Länge, auf die der Server den Text in einer Antwort-Vorschau kürzt.
     public static let replyPreviewLength = 200
 
@@ -365,7 +375,8 @@ public protocol ChatRepository: Sendable {
     /// Bearbeitet eine eigene Textnachricht (gleiche Längenregeln wie beim Senden) und liefert sie mit `editedAt`.
     /// `notFound` für fremde/gelöschte Nachrichten, `invalidInput` für andere Arten, `readOnly` ohne Schreibrecht.
     func editMessage(_ messageID: UUID, text: String) async throws -> ChatMessage
-    /// Markiert eine sichtbare Nachricht als privaten Favoriten bzw. entfernt ihn (idempotent).
+    /// Markiert eine sichtbare Nachricht als privaten Favoriten bzw. entfernt ihn (idempotent). Höchstens
+    /// `ChatRules.maximumFavorites` (`favoriteLimitReached`); Entfernen geht immer.
     func setFavorite(_ messageID: UUID, isFavorite: Bool) async throws
     /// Eigene Favoriten einer Unterhaltung, neueste Nachricht zuerst.
     func favorites(conversationID: UUID) async throws -> [ChatMessage]

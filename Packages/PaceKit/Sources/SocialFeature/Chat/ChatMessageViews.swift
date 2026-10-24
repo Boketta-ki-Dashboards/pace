@@ -636,6 +636,8 @@ struct ChatPinBanner: View {
     let index: Int
     let count: Int
     let onTap: () -> Void
+    /// Lösen (nur mit Recht zum Anpinnen) – nötig für verborgene Pins, die man nicht im Verlauf findet.
+    var onUnpin: (() -> Void)?
 
     var body: some View {
         Button(action: onTap) {
@@ -650,9 +652,10 @@ struct ChatPinBanner: View {
                         .font(PaceFont.caption.weight(.semibold))
                         .foregroundStyle(PaceColor.accent)
                         .lineLimit(1)
-                    Text(ChatReplySnippet.text(for: pin.message))
+                    Text(pin.isHidden ? ChatUIText.originalUnavailable : ChatReplySnippet.text(for: pin.message))
                         .font(PaceFont.callout)
-                        .foregroundStyle(PaceColor.textPrimary)
+                        .italic(pin.isHidden)
+                        .foregroundStyle(pin.isHidden ? PaceColor.textSecondary : PaceColor.textPrimary)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -670,7 +673,19 @@ struct ChatPinBanner: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.pacePressable)
+        .contextMenu {
+            if let onUnpin {
+                Button(action: onUnpin) {
+                    Label(ChatUIText.unpin, systemImage: "pin.slash")
+                }
+            }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityHint(ChatUIText.pinnedBannerHint)
+        .accessibilityActions {
+            if let onUnpin {
+                Button(ChatUIText.unpin, action: onUnpin)
+            }
+        }
     }
 }

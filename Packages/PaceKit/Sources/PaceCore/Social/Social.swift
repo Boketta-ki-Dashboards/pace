@@ -484,16 +484,18 @@ public struct GroupInvitation: Equatable, Sendable, Identifiable {
 
 /// Platz einer Person in der Tagesrangliste eines Gruppentags.
 public struct GroupCalendarEntry: Equatable, Sendable, Identifiable {
+    /// Platz (je Tag eindeutig).
     public let rank: Int
-    /// Mit eigenem Spitznamen (`profile.shownName`).
-    public let profile: SocialProfile
+    /// Mit eigenem Spitznamen (`profile.shownName`). `nil`: ehemaliges Mitglied, das dich blockiert hat – die Zeile
+    /// bleibt (Platz, Schritte, erreicht), damit Zählung und Liste übereinstimmen, aber ohne Namen und Bild.
+    public let profile: SocialProfile?
     /// Gültige Wettbewerbsschritte dieses Tages (ohne manuelle Einträge, wie synchronisiert).
     public let competitionSteps: Int
     /// Gruppenziel des Tages erreicht.
     public let reached: Bool
     public let isCurrentUser: Bool
 
-    public init(rank: Int, profile: SocialProfile, competitionSteps: Int, reached: Bool, isCurrentUser: Bool) {
+    public init(rank: Int, profile: SocialProfile?, competitionSteps: Int, reached: Bool, isCurrentUser: Bool) {
         self.rank = rank
         self.profile = profile
         self.competitionSteps = competitionSteps
@@ -501,7 +503,21 @@ public struct GroupCalendarEntry: Equatable, Sendable, Identifiable {
         self.isCurrentUser = isCurrentUser
     }
 
-    public var id: UUID { profile.publicID }
+    /// Der Platz – je Tag eindeutig, auch für anonymisierte Zeilen ohne Profil.
+    public var id: Int { rank }
+
+    /// Ohne Profil (ehemaliges Mitglied, das dich blockiert hat): ohne Namen, Bild und Profil-Link anzeigen.
+    public var isHidden: Bool { profile == nil }
+
+    /// Angezeigter Name: eigener Spitzname bzw. Anzeigename, ohne Profil „Ehemaliges Mitglied“.
+    public var shownName: String {
+        profile?.shownName ?? Self.hiddenMemberName
+    }
+
+    /// Name für anonymisierte Zeilen.
+    public static var hiddenMemberName: String {
+        PaceLocalization.text(de: "Ehemaliges Mitglied", en: "Former member", ru: "Бывший участник")
+    }
 }
 
 /// Ein Gruppentag im Kalender – historisch korrekt: Mitglieder und Ziel so, wie sie an diesem Tag galten
@@ -711,6 +727,8 @@ public enum SocialError: Error, Equatable, Sendable {
     case invalidNickname
     /// Es sind bereits so viele Nachrichten angepinnt wie erlaubt (`ChatRules.maximumPinnedMessages`).
     case pinLimitReached
+    /// Es gibt bereits so viele eigene Favoriten wie erlaubt (`ChatRules.maximumFavorites`).
+    case favoriteLimitReached
     /// In dieser Unterhaltung kann man nicht mehr schreiben (z. B. nach Ende der Freundschaft).
     case readOnly
     /// Die Social-Funktionen sind auf dem Server (noch) nicht eingerichtet.
@@ -797,6 +815,12 @@ public enum SocialError: Error, Equatable, Sendable {
                 de: "Es sind bereits 5 Nachrichten angepinnt. Löse zuerst eine davon.",
                 en: "5 messages are already pinned. Unpin one of them first.",
                 ru: "Уже закреплено 5 сообщений. Сначала открепи одно из них."
+            )
+        case .favoriteLimitReached:
+            PaceLocalization.text(
+                de: "Du hast bereits 1.000 Favoriten. Entferne zuerst einen davon.",
+                en: "You already have 1,000 favorites. Remove one of them first.",
+                ru: "У тебя уже 1 000 избранных сообщений. Сначала убери одно из них."
             )
         case .readOnly:
             PaceLocalization.text(

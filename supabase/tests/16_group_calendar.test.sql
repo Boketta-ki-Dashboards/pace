@@ -1,7 +1,7 @@
 -- Pace: Gruppenkalender – Rechte, Zeitraumgrenzen, historische Mitglieder und Ziele, ⌈n/3⌉, Gleichstände, leere
 -- Tage, Spitznamen, Blockierte und Übereinstimmung mit social_group_days (gleiche Berechnung wie die Streak).
 begin;
-select plan(33);
+select plan(40);
 
 -- =============================================================================================================
 -- Struktur
@@ -257,6 +257,53 @@ select is(
   'Blockierte bleiben wie im Gruppenranking in der Rangliste'
 );
 select ok(pg_temp.cal('quirin')::text not like '%Rita Rakete%', 'fremde Spitznamen erscheinen nie');
+
+-- Ehemalige Mitglieder, die mich blockiert haben, und Gruppenhistorie: paul (ausgetreten an t-5) blockiert quirin
+-- (beigetreten an t-2).
+reset role;
+insert into public.user_blocks (blocker_id, blocked_id) values (pg_temp.uid(2), pg_temp.uid(3));
+set local role authenticated;
+select pg_temp.as_user(3);
+insert into t_cal select 'quirin_hist', public.social_group_calendar(pg_temp.g(), pg_temp.t() - 13, pg_temp.t());
+select is(
+  (select array_agg((e->>'day')::date order by e->>'day') from jsonb_array_elements(pg_temp.cal('quirin_hist')->'days') e),
+  (select array_agg(d::date order by d) from generate_series(pg_temp.t() - 10, pg_temp.t(), interval '1 day') d),
+  'Gruppenhistorie: Mitglied sieht auch Tage vor dem eigenen Beitritt (ab Gründung)'
+);
+select is(
+  pg_temp.day('quirin_hist', -7)->'ranking'->0,
+  jsonb_build_object('public_id', null, 'username', null, 'display_name', null, 'avatar_path', null, 'nickname', null,
+                     'rank', 1, 'competition_steps', 6000, 'reached', true, 'is_current_user', false),
+  'ehemaliges Mitglied, das mich blockiert hat: anonymisiert, Platz und Schritte bleiben'
+);
+select ok(
+  pg_temp.cal('quirin_hist')::text not like '%paul_k%' and pg_temp.cal('quirin_hist')::text not like '%Paul%'
+  and pg_temp.cal('quirin_hist')::text not like '%' || pg_temp.pid(2)::text || '%',
+  'weder Name noch Benutzername noch public_id des blockierenden Ex-Mitglieds'
+);
+select ok(
+  (select bool_and((e->>'member_count')::int = jsonb_array_length(e->'ranking')
+                   and (e->>'reached_count')::int = (select count(*) from jsonb_array_elements(e->'ranking') r where (r->>'reached')::boolean))
+     from jsonb_array_elements(pg_temp.cal('quirin_hist')->'days') e),
+  'anonymisiert: member_count = Zeilen, reached_count = Zeilen mit reached'
+);
+select is(
+  (select array_agg(e - 'ranking' order by e->>'day') from jsonb_array_elements(pg_temp.cal('quirin_hist')->'days') e),
+  (select array_agg(e - 'ranking' order by e->>'day') from jsonb_array_elements(pg_temp.cal('olaf')->'days') e),
+  'Kennzahlen für alle Mitglieder gleich (Blockierung ändert keine Zählwerte)'
+);
+select pg_temp.as_user(1);
+select is(
+  public.social_group_calendar(pg_temp.g(), pg_temp.t() - 7, pg_temp.t() - 7)->'days'->0->'ranking'->0->>'username',
+  'paul_k', 'andere Mitglieder sehen das ehemalige Mitglied weiter'
+);
+-- quirin hat rita blockiert: rita sieht das aktuelle Mitglied quirin trotzdem – wie im Gruppenranking.
+select pg_temp.as_user(4);
+select ok(
+  exists (select 1 from jsonb_array_elements(public.social_group_calendar(pg_temp.g(), pg_temp.t() - 1, pg_temp.t() - 1)->'days'->0->'ranking') e
+           where e->>'username' = 'quirin_k'),
+  'aktuelles Mitglied, das mich blockiert hat, bleibt sichtbar (wie im Gruppenranking)'
+);
 select pg_temp.as_user(2);
 select throws_ok(
   $$select public.social_group_calendar(pg_temp.g(), pg_temp.t() - 7, pg_temp.t())$$,
