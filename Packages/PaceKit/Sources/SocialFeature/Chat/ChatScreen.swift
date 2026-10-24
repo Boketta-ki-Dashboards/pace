@@ -27,8 +27,8 @@ enum ChatDialog {
 
 /// Aktionen aus dem Chat-Inhalt heraus; der Rahmen (``ChatView``) verbindet sie mit ViewModel, Navigation und Dialogen.
 struct ChatActions {
-    /// Öffnet eine Social-Seite; `nil` → `NavigationLink(value:)`.
-    var openRoute: ((SocialRoute) -> Void)?
+    /// Öffnet eine Social-Seite (über den Navigator des Social-Tabs).
+    var openRoute: (SocialRoute) -> Void = { _ in }
     var openProfile: (SocialProfile) -> Void = { _ in }
     var openMedia: (ChatViewerItem) -> Void = { _ in }
     var loadOlder: () -> Void = {}
@@ -236,23 +236,18 @@ struct ChatInfoHeader: View {
     }
 }
 
-/// Öffnet eine Social-Seite: per Closure, wenn vorhanden, sonst per `NavigationLink(value:)`.
+/// Öffnet eine Social-Seite über den Navigator des Social-Tabs (nie per `NavigationLink(value:)`, damit eine schon offene
+/// Seite – z. B. die Gruppe hinter der Flamme – nicht erneut aufgelegt wird).
 struct ChatRouteLink<Content: View>: View {
     let route: SocialRoute
-    let openRoute: ((SocialRoute) -> Void)?
+    let openRoute: (SocialRoute) -> Void
     @ViewBuilder let label: () -> Content
 
     var body: some View {
-        if let openRoute {
-            Button {
-                openRoute(route)
-            } label: {
-                label()
-            }
-        } else {
-            NavigationLink(value: route) {
-                label()
-            }
+        Button {
+            openRoute(route)
+        } label: {
+            label()
         }
     }
 }

@@ -2,45 +2,27 @@ import DesignSystem
 import PaceCore
 import SwiftUI
 
-/// Ziel einer Navigation im Social-Tab.
-public enum SocialRoute: Hashable, Sendable {
-    case group(UUID)
-    /// Profil einer Person (gleich wie ``profile(_:)``; bleibt für bestehende Aufrufer erhalten).
-    case friend(SocialProfile)
-    case profile(SocialProfile)
-    case addFriend
-    case requests
-    case createGroup
-    case groups
-    case groupMembers(UUID)
-    case groupSettings(UUID)
-    case groupCalendar(UUID)
-    case friendsRanking
-    case settings
-    case shareProfile(SocialProfile)
-    case report(SocialReportSubject)
-}
-
 /// Social-Tab (Referenzbild 9): Freunde, Anfragen, Gruppen und Chats mit allen Unterseiten.
 public struct SocialView: View {
     @Bindable private var viewModel: SocialViewModel
-    @State private var path = NavigationPath()
+    @Bindable private var navigator: SocialNavigator
 
     public init(viewModel: SocialViewModel) {
         self.viewModel = viewModel
+        self.navigator = viewModel.navigator
     }
 
     public var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack(path: $navigator.path) {
             ScrollView {
                 SocialContent(
                     viewModel: viewModel,
-                    onOpen: { path.append($0) },
-                    onOpenChat: { path.append($0) }
+                    onOpen: { [navigator] in navigator.open($0) },
+                    onOpenChat: { [navigator] in navigator.openChat($0) }
                 )
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.l)
-                .paceTabRoot(isAtRoot: path.isEmpty) { path = NavigationPath() }
+                .paceTabRoot(isAtRoot: navigator.isAtRoot) { [navigator] in navigator.popToRoot() }
             }
             .scrollDismissesKeyboard(.interactively)
             .refreshable { [viewModel] in
@@ -49,29 +31,26 @@ public struct SocialView: View {
             }
             .paceScreenBackground()
             .paceRootPage()
-            .navigationDestination(for: SocialRoute.self) { route in
-                SocialDestination(
-                    route: route,
-                    viewModel: viewModel,
-                    onOpen: { path.append($0) },
-                    onOpenChat: { path.append($0) },
-                    onReplace: { route in
-                        if !path.isEmpty { path.removeLast() }
-                        path.append(route)
-                    },
-                    onPopToRoot: { path = NavigationPath() },
-                    onReplaceWithChat: { target in
-                        if !path.isEmpty { path.removeLast() }
-                        path.append(target)
-                    }
-                )
-            }
-            .navigationDestination(for: ChatTarget.self) { target in
-                ChatView(
-                    viewModel: viewModel.chats.chat(for: target),
-                    onOpenRoute: { path.append($0) },
-                    onOpenProfile: { path.append(SocialRoute.profile($0)) }
-                )
+            // Alle Unterseiten laufen über den Navigator: Eine schon offene Seite wird nicht erneut aufgelegt.
+            .navigationDestination(for: SocialPathItem.self) { [navigator] item in
+                switch item {
+                case .route(let route):
+                    SocialDestination(
+                        route: route,
+                        viewModel: viewModel,
+                        onOpen: { navigator.open($0) },
+                        onOpenChat: { navigator.openChat($0) },
+                        onReplace: { navigator.replaceTop(with: $0) },
+                        onPopToRoot: { navigator.popToRoot() },
+                        onReplaceWithChat: { navigator.replaceTop(withChat: $0) }
+                    )
+                case .chat(let target):
+                    ChatView(
+                        viewModel: viewModel.chats.chat(for: target),
+                        onOpenRoute: { navigator.open($0) },
+                        onOpenProfile: { navigator.open(.profile($0)) }
+                    )
+                }
             }
         }
         .task { [viewModel] in
@@ -90,9 +69,10 @@ public struct SocialView: View {
     private func openRequestedProfile() async {
         guard viewModel.requestedProfile != nil else { return }
         let profile = await viewModel.resolveRequestedProfile()
-        path = NavigationPath()
         if let profile {
-            path.append(SocialRoute.profile(profile))
+            navigator.show(.profile(profile))
+        } else {
+            navigator.popToRoot()
         }
     }
 
@@ -100,8 +80,7 @@ public struct SocialView: View {
     private func openRequestedGroup() {
         guard let groupID = viewModel.requestedGroup else { return }
         viewModel.clearRequestedGroup()
-        path = NavigationPath()
-        path.append(SocialRoute.group(groupID))
+        navigator.show(.group(groupID))
     }
 }
 

@@ -30,12 +30,12 @@ public struct ChatListSection: View {
 /// Verlauf (Gruppen- bzw. Profilkopf, Nachrichten) und die Eingabeleiste. Die Eingabeleiste steht unter dem Verlauf
 /// und damit immer sichtbar über der Tab-Leiste bzw. – bei offener Tastatur – direkt über der Tastatur.
 ///
-/// Navigation in Social-Seiten (Gruppendetails, Gruppeneinstellungen, Mitglieder) läuft über `onOpenRoute`; ohne
-/// Angabe über `NavigationLink(value: SocialRoute…)`, die der Social-Tab registriert. Profile öffnet `onOpenProfile`.
+/// Navigation in Social-Seiten (Gruppendetails, Gruppeneinstellungen, Mitglieder) läuft über `onOpenRoute`, Profile
+/// über `onOpenProfile` – im Social-Tab beide über den ``SocialNavigator``.
 public struct ChatView: View {
     private let viewModel: ChatViewModel
     private let backTitle: String?
-    private let onOpenRoute: ((SocialRoute) -> Void)?
+    private let onOpenRoute: (SocialRoute) -> Void
     private let onOpenProfile: (SocialProfile) -> Void
 
     @Environment(\.scenePhase) private var scenePhase
@@ -56,12 +56,12 @@ public struct ChatView: View {
 
     /// - Parameters:
     ///   - backTitle: Ziel des Zurück-Links; ohne Angabe „Social“.
-    ///   - onOpenRoute: Öffnet eine Social-Seite; ohne Angabe per `NavigationLink(value:)`.
+    ///   - onOpenRoute: Öffnet eine Social-Seite (Gruppe, Mitglieder, Einstellungen).
     ///   - onOpenProfile: Öffnet ein Profil (Gegenüber, Absender, geteiltes Profil).
     public init(
         viewModel: ChatViewModel,
         backTitle: String? = nil,
-        onOpenRoute: ((SocialRoute) -> Void)? = nil,
+        onOpenRoute: @escaping (SocialRoute) -> Void = { _ in },
         onOpenProfile: @escaping (SocialProfile) -> Void
     ) {
         self.viewModel = viewModel

@@ -199,9 +199,11 @@ public final class ProfileViewModel {
         path = [route]
     }
 
-    /// Öffnet eine weitere Unterseite über der aktuellen.
+    /// Öffnet eine weitere Unterseite über der aktuellen – oder geht zu ihr zurück, wenn sie schon offen ist (keine
+    /// Einstellungs-Schleifen, kein doppeltes Auflegen durch zweimaliges Tippen).
     public func open(_ route: ProfileRoute) {
-        path.append(route)
+        let opened = PaceNavigationRules.opening(route, in: path)
+        if opened != path { path = opened }
     }
 
     /// Neues Formular für „Problem melden“ bzw. „Feedback senden“.

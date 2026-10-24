@@ -338,6 +338,42 @@ public final class ChatListViewModel {
         return chat
     }
 
+    /// Anzahl der ViewModels einzelner Chats im Speicher (Tests, Diagnose).
+    var cachedChatCount: Int { chats.count }
+
+    /// Ob zwei Ziele dieselbe Unterhaltung zeigen – z. B. der Gruppenchat über die Gruppe (`.group`) und über die
+    /// Chatliste (`.conversation`). Grundlage der Navigation, damit derselbe Chat nie zweimal auf dem Stapel liegt.
+    /// Erzeugt keine ViewModels.
+    public func isSameChat(_ lhs: ChatTarget, _ rhs: ChatTarget) -> Bool {
+        if lhs == rhs || page(of: lhs) == page(of: rhs) { return true }
+        guard let chat = chats.first(where: { $0.matches(lhs) }) else { return false }
+        return chat.matches(rhs)
+    }
+
+    /// Identität des Chats hinter einem Ziel: Gruppenchats über die Gruppe, Privatchats über das Gegenüber, sonst die
+    /// Unterhaltung.
+    private func page(of target: ChatTarget) -> ChatPage {
+        switch target {
+        case .group(let id, _):
+            return .group(id)
+        case .direct(let profile):
+            return .direct(profile.publicID)
+        case .conversation(let id, _, _):
+            let known = conversations.first { $0.id == id } ?? chats.first { $0.conversation?.id == id }?.conversation
+            if let known {
+                if known.kind == .group, let groupID = known.groupID { return .group(groupID) }
+                if known.kind == .direct, let peer = known.peer { return .direct(peer.publicID) }
+            }
+            return .conversation(id)
+        }
+    }
+
+    private enum ChatPage: Hashable {
+        case group(UUID)
+        case direct(UUID)
+        case conversation(UUID)
+    }
+
     /// Bereits geladene Unterhaltung zu einem Ziel.
     func knownConversation(for target: ChatTarget) -> ConversationSummary? {
         switch target {

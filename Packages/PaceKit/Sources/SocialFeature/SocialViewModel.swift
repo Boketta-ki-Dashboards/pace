@@ -62,6 +62,8 @@ public final class SocialViewModel {
 
     /// Chats (privat und Gruppen) – geteilt zwischen Social-Hauptseite, Gruppendetails und Profilen.
     public let chats: ChatListViewModel
+    /// Navigationspfad des Social-Tabs (eine Quelle für alle Einstiege: Liste, Gruppe, Chat, Widget, Link).
+    public let navigator: SocialNavigator
     /// Profil, das von außen geöffnet werden soll (z. B. über einen geteilten Link `pace://u/<name>`).
     public private(set) var requestedProfile: String?
     /// Gruppe, die von außen geöffnet werden soll (z. B. aus einem Gruppen-Widget auf Home).
@@ -100,7 +102,11 @@ public final class SocialViewModel {
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.repository = repository
-        self.chats = chats ?? ChatListViewModel(repository: nil, media: media)
+        let chats = chats ?? ChatListViewModel(repository: nil, media: media)
+        self.chats = chats
+        self.navigator = SocialNavigator { [weak chats] lhs, rhs in
+            chats?.isSameChat(lhs, rhs) ?? (lhs == rhs)
+        }
         self.media = media
         self.ownUsername = ownUsername
         self.calendar = calendar

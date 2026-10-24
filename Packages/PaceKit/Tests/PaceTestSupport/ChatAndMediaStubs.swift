@@ -43,6 +43,8 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
     private let messageContinuations = Locked<[UUID: [AsyncStream<Void>.Continuation]]>([:])
     private let activityContinuations = Locked<[UUID: [AsyncStream<ChatConversationEvent>.Continuation]]>([:])
     private let listContinuations = Locked<[AsyncStream<Void>.Continuation]>([])
+    /// Gerade offene (nicht beendete) Abos je Unterhaltung – zum Prüfen, dass verlassene Chats ihr Abo beenden.
+    private let liveActivity = Locked<[UUID: Int]>([:])
 
     public init(configure: (inout State) -> Void = { _ in }) {
         var state = State()
@@ -254,7 +256,16 @@ public final class ChatRepositoryStub: ChatRepository, Sendable {
                 return
             }
             activityContinuations.withLock { $0[conversationID, default: []].append(continuation) }
+            liveActivity.withLock { $0[conversationID, default: 0] += 1 }
+            continuation.onTermination = { [liveActivity] _ in
+                liveActivity.withLock { $0[conversationID, default: 1] -= 1 }
+            }
         }
+    }
+
+    /// Anzahl der gerade offenen Abos einer Unterhaltung (beendete zählen nicht mehr).
+    public func liveSubscriberCount(conversationID: UUID) -> Int {
+        liveActivity.withLock { $0[conversationID] ?? 0 }
     }
 
     /// Simuliert einen Echtzeit-Hinweis mit Art (z. B. Bearbeitung durch einen zweiten Nutzer).
