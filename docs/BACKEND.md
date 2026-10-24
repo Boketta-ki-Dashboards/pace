@@ -420,7 +420,7 @@ sechs Parameter) funktionieren unverändert. Neue Felder in den Antworten ignori
 
 | Migration | Inhalt |
 |---|---|
-| `20261023100000_friend_nicknames.sql` | `friend_nicknames`, `social_set_friend_nickname`, `nickname` in `profile_json`, Rankings (Freunde, Gruppe, Region) und Einladungen; `account_export` mit eigenen Spitznamen |
+| `20261023100000_friend_nicknames.sql` | `friend_nicknames`, `social_set_friend_nickname`, `nickname` in `profile_json`, Rankings (Freunde, Gruppe, Region) und Einladungen; `account_export` mit eigenen Spitznamen; `social_report` ohne Spitznamen im Schnappschuss |
 | `20261023100100_chat_message_actions.sql` | `chat_messages.reply_to_id`/`edited_at`/`media_duration_ms`, Art `voice`; `chat_send` (Antwort, Sprachnachricht), `chat_edit_message`, `chat_set_favorite`/`chat_favorites`, `chat_set_pinned`/`chat_pins`; `chat_message_favorites`, `chat_message_pins`; Bucket `chat-media` mit AAC-Audio; Echtzeit `message_updated`, `pins_changed` |
 | `20261023100200_group_calendar.sql` | `social_group_calendar` |
 
@@ -448,8 +448,9 @@ ergänzen `nickname` ausdrücklich (`social_friend_ranking`, `social_group_ranki
 `leaderboard_neighborhood`); `social_group_invitations` liefert `inviter_nickname`, `chat_conversations`
 `last_message.sender_nickname`. `title` bzw. `display_name`/`sender_name` bleiben der echte Anzeigename (ältere
 App-Versionen); die App zeigt `shownName`/`shownTitle`/`shownSenderName`. Fremde Spitznamen gibt der Server nie aus.
-Hinweis: Der Schnappschuss einer Meldung (`reports.target_snapshot`, nur für das Moderationsteam) enthält über
-`profile_json` ggf. den eigenen Spitznamen der meldenden Person.
+Meldungen: `social_report` (in dieser Migration ersetzt, sonst unverändert) entfernt `nickname` aus dem
+Schnappschuss (`reports.target_snapshot`, nur für das Moderationsteam) – der private Spitzname der meldenden Person
+gelangt nicht in die Moderation.
 
 ### RPCs
 
