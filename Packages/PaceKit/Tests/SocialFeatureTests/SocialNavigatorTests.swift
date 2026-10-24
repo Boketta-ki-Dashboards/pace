@@ -231,3 +231,38 @@ struct SocialNavigatorTests {
         #expect(social.detail(groupID: groupID) === social.detail(groupID: groupID))
     }
 }
+
+/// Speicher: Geschlossene Chats werden nach dem Prinzip „am längsten unbenutzt zuerst“ freigegeben; offene, im Pfad
+/// liegende und Chats mit Entwurf bleiben.
+@MainActor
+struct ChatCacheTrimmingTests {
+    @Test func idleChatsAreReleasedButOpenAndDraftChatsStay() async {
+        let conversations = (0..<14).map { index in
+            ChatFixtures.group(id: UUID(), groupID: UUID(), title: "Gruppe \(index)")
+        }
+        let repository = ChatRepositoryStub { $0.conversations = conversations }
+        let chats = ChatListViewModel(
+            repository: repository, media: nil, calendar: Fixtures.activityCalendar,
+            now: { Fixtures.date(2026, 10, 16, 12) }, sleep: { try await ManualTicker().sleep($0) }
+        )
+        await chats.load()
+        let social = SocialViewModel(repository: SocialRepositoryStub(), chats: chats, calendar: Fixtures.activityCalendar)
+        let navigator = social.navigator
+
+        // Ein Chat mit Entwurf, dann nacheinander alle anderen öffnen und wieder schließen.
+        let draft = chats.chat(for: ChatTarget(conversations[0]))
+        draft.draftText = "Bis gleich"
+        for conversation in conversations.dropFirst() {
+            navigator.openChat(ChatTarget(conversation))
+            navigator.popToRoot()
+        }
+        // Der zuletzt geöffnete Chat liegt offen im Pfad.
+        navigator.openChat(ChatTarget(conversations[13]))
+
+        #expect(chats.cachedChatCount <= ChatListViewModel.maximumIdleChats + 2)
+        #expect(chats.chat(for: ChatTarget(conversations[0])) === draft)
+        let open = chats.chat(for: ChatTarget(conversations[13]))
+        navigator.openChat(ChatTarget(conversations[13]))
+        #expect(chats.chat(for: ChatTarget(conversations[13])) === open)
+    }
+}

@@ -337,6 +337,7 @@ public final class HomeDashboardViewModel {
         sizeMenuModuleID = nil
         activeModuleID = nil
         draggingModuleID = nil
+        settings.endDeferringSave()
         lastRemoved = nil
     }
 
@@ -406,6 +407,7 @@ public final class HomeDashboardViewModel {
         sizeMenuModuleID = nil
         draggingModuleID = id
         activeModuleID = id
+        settings.beginDeferringSave()
     }
 
     /// Ziehgriff: Das gezogene Widget wandert an die Position `index`.
@@ -414,9 +416,11 @@ public final class HomeDashboardViewModel {
         settings.move(draggingModuleID, toIndex: index)
     }
 
-    /// Ziehen beendet (abgelegt oder abgebrochen): Das Widget ist wieder normal sichtbar.
+    /// Ziehen beendet (abgelegt oder abgebrochen): Das Widget ist wieder normal sichtbar, die neue Reihenfolge wird
+    /// einmal gespeichert.
     public func endDragging() {
         draggingModuleID = nil
+        settings.endDeferringSave()
     }
 
     public func moveUp(_ id: HomeModule.ID) {

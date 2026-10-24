@@ -82,6 +82,11 @@ public final class ChatViewModel {
     @ObservationIgnored private var observerCount = 0
     /// Der Chat ist gerade auf dem Bildschirm (dann kein Hinweis auf neue Nachrichten).
     var isVisible: Bool { observerCount > 0 }
+    /// Etwas ist noch nicht gesendet (Entwurf, Antwort, Bearbeitung, ausstehende Nachricht) – der Chat bleibt im
+    /// Speicher.
+    var hasUnsentContent: Bool {
+        !draftText.isEmpty || replyingTo != nil || editingMessage != nil || !pending.isEmpty
+    }
     /// Gerade hochgeladene Bilder und Sprachnachrichten (Pfad → Daten), damit sie nicht noch einmal geladen werden
     /// müssen.
     @ObservationIgnored private var uploadedMedia: [String: Data] = [:]

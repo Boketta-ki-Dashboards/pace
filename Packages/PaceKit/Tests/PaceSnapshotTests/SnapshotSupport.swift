@@ -132,7 +132,6 @@ enum Snapshot {
         collect(view)
         guard let pager = pagers.max(by: { $0.contentSize.width < $1.contentSize.width }) else { return }
         let width = pager.bounds.width
-        let visual = PaceTabPaging.advancesWithFingerMovingRight ? Double(pageCount - 1) - position : position
-        pager.setContentOffset(CGPoint(x: CGFloat(visual) * width, y: 0), animated: false)
+        pager.setContentOffset(CGPoint(x: CGFloat(position) * width, y: 0), animated: false)
     }
 }

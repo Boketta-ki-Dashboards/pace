@@ -76,7 +76,12 @@ public enum SocialPathItem: Hashable, Sendable {
 @Observable
 public final class SocialNavigator {
     /// Pfad des `NavigationStack` (die Zurück-Geste des Systems schreibt ihn ebenfalls).
-    public var path: [SocialPathItem] = []
+    public var path: [SocialPathItem] = [] {
+        didSet { onPathChange?(path) }
+    }
+
+    /// Wird nach jeder Änderung des Pfads aufgerufen (z. B. um nicht mehr offene Chats freizugeben).
+    @ObservationIgnored var onPathChange: (@MainActor ([SocialPathItem]) -> Void)?
 
     @ObservationIgnored private let isSameChat: @MainActor (ChatTarget, ChatTarget) -> Bool
 
@@ -87,6 +92,13 @@ public final class SocialNavigator {
     }
 
     public var isAtRoot: Bool { path.isEmpty }
+
+    /// Chats im Pfad (offen oder darunter verdeckt).
+    var chatTargets: [ChatTarget] {
+        path.compactMap { item in
+            if case .chat(let target) = item { target } else { nil }
+        }
+    }
 
     /// Öffnet eine Social-Seite – oder geht zu ihr zurück, wenn sie schon offen ist.
     public func open(_ route: SocialRoute) {

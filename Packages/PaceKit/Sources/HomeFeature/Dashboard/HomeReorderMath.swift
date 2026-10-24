@@ -54,8 +54,62 @@ public enum HomeReorderMath {
         return 0
     }
 
+    /// Abstand zwischen den Widgets aus ihren Rahmen (häufigster Abstand untereinander); ohne Messung `fallback`.
+    public static func spacing(of frames: [CGRect], fallback: CGFloat) -> CGFloat {
+        let sorted = frames.sorted { $0.minY < $1.minY }
+        let gaps = zip(sorted, sorted.dropFirst()).map { ($1.minY - $0.maxY).rounded() }.filter { $0 >= 0 }
+        guard !gaps.isEmpty else { return fallback }
+        let counts = Dictionary(gaps.map { ($0, 1) }, uniquingKeysWith: +)
+        return counts.max { $0.value == $1.value ? $0.key > $1.key : $0.value < $1.value }?.key ?? fallback
+    }
+
     /// Neuer Scroll-Versatz nach `delta`, begrenzt auf den scrollbaren Bereich.
     public static func clampedOffset(_ offset: CGFloat, delta: CGFloat, minimum: CGFloat, maximum: CGFloat) -> CGFloat {
         min(max(offset + delta, minimum), max(minimum, maximum))
+    }
+}
+
+/// Aufbau der Widget-Liste während des Ziehens: Oberkante der Liste, Abstand und Höhe jedes Widgets.
+///
+/// Daraus ergibt sich der Platz jedes Widgets für jede Reihenfolge sofort – ohne auf neu gemessene Rahmen zu warten.
+/// Gemessene Rahmen kommen erst nach dem Layout an; wer das gezogene Widget gegen einen solchen (veralteten) Rahmen
+/// verschiebt, lässt es nach jedem Platztausch um die Höhe des übersprungenen Widgets springen.
+public struct HomeReorderLayout<ID: Hashable>: Equatable {
+    public var top: CGFloat
+    public var spacing: CGFloat
+    public var heights: [ID: CGFloat]
+
+    public init(top: CGFloat, spacing: CGFloat, heights: [ID: CGFloat]) {
+        self.top = top
+        self.spacing = spacing
+        self.heights = heights
+    }
+
+    /// Aus gemessenen Rahmen (Inhaltskoordinaten); `nil`, wenn ein Rahmen fehlt.
+    public init?(order: [ID], frames: [ID: CGRect], fallbackSpacing: CGFloat) {
+        let measured = order.compactMap { frames[$0] }
+        guard measured.count == order.count, let top = measured.map(\.minY).min() else { return nil }
+        self.init(
+            top: top,
+            spacing: HomeReorderMath.spacing(of: measured, fallback: fallbackSpacing),
+            heights: Dictionary(uniqueKeysWithValues: zip(order, measured.map(\.height)))
+        )
+    }
+
+    /// Rahmen aller Widgets (nur senkrecht aussagekräftig) in der Reihenfolge `order`.
+    public func frames(order: [ID]) -> [ID: CGRect] {
+        var result: [ID: CGRect] = [:]
+        var y = top
+        for id in order {
+            let height = heights[id] ?? 0
+            result[id] = CGRect(x: 0, y: y, width: 1, height: height)
+            y += height + spacing
+        }
+        return result
+    }
+
+    /// Oberkante des Platzes von `id` in der Reihenfolge `order`.
+    public func slotTop(of id: ID, order: [ID]) -> CGFloat? {
+        frames(order: order)[id]?.minY
     }
 }

@@ -3,6 +3,32 @@ import DesignSystem
 import PaceCore
 import SwiftUI
 
+// MARK: - Audio-Sitzung
+
+/// Die gemeinsame Audio-Sitzung für Aufnahme und Wiedergabe (siehe ``ChatAudioSessionOwnership``): Nur wer sie
+/// aktiviert hat, deaktiviert sie wieder – das Stoppen der Wiedergabe beendet so nie eine laufende Aufnahme.
+@MainActor
+enum ChatAudioSession {
+    private static var ownership = ChatAudioSessionOwnership()
+
+    static func activate(
+        for owner: ChatAudioSessionOwnership.Owner,
+        category: AVAudioSession.Category,
+        mode: AVAudioSession.Mode,
+        options: AVAudioSession.CategoryOptions = []
+    ) throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(category, mode: mode, options: options)
+        try session.setActive(true)
+        ownership.take(owner)
+    }
+
+    static func release(_ owner: ChatAudioSessionOwnership.Owner) {
+        guard ownership.release(owner) else { return }
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+}
+
 // MARK: - Wiedergabe
 
 /// Spielt Sprachnachrichten ab – immer nur eine gleichzeitig (eine Instanz je Chat). Unterbrechungen (Anruf, andere
@@ -117,13 +143,12 @@ final class ChatVoicePlayer {
     }
 
     private func activateSession() {
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .spokenAudio)
-        try? session.setActive(true)
+        try? ChatAudioSession.activate(for: .player, category: .playback, mode: .spokenAudio)
     }
 
+    /// Gibt die Sitzung nur ab, wenn die Wiedergabe sie hält – eine laufende Aufnahme bleibt unberührt.
     private func deactivateSession() {
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        ChatAudioSession.release(.player)
     }
 }
 
@@ -190,9 +215,7 @@ final class ChatVoiceRecorder {
             break
         }
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
-            try session.setActive(true)
+            try ChatAudioSession.activate(for: .recorder, category: .playAndRecord, mode: .default, options: [.defaultToSpeaker])
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("pace-voice-\(UUID().uuidString.lowercased())")
                 .appendingPathExtension("m4a")
@@ -328,8 +351,9 @@ final class ChatVoiceRecorder {
         fileURL = nil
     }
 
+    /// Gibt die Sitzung nur ab, wenn die Aufnahme sie hält (z. B. nicht während die Vorschau abgespielt wird).
     private func deactivateSession() {
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        ChatAudioSession.release(.recorder)
     }
 }
 

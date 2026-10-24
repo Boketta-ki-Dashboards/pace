@@ -91,6 +91,8 @@ public struct HomeView: View {
         .onChange(of: viewModel.isEditing) { _, isEditing in
             if !isEditing { reorder.endDrag() }
         }
+        // Seite verlassen (z. B. Galerie geöffnet) oder App verlassen: kein Ziehen und kein Auto-Scroll bleibt übrig.
+        .onDisappear { [reorder] in reorder.endDrag() }
         .onChange(of: viewModel.streak.record) {
             viewModel.streak.saveRecordIfNeeded()
         }
@@ -98,8 +100,11 @@ public struct HomeView: View {
             Task { await viewModel.stepsDidChange() }
         }
         .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else {
+                reorder.endDrag()
+                return
+            }
             // Zurück in der App: Schritte lesen, dann Platzierungen auffrischen, falls älter als eine Minute.
-            guard newPhase == .active else { return }
             Task {
                 await viewModel.returnedToForeground()
                 await viewModel.loadNotificationsIfNeeded()

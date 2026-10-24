@@ -66,8 +66,8 @@ App-Start
 - **Wischen zwischen den Tabs** (`PaceTabPager`, DesignSystem): native horizontale `ScrollView` mit
   `.scrollTargetBehavior(.paging)`; die Seiten folgen dem Finger, die laufende Position (`PaceTabPaging.position`)
   bewegt die Hervorhebung der Tab-Leiste mit, die Auswahl wechselt erst, wenn die Seite ruht (Zurückziehen bricht ab).
-  Richtung laut Vorgabe: Finger nach rechts → nächster Tab (`PaceTabPaging.advancesWithFingerMovingRight`, an einer
-  Stelle umschaltbar). Nur auf der Startseite eines Tabs (`.paceTabRoot(isAtRoot:popToRoot:)` meldet Unterseiten),
+  Richtung (Auftrag 4, normales Paging): Seiten in Tab-Reihenfolge von links nach rechts; Finger von rechts nach links →
+  nächster Tab rechts, Finger von links nach rechts → vorheriger Tab. Nur auf der Startseite eines Tabs (`.paceTabRoot(isAtRoot:popToRoot:)` meldet Unterseiten),
   nicht im Anpassen-Modus und nicht bei offener Tastatur. Erneutes Antippen des aktiven Tabs scrollt nach oben bzw.
   führt von einer Unterseite zurück zur Startseite.
 

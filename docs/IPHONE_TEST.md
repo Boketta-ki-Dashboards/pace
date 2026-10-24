@@ -70,7 +70,7 @@ funktionieren schon (die bisherigen sechs Migrationen sind eingespielt).
 | 2 | Apple Health → Aktivität → Aktive Energie von heute ansehen, dann Pace. | Pace zeigt denselben Wert (kcal) an. Hat Health für heute keine Werte, steht „Nicht verfügbar“ – nie eine erfundene 0. | A |
 | 3 | Einen Chat öffnen, Nachricht schreiben, senden. | Kopf mit „‹ Social“ oben links, die Nachricht erscheint sofort unten; das Eingabefeld ist immer sichtbar. | A |
 | 4 | Ins Eingabefeld tippen, Tastatur wieder schließen (nach unten wischen). | Das Eingabefeld sitzt direkt über der Tastatur, die Tab-Leiste verschwindet solange; nichts wird verdeckt. | A |
-| 5 | Auf Home, Rankings, Social und Profil seitlich wischen. | Die Seiten folgen dem Finger, die helle Tab-Fläche gleitet mit. Finger nach rechts → nächster Tab. | A |
+| 5 | Auf Home, Rankings, Social und Profil seitlich wischen. | Die Seiten folgen dem Finger, die helle Tab-Fläche gleitet mit. Finger von rechts nach links → nächster Tab rechts (Home → Rankings → Social → Profil), Finger von links nach rechts → vorheriger Tab. | A |
 | 6 | Wischen anfangen und auf halbem Weg zurückziehen. | Der Wechsel wird abgebrochen, der bisherige Tab bleibt. | A |
 | 7 | Eine Unterseite öffnen (z. B. Kalender oder ein Chat) und seitlich wischen. | Kein Tab-Wechsel – nur die normale Zurück-Geste vom linken Rand. | A |
 | 8 | Home → „Anpassen“, ein Widget am Griff (sechs Punkte) festhalten und weit nach unten ziehen. | Die Seite scrollt am Rand mit, das Widget lässt sich über mehrere Bildschirmhöhen verschieben und bleibt nach dem Neustart dort. | A |

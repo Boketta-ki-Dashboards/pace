@@ -316,11 +316,11 @@ public final class ChatListViewModel {
     /// Gruppe geöffnet – gibt es immer dieselbe Instanz.
     public func chat(for target: ChatTarget) -> ChatViewModel {
         if let existing = chats.first(where: { $0.matches(target) }) {
-            return existing
+            return touched(existing)
         }
         let known = knownConversation(for: target)
         if let known, let existing = chats.first(where: { $0.matches(.conversation(id: known.id, kind: known.kind, title: known.title)) }) {
-            return existing
+            return touched(existing)
         }
         let chat = ChatViewModel(
             target: target,
@@ -340,6 +340,30 @@ public final class ChatListViewModel {
 
     /// Anzahl der ViewModels einzelner Chats im Speicher (Tests, Diagnose).
     var cachedChatCount: Int { chats.count }
+
+    /// So viele gerade nicht offene Chats bleiben höchstens im Speicher (mit Verlauf, Entwurf und hochgeladenen
+    /// Medien); ältere werden freigegeben und beim nächsten Öffnen neu geladen.
+    static let maximumIdleChats = 8
+
+    /// Gibt die am längsten nicht benutzten Chats frei – nie einen sichtbaren, einen im Navigationspfad oder einen mit
+    /// ungesendetem Inhalt (Entwurf, Antwort, Bearbeitung, ausstehende Nachricht).
+    func trimCache(keeping targets: [ChatTarget]) {
+        let idle = chats.filter { chat in
+            !chat.isVisible && !chat.hasUnsentContent && !targets.contains { chat.matches($0) }
+        }
+        let excess = idle.count - Self.maximumIdleChats
+        guard excess > 0 else { return }
+        let released = Set(idle.prefix(excess).map(ObjectIdentifier.init))
+        chats.removeAll { released.contains(ObjectIdentifier($0)) }
+    }
+
+    /// Zuletzt benutzte Chats stehen hinten (für ``trimCache(keeping:)``).
+    private func touched(_ chat: ChatViewModel) -> ChatViewModel {
+        if chats.last !== chat, let index = chats.firstIndex(where: { $0 === chat }) {
+            chats.append(chats.remove(at: index))
+        }
+        return chat
+    }
 
     /// Ob zwei Ziele dieselbe Unterhaltung zeigen – z. B. der Gruppenchat über die Gruppe (`.group`) und über die
     /// Chatliste (`.conversation`). Grundlage der Navigation, damit derselbe Chat nie zweimal auf dem Stapel liegt.

@@ -20,6 +20,9 @@ public final class HomeSettings {
     public private(set) var preferences: HomePreferences
 
     @ObservationIgnored private let store: any HomePreferencesStoring
+    /// Während des Ziehens am Griff ändert sich die Reihenfolge live, gespeichert wird erst am Ende.
+    @ObservationIgnored private var isDeferringSave = false
+    @ObservationIgnored private var hasUnsavedChanges = false
 
     public init(store: any HomePreferencesStoring) {
         self.store = store
@@ -210,12 +213,31 @@ public final class HomeSettings {
         preferences.modules.contains { $0.kind.showsRegionalRankings }
     }
 
+    /// Änderungen bis ``endDeferringSave()`` nur im Speicher halten (z. B. viele Platztausche beim Ziehen).
+    public func beginDeferringSave() {
+        isDeferringSave = true
+    }
+
+    /// Speichert einmal, was seit ``beginDeferringSave()`` geändert wurde.
+    public func endDeferringSave() {
+        guard isDeferringSave else { return }
+        isDeferringSave = false
+        if hasUnsavedChanges {
+            hasUnsavedChanges = false
+            store.save(preferences)
+        }
+    }
+
     private func update(_ change: (inout HomePreferences) -> Void) {
         var updated = preferences
         change(&updated)
         updated = updated.normalized()
         guard updated != preferences else { return }
         preferences = updated
-        store.save(updated)
+        if isDeferringSave {
+            hasUnsavedChanges = true
+        } else {
+            store.save(updated)
+        }
     }
 }

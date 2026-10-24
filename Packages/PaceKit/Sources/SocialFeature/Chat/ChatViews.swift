@@ -136,7 +136,11 @@ public struct ChatView: View {
                 voicePlayer.pause()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { _ in
+        // Nur der Beginn einer Unterbrechung zählt; das Ende (oder Hinweise anderer Apps) beendet keine Aufnahme.
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
+            guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  AVAudioSession.InterruptionType(rawValue: raw) == .began
+            else { return }
             recorder.interrupt()
             voicePlayer.pause()
         }

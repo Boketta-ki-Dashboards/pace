@@ -312,12 +312,16 @@ struct HomeEditHeader: View {
 
 /// Ziehgriff eines Widgets im Anpassen-Modus: Berühren und Ziehen verschiebt das Widget (Finger-genau, mit
 /// Auto-Scroll am Rand). Die Geste hat Vorrang vor dem Scrollen, damit die Liste beim Ziehen am Griff stillsteht.
+///
+/// Bricht das System die Geste ab (dann kommt kein `onEnded`), endet das Ziehen über den Gesten-Zustand trotzdem –
+/// sonst liefe das automatische Scrollen weiter.
 struct HomeReorderHandle: View {
     let module: HomeModule
     let viewModel: HomeDashboardViewModel
 
     @Environment(HomeReorderController.self) private var reorder: HomeReorderController?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @GestureState private var isTouching = false
 
     var body: some View {
         HomeDragHandle(color: viewModel.draggingModuleID == module.id ? PaceColor.accent : PaceColor.textSecondary)
@@ -325,15 +329,25 @@ struct HomeReorderHandle: View {
             .contentShape(Rectangle())
             .highPriorityGesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                    .updating($isTouching) { _, state, _ in state = true }
                     .onChanged { [reorder, viewModel, id = module.id] value in
                         reorder?.drag(id, toGlobalY: value.location.y, dashboard: viewModel)
                     }
-                    .onEnded { [reorder, reduceMotion] _ in
-                        withAnimation(reduceMotion ? nil : .snappy) {
-                            reorder?.endDrag()
-                        }
-                    }
+                    .onEnded { _ in endDrag() }
             )
+            .onChange(of: isTouching) { _, touching in
+                if !touching { endDrag() }
+            }
+            .onDisappear {
+                if viewModel.draggingModuleID == module.id { reorder?.endDrag() }
+            }
             .accessibilityHidden(true)
+    }
+
+    private func endDrag() {
+        guard viewModel.draggingModuleID == module.id else { return }
+        withAnimation(reduceMotion ? nil : .snappy) {
+            reorder?.endDrag()
+        }
     }
 }

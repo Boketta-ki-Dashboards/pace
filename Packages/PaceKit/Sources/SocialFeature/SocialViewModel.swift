@@ -104,9 +104,15 @@ public final class SocialViewModel {
         self.repository = repository
         let chats = chats ?? ChatListViewModel(repository: nil, media: media)
         self.chats = chats
-        self.navigator = SocialNavigator { [weak chats] lhs, rhs in
+        let navigator = SocialNavigator { [weak chats] lhs, rhs in
             chats?.isSameChat(lhs, rhs) ?? (lhs == rhs)
         }
+        // Geschlossene Chats geben ihren Speicher frei (höchstens wenige bleiben für schnelles Wiederöffnen).
+        navigator.onPathChange = { [weak chats, weak navigator] _ in
+            guard let navigator else { return }
+            chats?.trimCache(keeping: navigator.chatTargets)
+        }
+        self.navigator = navigator
         self.media = media
         self.ownUsername = ownUsername
         self.calendar = calendar

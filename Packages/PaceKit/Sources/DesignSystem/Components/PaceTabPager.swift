@@ -4,16 +4,21 @@ import SwiftUI
 /// Koordinatensystem der Seitenleiste (außerhalb des generischen Typs, damit die Messung ohne Typbezug auskommt).
 private let paceTabPagerSpace = "pace.tab.pager"
 
-/// Haupttabs nebeneinander, interaktiv per Wischen wechselbar (wie die Seiten-Navigation in Spielen): Die Seiten
-/// folgen dem Finger, Zwischenzustände (z. B. halb Rankings, halb Social) sind möglich, beim Loslassen entscheidet die
-/// native Paging-Logik nach Anteil und Geschwindigkeit; Zurückziehen bricht den Wechsel ab. An Home und Profil endet
-/// die Reihe (Gummiband, keine Schleife). Richtung siehe ``PaceTabPaging``.
+/// Haupttabs nebeneinander in Tab-Reihenfolge, interaktiv per Wischen wechselbar (normales Paging): Die Seiten folgen
+/// dem Finger – nach links wischen zeigt den nächsten Tab rechts, nach rechts den vorherigen. Zwischenzustände (z. B.
+/// halb Rankings, halb Social) sind möglich, beim Loslassen entscheidet die native Paging-Logik nach Anteil und
+/// Geschwindigkeit; Zurückziehen bricht den Wechsel ab. An Home und Profil endet die Reihe (Gummiband, keine Schleife).
+/// Rechenregeln siehe ``PaceTabPaging``.
 ///
 /// - Vertikales Scrollen in den Seiten bleibt unberührt (UIKit unterscheidet die Richtungen verschachtelter
 ///   Scrollansichten selbst).
 /// - `isPagingEnabled == false` (Unterseite offen, Anpassen-Modus, Tastatur): kein Wischen – die native Zurück-Geste
 ///   der Unterseiten bleibt frei.
 /// - Seiten bleiben erhalten (kein Lazy-Stack), damit Navigation, Scrollposition und ViewModels nicht verloren gehen.
+/// - Tastatur: Eine Scrollansicht verbraucht die Tastatur als eigenen Scroll-Abstand und gibt sie nicht an ihre Inhalte
+///   weiter – bei der waagerechten Seitenleiste blieben Eingabefelder (z. B. die Chat-Eingabe) dadurch unter der
+///   Tastatur. Die Leiste ignoriert die Tastatur deshalb selbst und gibt deren Höhe (aus der Safe Area gemessen, ohne
+///   feste Werte) jeder Seite als untere Safe Area weiter: Inhalte enden direkt über der Tastatur.
 public struct PaceTabPager<Tab: Hashable, Page: View>: View {
     private let tabs: [Tab]
     @Binding private var selection: Tab
@@ -27,6 +32,8 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
     /// damit ein unterbrochenes Gleiten die Auswahl nicht dauerhaft festhält).
     @State private var pendingTarget: (tab: Tab, since: Date)?
     @State private var lastPosition: Double?
+    /// Wie weit die Tastatur die Seitenleiste von unten überdeckt (0 ohne Tastatur).
+    @State private var keyboardOverlap: CGFloat = 0
     /// Startpunkt beim ersten Anzeigen: die Seite des anfangs gewählten Tabs (nicht immer Home).
     private let initialAnchor: UnitPoint
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -53,8 +60,9 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
     public var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 0) {
-                ForEach(PaceTabPaging.visualOrder(tabs), id: \.self) { tab in
+                ForEach(tabs, id: \.self) { tab in
                     page(tab)
+                        .safeAreaPadding(.bottom, keyboardOverlap)
                         .containerRelativeFrame(.horizontal)
                         .id(tab)
                 }
@@ -72,6 +80,17 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
         .defaultScrollAnchor(initialAnchor)
         .scrollIndicators(.hidden)
         .scrollDisabled(!isPagingEnabled)
+        .ignoresSafeArea(.keyboard)
+        .background {
+            PaceKeyboardOverlapReader { overlap in
+                guard abs(overlap - keyboardOverlap) > 0.5 else { return }
+                // Ein- und Ausblenden gleitet mit; Zwischenstände (z. B. Vorschlagsleiste) folgen direkt.
+                let animates = (overlap == 0 || keyboardOverlap == 0) && !reduceMotion
+                withAnimation(animates ? .easeOut(duration: 0.25) : nil) {
+                    keyboardOverlap = overlap
+                }
+            }
+        }
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { width in
@@ -102,5 +121,36 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
         if tab != selection {
             selection = tab
         }
+    }
+}
+
+/// Misst, wie weit die Tastatur einen Bereich von unten überdeckt: untere Safe Area mit Tastatur minus untere Safe
+/// Area ohne Tastatur (so zählen Home-Indikator und Ähnliches nicht mit).
+struct PaceKeyboardOverlapReader: View {
+    let onChange: (CGFloat) -> Void
+
+    @State private var withKeyboard: CGFloat = 0
+    @State private var withoutKeyboard: CGFloat = 0
+
+    var body: some View {
+        Color.clear
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.safeAreaInsets.bottom
+            } action: { inset in
+                withKeyboard = inset
+                onChange(max(inset - withoutKeyboard, 0))
+            }
+            .background {
+                Color.clear
+                    .ignoresSafeArea(.keyboard)
+                    .onGeometryChange(for: CGFloat.self) { proxy in
+                        proxy.safeAreaInsets.bottom
+                    } action: { inset in
+                        withoutKeyboard = inset
+                        onChange(max(withKeyboard - inset, 0))
+                    }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }

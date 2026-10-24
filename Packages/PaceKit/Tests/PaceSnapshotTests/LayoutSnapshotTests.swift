@@ -66,8 +66,8 @@ struct LayoutSnapshotTests {
         try await Snapshot.renderInWindow(screen, name: "layout-home-edit")
     }
 
-    /// Wischen auf halbem Weg (Finger nach rechts von Rankings Richtung Social): Beide Seiten sind halb sichtbar, die
-    /// Tab-Fläche liegt zwischen Rankings und Social.
+    /// Wischen auf halbem Weg (Finger von rechts nach links, von Rankings Richtung Social): Rankings links, Social rechts
+    /// je halb sichtbar, die Tab-Fläche liegt zwischen Rankings und Social.
     @Test func swipeHalfwayBetweenRankingsAndSocial() async throws {
         let screen = MainScreenHarness(selected: 1, content: AnyView(EmptyView()), labelsPages: true)
         try await Snapshot.renderInWindow(screen, name: "layout-pager-halfway") { view in
