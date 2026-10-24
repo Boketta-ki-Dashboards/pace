@@ -192,6 +192,14 @@ struct GroupCalendarContractTests {
         #expect(groupCalendar.day(Fixtures.day(2026, 10, 14))?.currentUserEntry == zero)
     }
 
+    /// Das Favoriten-Limit hat einen eigenen, verständlichen Text (nicht „z. B. Mitglieder einer Gruppe“).
+    @Test func favoriteLimitHasItsOwnMessage() {
+        #expect(ChatRules.maximumFavorites == 1_000)
+        #expect(!SocialError.favoriteLimitReached.message.isEmpty)
+        #expect(SocialError.favoriteLimitReached.message != SocialError.limitReached.message)
+        #expect(SocialError.favoriteLimitReached.message != SocialError.pinLimitReached.message)
+    }
+
     /// Ehemalige Mitglieder, die mich blockiert haben, kommen ohne Profil (Zählwerte bleiben).
     @Test func hiddenCalendarEntriesHaveNoProfile() {
         let hidden = GroupCalendarEntry(rank: 2, profile: nil, competitionSteps: 6_000, reached: true, isCurrentUser: false)

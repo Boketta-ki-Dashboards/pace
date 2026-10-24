@@ -1,7 +1,7 @@
 -- Pace: Nachrichtenaktionen – Sprachnachrichten, Antworten, Bearbeiten, Favoriten, Pins; Rechte, Privatsphäre,
 -- Echtzeit-Hinweise und Storage-Zugriff auf Audio.
 begin;
-select plan(140);
+select plan(152);
 
 -- =============================================================================================================
 -- Struktur
@@ -282,6 +282,7 @@ select pg_temp.as_user(1);
 select pg_temp.send('e1', pg_temp.id('direct'), 'text', 'Bis spöter');
 reset role;
 delete from realtime.messages m where m.topic = 'chat:' || pg_temp.id('direct');
+delete from realtime.messages m where m.topic in ('user:' || pg_temp.pid(1), 'user:' || pg_temp.pid(2));
 set local role authenticated;
 select pg_temp.as_user(1);
 select isnt(public.chat_edit_message(pg_temp.id('e1'), 'Bis später')->>'edited_at', null, 'Bearbeiten liefert edited_at');
@@ -298,6 +299,13 @@ select ok(
   exists (select 1 from realtime.messages m where m.topic = 'chat:' || (select (result->>'id') from t_r where name = 'direct')
             and m.event = 'message_updated' and m.private),
   'Echtzeit: message_updated an chat:<conversation_id>'
+);
+select is(
+  (select array_agg(distinct m.topic order by m.topic) from realtime.messages m
+    where m.event = 'conversation' and m.private and m.payload->>'event' = 'message_updated'
+      and m.topic in ('user:' || pg_temp.pid(1), 'user:' || pg_temp.pid(2))),
+  array['user:' || pg_temp.pid(1), 'user:' || pg_temp.pid(2)],
+  'Echtzeit: conversation an user:<public_id> beider Teilnehmer (Chatliste)'
 );
 select ok(
   not exists (select 1 from realtime.messages m where m.payload::text like '%Bis sp%'),
@@ -613,6 +621,78 @@ select is(
     where o.bucket_id = 'chat-media' and o.name like pg_temp.id('group') || '/%'),
   array[pg_temp.id('group') || '/ben.jpg', pg_temp.id('group') || '/emma.gif'],
   'Ordnerliste ben: eigene Datei und Dateien sichtbarer Nachrichten'
+);
+
+-- =============================================================================================================
+-- Grenzen: höchstens 1000 Favoriten, Rate Limits für Favoriten (60/min) und Pins (30/min)
+-- =============================================================================================================
+
+create function pg_temp.toggle_favorite(p_message uuid, p_times int) returns int language plpgsql as $$
+begin
+  for i in 1..p_times loop
+    perform public.chat_set_favorite(p_message, true);
+    perform public.chat_set_favorite(p_message, false);
+  end loop;
+  return p_times;
+end;
+$$;
+create function pg_temp.toggle_pin(p_message uuid, p_times int) returns int language plpgsql as $$
+begin
+  for i in 1..p_times loop
+    perform public.chat_set_pinned(p_message, false);
+    perform public.chat_set_pinned(p_message, true);
+  end loop;
+  return p_times;
+end;
+$$;
+
+-- cara hat 999 Favoriten (Nachrichten von anna in der Gruppe); der 1000. geht, der 1001. nicht.
+reset role;
+with filler as (
+  insert into public.chat_messages (conversation_id, sender_id, client_id, kind, body)
+  select (select (result->>'id')::uuid from t_r where name = 'group'), 'af000000-0000-4000-8000-000000000001',
+         gen_random_uuid(), 'text', 'Füller ' || n
+    from generate_series(1, 999) n
+  returning id
+)
+insert into public.chat_message_favorites (user_id, message_id)
+select 'af000000-0000-4000-8000-000000000003', f.id from filler f;
+set local role authenticated;
+select pg_temp.as_user(3);
+select lives_ok(format('select public.chat_set_favorite(%L, true)', pg_temp.id('p2')), '1000. Favorit erlaubt');
+select throws_ok(
+  format('select public.chat_set_favorite(%L, true)', pg_temp.id('p3')),
+  'P0001', 'favorite_limit_reached', '1001. Favorit: favorite_limit_reached'
+);
+select lives_ok(format('select public.chat_set_favorite(%L, true)', pg_temp.id('p2')), 'vorhandenen Favoriten erneut setzen: kein Fehler am Limit');
+select lives_ok(format('select public.chat_set_favorite(%L, false)', pg_temp.id('p2')), 'Entfernen geht am Limit');
+select lives_ok(format('select public.chat_set_favorite(%L, true)', pg_temp.id('p3')), 'danach wieder Platz');
+
+-- Rate Limit Favoriten: 60 Markierungen je Minute (Entfernen zählt nicht).
+reset role;
+delete from private.rate_limit_events e where e.user_id = 'af000000-0000-4000-8000-000000000002' and e.action = 'chat_favorite';
+set local role authenticated;
+select pg_temp.as_user(2);
+select is(pg_temp.toggle_favorite(pg_temp.id('p4'), 60), 60, '60 Markierungen je Minute erlaubt (Entfernen dazwischen zählt nicht)');
+select throws_ok(
+  format('select public.chat_set_favorite(%L, true)', pg_temp.id('p4')),
+  'P0001', 'rate_limited', '61. Markierung: rate_limited'
+);
+select lives_ok(format('select public.chat_set_favorite(%L, false)', pg_temp.id('p4')), 'Entfernen trotz Rate Limit');
+
+-- Rate Limit Pins: 30 Änderungen je Minute (Anpinnen und Lösen zählen).
+reset role;
+delete from private.rate_limit_events e where e.user_id = 'af000000-0000-4000-8000-000000000001' and e.action = 'chat_pin';
+set local role authenticated;
+select pg_temp.as_user(1);
+select is(pg_temp.toggle_pin(pg_temp.id('p6'), 15), 15, '30 Pin-Änderungen je Minute erlaubt');
+select throws_ok(
+  format('select public.chat_set_pinned(%L, false)', pg_temp.id('p6')),
+  'P0001', 'rate_limited', '31. Pin-Änderung: rate_limited'
+);
+select is(
+  jsonb_array_length(public.chat_pins(pg_temp.id('group'))), 5,
+  'abgelehnte Änderung lässt die Pins unverändert'
 );
 
 select * from finish();

@@ -348,6 +348,21 @@ struct MessageActionsNicknameCalendarTests {
         }
     }
 
+    @Test(arguments: [
+        TokenCase(function: "chat_set_favorite", token: "favorite_limit_reached", error: .favoriteLimitReached),
+        TokenCase(function: "chat_set_favorite", token: "limit_reached", error: .limitReached),
+        TokenCase(function: "chat_set_favorite", token: "rate_limited", error: .rateLimited),
+        TokenCase(function: "chat_set_favorite", token: "not_found", error: .notFound),
+    ])
+    func favoriteErrorTokensAreMapped(_ testCase: TokenCase) async {
+        let harness = BackendTestHarness()
+        harness.stub("POST", "/rest/v1/rpc/\(testCase.function)", .postgrestError(status: 400, code: "P0001", message: testCase.token))
+
+        await #expect(throws: testCase.error) {
+            try await harness.backend.chat.setFavorite(Self.messageID, isFavorite: true)
+        }
+    }
+
     @Test func nicknameAndEditErrorsAreMapped() async {
         let harness = BackendTestHarness()
         harness.stub("POST", "/rest/v1/rpc/social_set_friend_nickname", .postgrestError(status: 400, code: "P0001", message: "invalid_nickname"))

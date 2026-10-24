@@ -131,7 +131,8 @@ Wiedergabe) baut der Hauptstrang darauf auf. Bis dahin zeigt der Verlauf Sprachn
 - **Bearbeiten:** `editMessage(_:text:)` nur für eigene Textnachrichten (`ChatMessage.canEdit`); Antwort mit
   `editedAt` („Bearbeitet“, `isEdited`). Andere Teilnehmer bekommen `ChatConversationEvent.messageUpdated`.
 - **Favoriten:** `setFavorite(_:isFavorite:)`, `favorites(conversationID:)` (Übersicht in den Chat-Einstellungen);
-  `ChatMessage.isFavorite` gilt nur für mich. `withFavorite(_:)` für sofortiges Umschalten.
+  `ChatMessage.isFavorite` gilt nur für mich. `withFavorite(_:)` für sofortiges Umschalten. Höchstens
+  `ChatRules.maximumFavorites` (1000, sonst `favoriteLimitReached` mit eigenem Text); Entfernen geht immer.
 - **Anpinnen:** `ConversationSummary.canPin` (Gruppe: Owner; Privatchat: beide mit Schreibrecht),
   `setPinned(_:isPinned:)` → alle Pins, `pins(conversationID:)` → `[ChatPin]` (zuletzt angepinnte zuerst),
   `ChatMessage.isPinned`; höchstens `ChatRules.maximumPinnedMessages` (5, sonst `pinLimitReached`), Nicht-Owner

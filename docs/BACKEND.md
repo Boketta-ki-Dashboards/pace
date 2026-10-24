@@ -459,7 +459,7 @@ gelangt nicht in die Moderation.
 | `social_set_friend_nickname(p_public_id, p_nickname)` | eigenen Spitznamen für einen **aktuellen Freund** setzen (Leerraum zusammengefasst), leer/`null` entfernt; Antwort = Profil mit `nickname`. `not_found` ohne Freundschaft, `invalid_nickname`, 30 je 10 min |
 | `chat_send(…, p_reply_to_id = null, p_media_duration_ms = null)` | zusätzlich Antworten (nur auf sichtbare, nicht gelöschte Nachricht **derselben** Unterhaltung, sonst `not_found`) und `voice` (eigene, hochgeladene Datei im Ordner der Unterhaltung mit `audio/mp4`, `audio/x-m4a` oder `audio/aac`, Dauer 1–300 000 ms, sonst `invalid_input`). Bilder müssen jetzt `image/*`, GIFs `image/gif` sein. Eine Dauer bei anderen Arten → `invalid_input` |
 | `chat_edit_message(p_message_id, p_text)` | eigene, nicht gelöschte **Textnachricht** bearbeiten (Regeln wie Senden, `invalid_message`); andere Arten `invalid_input`, fremde/gelöschte `not_found`, ohne Schreibrecht `read_only`; gleicher Text ändert nichts; setzt `edited_at`; 30 je Minute; Echtzeit `message_updated` |
-| `chat_set_favorite(p_message_id, p_favorite)` | privaten Favoriten setzen (nur sichtbare Nachrichten lesbarer Unterhaltungen, sonst `not_found`; max. 1000 → `limit_reached`; 60 je Minute) bzw. entfernen (immer, idempotent) |
+| `chat_set_favorite(p_message_id, p_favorite)` | privaten Favoriten setzen (nur sichtbare Nachrichten lesbarer Unterhaltungen, sonst `not_found`; max. 1000 → `favorite_limit_reached`; 60 je Minute) bzw. entfernen (immer, idempotent) |
 | `chat_favorites(p_conversation_id)` | eigene Favoriten einer lesbaren Unterhaltung (Form wie `chat_messages`), neueste zuerst, max. 500 |
 | `chat_set_pinned(p_message_id, p_pinned)` | anpinnen/lösen (idempotent), Antwort = alle Pins. Gruppenchat nur Owner (`not_allowed`), Privatchat beide mit Schreibrecht (`read_only`); max. 5 (`pin_limit_reached`); 30 Änderungen je Minute; Lösen auch für verborgene Nachrichten; Echtzeit `pins_changed` |
 | `chat_pins(p_conversation_id)` | `[{message, pinned_by, pinned_at}]`, zuletzt angepinnte zuerst. Verborgene Nachrichten (gelöscht bzw. von Personen, die ich blockiert habe) zählen weiter zur Höchstzahl: Wer anpinnen darf (`can_pin`), bekommt sie als Platzhalter (`message` mit `id`, `conversation_id`, `kind`, `created_at`, `is_pinned`, `is_deleted: true`, Inhalt/Absender `null`; `pinned_by: null`) und kann sie lösen; alle anderen sehen sie nicht |
@@ -473,7 +473,8 @@ Ranking-Einträge `nickname`; Einladungen `inviter_nickname`; Auskunft `friend_n
 `chat_message_pins`, Nachrichten mit `reply_to_id`, `edited_at`, `media_duration_ms`.
 
 Neue Fehler-Tokens: `invalid_nickname` → `SocialError.invalidNickname`, `pin_limit_reached` →
-`SocialError.pinLimitReached` (vor `limit_reached` geprüft).
+`SocialError.pinLimitReached`, `favorite_limit_reached` → `SocialError.favoriteLimitReached` (beide vor
+`limit_reached` geprüft).
 
 ### Sprachnachrichten (Speicher)
 

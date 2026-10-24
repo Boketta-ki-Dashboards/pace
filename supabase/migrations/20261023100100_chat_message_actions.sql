@@ -25,7 +25,7 @@
 --   image/*-Typ haben.
 -- * Storage-Lesen (alle Chat-Medien): die hochladende Person immer, alle anderen nur Dateien sichtbarer, nicht
 --   gelöschter Nachrichten (Policy pace_chat_media_select ersetzt, siehe Abschnitt „Storage: Lesen …“).
--- * Fehler-Tokens: not_found, not_allowed, read_only, invalid_message, invalid_input, limit_reached,
+-- * Fehler-Tokens: not_found, not_allowed, read_only, invalid_message, invalid_input, favorite_limit_reached,
 --   pin_limit_reached, rate_limited.
 -- =============================================================================================================
 
@@ -753,7 +753,7 @@ begin
 
   perform private.lock_users(array[v_me]);
   if (select count(*) from public.chat_message_favorites f where f.user_id = v_me) >= 1000 then
-    raise exception 'limit_reached';
+    raise exception 'favorite_limit_reached';
   end if;
   perform private.consume_rate_limit(v_me, 'chat_favorite', 60, interval '1 minute');
 
@@ -766,7 +766,7 @@ $$;
 revoke all on function public.chat_set_favorite(uuid, boolean) from public, anon;
 grant execute on function public.chat_set_favorite(uuid, boolean) to authenticated;
 comment on function public.chat_set_favorite(uuid, boolean) is
-  'Pace: Nachricht privat als Favorit markieren bzw. entfernen (idempotent). Nur sichtbare Nachrichten lesbarer Unterhaltungen; max. 1000 Favoriten, 60 je Minute.';
+  'Pace: Nachricht privat als Favorit markieren bzw. entfernen (idempotent). Nur sichtbare Nachrichten lesbarer Unterhaltungen; max. 1000 Favoriten (favorite_limit_reached), 60 je Minute.';
 
 create function public.chat_favorites(p_conversation_id uuid)
 returns jsonb

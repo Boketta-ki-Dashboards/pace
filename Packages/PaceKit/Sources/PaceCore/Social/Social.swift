@@ -727,6 +727,8 @@ public enum SocialError: Error, Equatable, Sendable {
     case invalidNickname
     /// Es sind bereits so viele Nachrichten angepinnt wie erlaubt (`ChatRules.maximumPinnedMessages`).
     case pinLimitReached
+    /// Es gibt bereits so viele eigene Favoriten wie erlaubt (`ChatRules.maximumFavorites`).
+    case favoriteLimitReached
     /// In dieser Unterhaltung kann man nicht mehr schreiben (z. B. nach Ende der Freundschaft).
     case readOnly
     /// Die Social-Funktionen sind auf dem Server (noch) nicht eingerichtet.
@@ -813,6 +815,12 @@ public enum SocialError: Error, Equatable, Sendable {
                 de: "Es sind bereits 5 Nachrichten angepinnt. Löse zuerst eine davon.",
                 en: "5 messages are already pinned. Unpin one of them first.",
                 ru: "Уже закреплено 5 сообщений. Сначала открепи одно из них."
+            )
+        case .favoriteLimitReached:
+            PaceLocalization.text(
+                de: "Du hast bereits 1.000 Favoriten. Entferne zuerst einen davon.",
+                en: "You already have 1,000 favorites. Remove one of them first.",
+                ru: "У тебя уже 1 000 избранных сообщений. Сначала убери одно из них."
             )
         case .readOnly:
             PaceLocalization.text(

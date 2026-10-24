@@ -136,6 +136,7 @@ enum BackendErrorMapping {
         ("rate_limited", .rateLimited),
         ("cooldown", .cooldown),
         ("pin_limit_reached", .pinLimitReached),
+        ("favorite_limit_reached", .favoriteLimitReached),
         ("limit_reached", .limitReached),
         ("not_allowed", .notAllowed),
         ("not_found", .notFound),

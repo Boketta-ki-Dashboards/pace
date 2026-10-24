@@ -319,6 +319,8 @@ public enum ChatRules {
     public static let maximumVoiceDuration: Duration = .seconds(300)
     /// Höchstzahl angepinnter Nachrichten je Unterhaltung (wie auf dem Server).
     public static let maximumPinnedMessages = 5
+    /// Höchstzahl eigener Favoriten über alle Unterhaltungen (wie auf dem Server, sonst `favoriteLimitReached`).
+    public static let maximumFavorites = 1_000
     /// Länge, auf die der Server den Text in einer Antwort-Vorschau kürzt.
     public static let replyPreviewLength = 200
 
@@ -373,7 +375,8 @@ public protocol ChatRepository: Sendable {
     /// Bearbeitet eine eigene Textnachricht (gleiche Längenregeln wie beim Senden) und liefert sie mit `editedAt`.
     /// `notFound` für fremde/gelöschte Nachrichten, `invalidInput` für andere Arten, `readOnly` ohne Schreibrecht.
     func editMessage(_ messageID: UUID, text: String) async throws -> ChatMessage
-    /// Markiert eine sichtbare Nachricht als privaten Favoriten bzw. entfernt ihn (idempotent).
+    /// Markiert eine sichtbare Nachricht als privaten Favoriten bzw. entfernt ihn (idempotent). Höchstens
+    /// `ChatRules.maximumFavorites` (`favoriteLimitReached`); Entfernen geht immer.
     func setFavorite(_ messageID: UUID, isFavorite: Bool) async throws
     /// Eigene Favoriten einer Unterhaltung, neueste Nachricht zuerst.
     func favorites(conversationID: UUID) async throws -> [ChatMessage]

@@ -328,6 +328,8 @@ Fehler sind stabile Tokens als Meldung; die App prüft `message.contains(token)`
 | `limit_reached` | Mengenlimit erreicht (siehe unten) |
 | `invalid_invite_code` | unbekannter Einladungscode (HTTP 400, siehe oben) |
 | `invalid_nickname` | Spitzname zu lang (über 30 Zeichen) oder mit Steuer-/Formatzeichen |
+| `pin_limit_reached` | bereits 5 Pins in der Unterhaltung (`SocialError.pinLimitReached`) |
+| `favorite_limit_reached` | bereits 1000 eigene Favoriten (`SocialError.favoriteLimitReached`) |
 
 Ohne Anmeldung (nur Publishable Key, Rolle `anon`) antwortet PostgREST mit `42501 permission denied for function`.
 
