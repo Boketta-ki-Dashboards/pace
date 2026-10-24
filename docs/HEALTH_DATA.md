@@ -100,12 +100,38 @@ Das betrifft nur die Statistik der letzten 7 Tage.
 - Woche = ISO-Woche Montag bis Sonntag. Das passt zu den späteren Weekly-Rankings im Backend.
 - Geladen werden immer die letzten 7 Tage. Daraus ergeben sich „heute“, „gestern“, „aktuelle Woche“ und
   „letzte 7 Tage“.
-- Der **Monatskalender** zeigt die Wochentage nach App-Sprache (Deutsch und Russisch ab Montag, Englisch ab Sonntag).
+- Der **Monatskalender** beginnt in allen Sprachen am Montag (wie Woche und Streak).
   Er liest nichts zusätzlich, sondern nutzt den Verlauf (siehe unten): zurück bis zum Anfang des Verlaufs (12 volle
   Monate), vorwärts bis zum aktuellen Monat. Zustände je Tag: Ziel erreicht (volle Fläche), gemessen aber nicht
   erreicht (Ring, auch bei gemessenen 0 Schritten), keine Daten (gestrichelter Ring, „–“), Zukunft (neutral, „–“).
+  Die Auswahl ist ein eigener Zustand: ein Akzentrahmen mit Abstand außen um das Feld (auch im Dark Mode und um
+  gefüllte Tage klar sichtbar) – sie verändert das Feld selbst nicht und sieht nie wie „Ziel erreicht“ aus.
 - Bewertet wird jeder Tag mit dem **damals gültigen Tagesziel** (`StepGoalHistory`) – dieselbe Grundlage wie die
   Streak. Eine spätere Zieländerung verändert vergangene Tage nicht.
+
+### Aktive Energie (kcal): drei Zustände
+
+- **gemessen** – Summe der aktiven Energie des Tages aus Apple Health,
+- **gemessene 0** – Health hat Samples, aber 0 kcal für den Tag,
+- **nicht verfügbar** – für den Tag liegt kein Wert vor (kein Zugriff, kein Gerät, das misst). Angezeigt als
+  „Nicht verfügbar“ mit Erklärung – nie als erfundene 0. Pace schätzt keine Kalorien.
+
+Gleich auf Home, in den Tagesdetails, der Woche, dem Monat und im Kalender.
+
+## Live-Schritte (Core Motion)
+
+Solange Pace im Vordergrund ist, zählt die Anzeige „Deine Schritte heute“ über `CMPedometer` live mit
+(`PedometerLiveSteps`, nur mit Erlaubnis „Bewegung & Fitness“, `NSMotionUsageDescription`). `LiveStepEstimator`
+verhindert doppeltes Zählen:
+
+- Grundlage bleibt der letzte HealthKit-Wert (Wettbewerbsschritte). Der Sensor liefert nur den Zuwachs seit diesem
+  Wert; jeder neue HealthKit-Wert setzt die Basis neu (die Schritte sind dann in Health enthalten).
+- Die Anzeige sinkt nie innerhalb eines Tages (hinkt Health hinterher, bleibt sie stehen, bis Health aufholt); ein
+  neuer Tag beginnt mit dem HealthKit-Wert; ein neu gestarteter Sensor (kleinerer Zählerstand) zählt nicht doppelt.
+- Die Live-Werte sind **nur Anzeige**: Rankings, Synchronisierung, Streak und Erinnerungen nutzen ausschließlich die
+  HealthKit-Wettbewerbsschritte (manuell eingetragene Schritte zählen weiterhin nicht – die Live-Vorschau umgeht das
+  nicht, weil der Sensor nur echte Bewegung misst und Health die Basis bleibt).
+- Ohne Erlaubnis oder ohne Sensor zeigt Pace wie bisher die HealthKit-Werte.
 
 ## Wann gelesen wird
 

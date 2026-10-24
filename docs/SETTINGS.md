@@ -75,15 +75,34 @@ Social-Einstellungen; beide nutzen dieselbe Server-Logik (`SocialRepository`), k
 ### Mitteilungen (`NotificationSettingsViewModel`)
 - Status der iOS-Erlaubnis; „Mitteilungen erlauben“ (Abfrage) bzw. „iOS-Einstellungen öffnen“
   (`UIApplication.openNotificationSettingsURLString`). Beim Zurückkehren in die App wird der Status neu gelesen.
-- **Erinnerung an das Tagesziel** (lokal, `UserNotificationScheduler`): an/aus und Uhrzeit, gespeichert in
-  `AppSettings.streakReminder`. Geplant werden einzelne Mitteilungen für 14 Tage; ist das heutige Ziel erreicht,
-  entfällt die heutige. Neu geplant wird beim Start der Main App, beim Erreichen des Ziels (`MainTabView`), bei
-  Änderungen von Uhrzeit oder Sprache und an einem neuen Tag. Ohne Erlaubnis bleibt die Erinnerung aus.
-  Grenze: Pace hat keine HealthKit-Hintergrundzustellung (bräuchte eine zusätzliche Capability). Wird das Ziel
-  erreicht, ohne dass Pace danach geöffnet wird, kommt die heutige Erinnerung trotzdem – die Texte in der App sagen
-  das so („… und Pace danach geöffnet …“).
-- Push-Mitteilungen (Anfragen, Einladungen, Chat) brauchen APNs und einen Server-Versand – sie werden nur als
-  „folgt“ erklärt, nicht als Schalter angeboten.
+- **Tagesziel-Erinnerungen** (lokal, `UserNotificationScheduler`): an/aus und **bis zu 6 Uhrzeiten** (hinzufügen,
+  ändern, entfernen; die letzte bleibt), gespeichert in `AppSettings.streakReminder` (`StreakReminderSettings.times`,
+  zusätzlich `hour`/`minute` der ersten Uhrzeit, damit ältere Versionen lesen können; die frühere einzelne Uhrzeit wird
+  übernommen). Die Profilzeile zeigt „Aus“, die Uhrzeit oder „3 Erinnerungen“.
+- **Planung** (`GoalReminderPlanner`, PaceCore): 14 Tage im Voraus, bei vielen Uhrzeiten weniger (höchstens 60
+  geplante Mitteilungen – iOS behält 64 je App). Texte passend zur Situation:
+  - vor 11 Uhr: „Vergiss dein Tagesziel nicht!“ (ohne Zahl),
+  - später mit den fehlenden Schritten („Dir fehlen noch 2.400 Schritte …“) – nur, wenn der bekannte Stand bei der
+    Zustellung höchstens 90 Minuten alt ist, sonst ein allgemeiner Text ohne Zahl (nie eine veraltete Restzahl),
+  - „Nur noch 700 Schritte!“, wenn höchstens max(500, Ziel/10) fehlen,
+  - ist das Ziel heute erreicht, entfallen die heutigen Erinnerungen,
+  - „Geschafft!“ höchstens einmal am Tag (`AppSettings.goalReachedNotifiedOn`) und nur, wenn Pace den Wechsel von
+    offen zu erreicht selbst gesehen hat (kein „Geschafft!“ für einen beim Start schon erreichten Tag).
+  Neu geplant wird beim Start, bei geänderten Uhrzeiten/Sprache, beim Erreichen des Ziels und bei neuen Schrittwerten
+  aus Apple Health (gedrosselt auf höchstens alle 5 Minuten). Zeitzone und Sommerzeit: Uhrzeiten sind Ortszeit; eine
+  in der Umstellungsnacht nicht existierende Uhrzeit wird an diesem Tag übersprungen.
+  Grenzen (auch so in der App erklärt): iOS plant im Voraus, Pace kann Apple Health nicht unmittelbar vor der Zustellung
+  lesen; ohne HealthKit-Hintergrundzustellung (eigene Capability, bewusst nicht ergänzt) wirkt ein erreichtes Ziel erst,
+  wenn Pace danach geöffnet war. Mitteilungen erscheinen auch bei geöffneter App als Banner
+  (`ForegroundNotificationPresenter`).
+- **Chatnachrichten** – Schalter „Hinweis bei neuen Nachrichten“ (`AppSettings.chatMessageHints`, Standard an): Solange
+  Pace geöffnet ist, meldet `ChatListViewModel.onIncomingMessage` neue Nachrichten anderer in einem nicht offenen Chat
+  als lokalen Hinweis (Titel = Chatname bzw. eigener Spitzname, Text = Vorschau wie in der Chatliste; je Chat ersetzt
+  ein neuer Hinweis den vorigen). Kein Hinweis beim ersten Laden, nach der Rückkehr aus dem Hintergrund (Abstand zum
+  vorigen Stand > 2 Minuten), für eigene Nachrichten oder den offenen Chat.
+- **Push-Mitteilungen bei geschlossener App** (Anfragen, Einladungen, Chat) bräuchten APNs mit Push-Capability und
+  einen Server-Versand. Mit einem kostenlosen Personal Team ist das nicht möglich; es wird ehrlich erklärt und nicht als
+  Schalter angeboten. Eine lokale Mitteilung wird nirgends als Push ausgegeben.
 
 ### Datenschutz & Daten (`DataPrivacyViewModel`)
 - Erklärungen zu Gesundheitsdaten, Wettbewerbsschritten, Profil-/Gruppen-/Chatdaten und Aufbewahrung – sichtbar als

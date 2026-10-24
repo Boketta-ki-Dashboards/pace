@@ -61,6 +61,15 @@ App-Start
   aus. Ob das Profil sichtbar ist, entscheidet der Server.
 - Weitere Tabs kommen als zusätzlicher Fall in `MainViewModel.Tab` mit eigenem Feature-Modul hinzu. Home wechselt
   über Callbacks in andere Tabs (z. B. eine Ranking-Karte → Rankings mit dieser Ebene), ohne die Main App zu kennen.
+- **Tab-Rahmen** (`MainTabView`): `VStack` aus Inhalt und `PaceTabBar` (keine Überlagerung – nichts wird verdeckt);
+  bei offener Tastatur ist die Tab-Leiste ausgeblendet (`onKeyboardVisibilityChange`).
+- **Wischen zwischen den Tabs** (`PaceTabPager`, DesignSystem): native horizontale `ScrollView` mit
+  `.scrollTargetBehavior(.paging)`; die Seiten folgen dem Finger, die laufende Position (`PaceTabPaging.position`)
+  bewegt die Hervorhebung der Tab-Leiste mit, die Auswahl wechselt erst, wenn die Seite ruht (Zurückziehen bricht ab).
+  Richtung laut Vorgabe: Finger nach rechts → nächster Tab (`PaceTabPaging.advancesWithFingerMovingRight`, an einer
+  Stelle umschaltbar). Nur auf der Startseite eines Tabs (`.paceTabRoot(isAtRoot:popToRoot:)` meldet Unterseiten),
+  nicht im Anpassen-Modus und nicht bei offener Tastatur. Erneutes Antippen des aktiven Tabs scrollt nach oben bzw.
+  führt von einer Unterseite zurück zur Startseite.
 
 ## Home-Dashboard
 
@@ -92,7 +101,16 @@ App-Start
   automatisch) und wird von Social-Tab und Home-Modulen geteilt. `GroupDetailViewModel` und
   `FriendProfileViewModel` für die Detailansichten.
 - Fehlt die Migration auf dem Server (PostgREST `PGRST202`), zeigen Social-Tab und Module einen ehrlichen Hinweis
-  statt scheinbar funktionierender Oberflächen. Einen Gruppenchat gibt es bewusst nicht (keine Moderation).
+  statt scheinbar funktionierender Oberflächen.
+- Chats: `ChatListViewModel` (app-weit beobachtet, Ungelesen-Badge, Hinweise auf neue Nachrichten) und je Unterhaltung
+  ein `ChatViewModel` (Verlauf, optimistisches Senden, Antworten, Bearbeiten, Favoriten, Pins, Sprung zu Nachrichten,
+  Sprachnachrichten senden). Aufnahme und Wiedergabe (`ChatVoiceRecorder`, `ChatVoicePlayer`, AVFoundation) leben in
+  der Ansicht. Details: `docs/CHAT.md`.
+- Spitznamen: privat je Nutzer, vom Server in alle Profile/Einträge gemischt (`SocialProfile.nickname`); angezeigt wird
+  überall `shownName` (Spitzname, sonst Anzeigename). Nach dem Speichern übernimmt `SocialViewModel.nicknameDidChange`
+  den Namen sofort in Freunde, Ranking und Chats.
+- Gruppenkalender: `GroupCalendarViewModel` (Monatsraster ab Montag, Zustände aus `GroupCalendar.state(of:)`,
+  Tagesrangliste) über `SocialRepository.groupCalendar` – alle Werte historisch vom Server.
 
 ## Profil und Einstellungen
 

@@ -64,9 +64,13 @@ nicht betroffen (eigene Regeln).
 - Jedes Widget: X oben links (Entfernen mit „Rückgängig“-Leiste; „Deine Schritte heute“ ist Pflicht und hat kein X),
   oben rechts „Größe auswählen“ mit Menü Klein/Mittel/Groß/Max (Haken an der aktuellen, nur unterstützte Größen) und
   Ziehgriff (sechs Punkte). Keine Ziehecken.
-- Umsortieren per Drag & Drop (`onDrag`/`onDrop`, iOS 17): sobald ein Widget über einem anderen schwebt, tauschen sie
-  die Plätze; Haptik bei jeder Änderung. Wird außerhalb eines Widgets abgelegt (Kopf, Zwischenräume, freie Fläche darunter), endet das
-  Ziehen ebenfalls sauber (`endDragging()`); Text aus anderen Apps wird nicht angenommen. VoiceOver-Alternative:
+- Umsortieren am Ziehgriff (sechs Punkte) mit einer eigenen Geste (`HomeReorderController`, kein System-Drag &
+  Drop mehr): Das Widget hängt am Finger (leicht vergrößert, Schatten), die anderen weichen animiert aus, sobald seine
+  Mitte über einem anderen Platz liegt (`HomeReorderMath.targetIndex`); Haptik bei jedem Platzwechsel. Nahe am oberen
+  bzw. unteren Rand scrollt die Seite automatisch mit (`CADisplayLink`, Geschwindigkeit steigt quadratisch bis
+  1.150 pt/s, `HomeReorderMath.autoScrollVelocity`) – so lassen sich Widgets über mehrere Bildschirmhöhen verschieben.
+  Während des Ziehens ist das normale Scrollen gesperrt, das Wischen zwischen Tabs ebenfalls. Loslassen speichert die
+  neue Reihenfolge sofort; „Fertig“ oder Verlassen beendet ein laufendes Ziehen sauber. VoiceOver-Alternative:
   Aktionen „Nach oben/unten verschieben“, Größen und Entfernen am Titel jedes Widgets.
 - „Größe auswählen“ trägt das Symbol aus dem Anpassen-Design (`HomeSizeGlyph`: Quadrat mit offener Ecke und
   versetztem kleinen Quadrat), gezeichnet als Pfad und mit der Schriftgröße skaliert.
