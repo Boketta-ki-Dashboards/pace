@@ -372,6 +372,30 @@ struct LeaderboardViewModelTests {
         #expect(viewModel.friendsProgressText == "Noch 11 Schritte bis Platz #1")
     }
 
+    /// Spitzname im Social-Tab geändert: Rankings → Freunde zeigt ihn sofort, ohne neu zu laden (Auftrag 4, 8.2).
+    @Test func changedNicknameShowsUpInTheFriendsRankingRightAway() async throws {
+        let social = SocialRepositoryStub { $0.ranking = Fixtures.ranking(count: 3, currentUserRank: 2) }
+        let (viewModel, _) = makeViewModel(social: social)
+        await viewModel.selectFriends()
+        guard case .loaded(let before) = viewModel.friends else {
+            Issue.record("Freunde-Ranking nicht geladen")
+            return
+        }
+        let friend = try #require(before.first { !$0.isCurrentUser })
+
+        viewModel.nicknameDidChange(SocialProfile(
+            publicID: friend.publicUserID, username: friend.username, displayName: friend.displayName, nickname: "Sprinter"
+        ))
+
+        guard case .loaded(let after) = viewModel.friends else {
+            Issue.record("Freunde-Ranking verloren")
+            return
+        }
+        #expect(after.first { $0.publicUserID == friend.publicUserID }?.shownName == "Sprinter")
+        #expect(after.filter { $0.publicUserID != friend.publicUserID } == before.filter { $0.publicUserID != friend.publicUserID })
+        #expect(social.state.current.friendRankingPeriods.count == 1)
+    }
+
     @Test func friendsHintsForLeaderAndLoneUser() async {
         let leader = SocialRepositoryStub { $0.ranking = Fixtures.ranking(count: 3, currentUserRank: 1) }
         let (leading, _) = makeViewModel(social: leader)

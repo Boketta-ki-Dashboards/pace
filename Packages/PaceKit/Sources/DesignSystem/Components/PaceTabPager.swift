@@ -1,5 +1,6 @@
 import PaceCore
 import SwiftUI
+import UIKit
 
 /// Koordinatensystem der Seitenleiste (außerhalb des generischen Typs, damit die Messung ohne Typbezug auskommt).
 private let paceTabPagerSpace = "pace.tab.pager"
@@ -17,8 +18,9 @@ private let paceTabPagerSpace = "pace.tab.pager"
 /// - Seiten bleiben erhalten (kein Lazy-Stack), damit Navigation, Scrollposition und ViewModels nicht verloren gehen.
 /// - Tastatur: Eine Scrollansicht verbraucht die Tastatur als eigenen Scroll-Abstand und gibt sie nicht an ihre Inhalte
 ///   weiter – bei der waagerechten Seitenleiste blieben Eingabefelder (z. B. die Chat-Eingabe) dadurch unter der
-///   Tastatur. Die Leiste ignoriert die Tastatur deshalb selbst und gibt deren Höhe (aus der Safe Area gemessen, ohne
-///   feste Werte) jeder Seite als untere Safe Area weiter: Inhalte enden direkt über der Tastatur.
+///   Tastatur. Die Leiste ignoriert die Tastatur deshalb selbst und gibt die gemessene Überdeckung
+///   (``PaceKeyboardOverlapReader``, ohne feste Werte) jeder Seite als untere Safe Area weiter: Inhalte enden direkt
+///   über der Tastatur.
 public struct PaceTabPager<Tab: Hashable, Page: View>: View {
     private let tabs: [Tab]
     @Binding private var selection: Tab
@@ -90,6 +92,9 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
                     keyboardOverlap = overlap
                 }
             }
+            // Gleicher Rahmen wie die Seitenleiste (die die Tastatur ebenfalls ignoriert).
+            .ignoresSafeArea(.keyboard)
+            .accessibilityHidden(true)
         }
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
@@ -124,33 +129,57 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
     }
 }
 
-/// Misst, wie weit die Tastatur einen Bereich von unten überdeckt: untere Safe Area mit Tastatur minus untere Safe
-/// Area ohne Tastatur (so zählen Home-Indikator und Ähnliches nicht mit).
-struct PaceKeyboardOverlapReader: View {
+/// Meldet, wie weit die Tastatur diesen Bereich von unten überdeckt (0 ohne Tastatur).
+///
+/// Gemessen wird mit `UIKeyboardLayoutGuide`: UIKit führt die Hilfslinie mit der Tastatur mit – auch beim
+/// interaktiven Ausblenden durch Wischen – und rechnet in den Koordinaten dieser Ansicht. Keine festen Höhen, keine
+/// Annahmen über Gerät oder Home-Indikator.
+struct PaceKeyboardOverlapReader: UIViewRepresentable {
     let onChange: (CGFloat) -> Void
 
-    @State private var withKeyboard: CGFloat = 0
-    @State private var withoutKeyboard: CGFloat = 0
+    func makeUIView(context: Context) -> TrackerView {
+        let view = TrackerView()
+        view.onChange = onChange
+        return view
+    }
 
-    var body: some View {
-        Color.clear
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.safeAreaInsets.bottom
-            } action: { inset in
-                withKeyboard = inset
-                onChange(max(inset - withoutKeyboard, 0))
-            }
-            .background {
-                Color.clear
-                    .ignoresSafeArea(.keyboard)
-                    .onGeometryChange(for: CGFloat.self) { proxy in
-                        proxy.safeAreaInsets.bottom
-                    } action: { inset in
-                        withoutKeyboard = inset
-                        onChange(max(withKeyboard - inset, 0))
-                    }
-            }
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+    func updateUIView(_ uiView: TrackerView, context: Context) {
+        uiView.onChange = onChange
+    }
+
+    final class TrackerView: UIView {
+        var onChange: ((CGFloat) -> Void)?
+        private var lastOverlap: CGFloat = 0
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+            // Ohne Tastatur liegt die Hilfslinie am unteren Rand dieser Ansicht (nicht am Rand der Safe Area).
+            keyboardLayoutGuide.usesBottomSafeArea = false
+            // Eine Markierung an der Hilfslinie sorgt dafür, dass jede Bewegung der Tastatur ein Layout auslöst.
+            let marker = UIView()
+            marker.isUserInteractionEnabled = false
+            marker.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(marker)
+            NSLayoutConstraint.activate([
+                marker.leadingAnchor.constraint(equalTo: leadingAnchor),
+                marker.widthAnchor.constraint(equalToConstant: 1),
+                marker.heightAnchor.constraint(equalToConstant: 1),
+                marker.topAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor),
+            ])
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) is not supported")
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            let overlap = window == nil ? 0 : min(max(bounds.height - keyboardLayoutGuide.layoutFrame.minY, 0), bounds.height)
+            guard abs(overlap - lastOverlap) > 0.5 else { return }
+            lastOverlap = overlap
+            onChange?(overlap)
+        }
     }
 }

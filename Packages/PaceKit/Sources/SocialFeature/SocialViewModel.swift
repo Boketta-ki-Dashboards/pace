@@ -71,6 +71,8 @@ public final class SocialViewModel {
     /// Öffnet die Privatsphäre-Einstellungen im Profil-Tab (vom App-Rahmen gesetzt). Ohne Angabe erklären die
     /// Social-Einstellungen nur, wo sich die Auffindbarkeit einstellen lässt.
     public var openPrivacySettings: (@MainActor () -> Void)?
+    /// Ein eigener Spitzname wurde geändert – für Ansichten außerhalb des Social-Tabs (z. B. Rankings → Freunde).
+    public var onNicknameChange: (@MainActor (SocialProfile) -> Void)?
 
     @ObservationIgnored private let repository: (any SocialRepository)?
     /// Profil- und Gruppenbilder; `nil` ohne Backend.
@@ -545,6 +547,7 @@ public final class SocialViewModel {
     /// Ein Spitzname wurde gespeichert: sofort in Freunden, Ranking (Top-Freunde, Home) und Chats übernehmen; die
     /// Chatliste gleicht sich im Hintergrund mit dem Server ab (Titel, Absendernamen).
     func nicknameDidChange(_ profile: SocialProfile) {
+        onNicknameChange?(profile)
         friends = friends.map { friend in
             guard friend.profile.publicID == profile.publicID else { return friend }
             return Friend(profile: friend.profile.withNickname(profile.nickname), friendsSince: friend.friendsSince)

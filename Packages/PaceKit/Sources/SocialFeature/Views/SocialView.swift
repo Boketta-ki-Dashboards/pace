@@ -143,12 +143,13 @@ struct SocialContent: View {
         .padding(.top, PaceSpacing.xs)
     }
 
-    /// Freundschaftsanfragen: gleicher Stil wie das Zahnrad, Zähler offener Anfragen als Badge.
+    /// Freundschaftsanfragen: gleicher Stil wie das Zahnrad, Zähler offener Anfragen als Badge. Briefumschlag mit
+    /// Person – eindeutig „eingegangene Anfragen“, nicht „Freund hinzufügen“ (das hat sein eigenes Symbol darunter).
     private var requestsButton: some View {
         Button {
             onOpen(.requests)
         } label: {
-            Image(systemName: "person.crop.circle.badge.plus")
+            Image(systemName: "envelope.badge.person.crop")
         }
         .buttonStyle(.paceIcon)
         .overlay(alignment: .topTrailing) {

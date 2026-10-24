@@ -95,6 +95,8 @@ public final class ChatListViewModel {
     @ObservationIgnored private var reloadRequested = false
     @ObservationIgnored private var lastLoadedAt: Date?
     @ObservationIgnored private var chats: [ChatViewModel] = []
+    /// Eigene öffentliche ID (z. B. für „Du“ im Verweis auf eine eigene, nicht geladene Nachricht).
+    @ObservationIgnored let ownPublicID: @MainActor () -> UUID?
 
     /// - Parameters:
     ///   - repository: `nil`, wenn kein Backend konfiguriert ist.
@@ -109,8 +111,10 @@ public final class ChatListViewModel {
         calendar: ActivityCalendar = ActivityCalendar(),
         now: @escaping @Sendable () -> Date = { Date() },
         pollInterval: Duration = .seconds(25),
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        ownPublicID: @escaping @MainActor () -> UUID? = { nil }
     ) {
+        self.ownPublicID = ownPublicID
         self.repository = repository
         self.media = media
         self.social = social

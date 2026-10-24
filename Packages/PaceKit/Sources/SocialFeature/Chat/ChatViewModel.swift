@@ -1041,8 +1041,14 @@ public final class ChatViewModel {
     }
 
     /// Name im Verweis einer Antwort („Du“, wenn das Original von dir ist).
+    ///
+    /// Auch wenn das Original nicht geladen ist (ältere Nachricht): Ist der Absender die eigene Person, steht „Du“ statt
+    /// des eigenen Profilnamens.
     public func replyAuthor(of preview: ChatReplyPreview) -> String {
         if let original = messages.first(where: { $0.id == preview.id }), original.isOwn {
+            return ChatFormatting.ownPrefix
+        }
+        if let sender = preview.sender, let own = list?.ownPublicID(), sender.publicID == own {
             return ChatFormatting.ownPrefix
         }
         return preview.sender?.shownName ?? ChatFormatting.deletedAccount

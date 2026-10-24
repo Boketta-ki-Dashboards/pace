@@ -34,8 +34,17 @@ public struct PaceTabBar<Value: Hashable>: View {
     private let onReselect: ((Value) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Höhe des Bereichs am unteren Rand mit Home-Indikator (0 bei iPhones mit Home-Taste).
+    @State private var homeIndicatorInset: CGFloat = 0
 
     private static var spacing: CGFloat { PaceSpacing.xxs }
+
+    /// So weit reicht die Leiste in den Bereich des Home-Indikators hinein: Unter den Beschriftungen bleibt weniger
+    /// Leerraum, Symbole, Texte und Fläche bleiben gleich groß, der Indikator selbst bleibt frei (er sitzt in den
+    /// untersten ~13 pt).
+    static func bottomCompaction(forHomeIndicatorInset inset: CGFloat) -> CGFloat {
+        inset > 0 ? min(14, inset / 2) : 0
+    }
 
     /// - Parameters:
     ///   - position: Laufende Position beim Wischen; ohne Angabe die Auswahl.
@@ -79,7 +88,9 @@ public struct PaceTabBar<Value: Hashable>: View {
             .animation(position == nil && !reduceMotion ? .snappy(duration: 0.3) : nil, value: selectedIndex)
         .padding(.horizontal, PaceSpacing.s)
         .padding(.top, 6)
-        .padding(.bottom, PaceSpacing.xxs)
+        // Nur unten kompakter: Ein Teil des Leerraums unter den Beschriftungen liegt jetzt im Bereich des
+        // Home-Indikators (die Leiste wird insgesamt niedriger, die Inhalte darüber bekommen den Platz).
+        .padding(.bottom, PaceSpacing.xxs - Self.bottomCompaction(forHomeIndicatorInset: homeIndicatorInset))
         // Große Schriftgrade würden die vier Beschriftungen sprengen; der Inhalt der Screens skaliert weiter.
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .background {
@@ -88,6 +99,11 @@ public struct PaceTabBar<Value: Hashable>: View {
                     Rectangle().fill(PaceColor.border).frame(height: 1)
                 }
                 .ignoresSafeArea(edges: .bottom)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.safeAreaInsets.bottom
+                } action: { inset in
+                    homeIndicatorInset = inset
+                }
         }
     }
 

@@ -178,6 +178,41 @@ public final class LeaderboardViewModel {
     }
 
     /// „unter deinen Freunden“ für Hinweise im Freunde-Ranking.
+    /// Ein eigener Spitzname für eine Person wurde geändert (Social-Tab): Freunde- und Gruppenrankings zeigen ihn
+    /// sofort, ohne neu zu laden.
+    public func nicknameDidChange(_ profile: SocialProfile) {
+        if case .loaded(let entries) = friends {
+            friends = .loaded(entries.map { entry in
+                entry.publicUserID == profile.publicID ? entry.withNickname(profile.nickname) : entry
+            })
+        }
+        if case .loaded(let standings) = groups {
+            groups = .loaded(standings.map { standing in
+                guard let ranking = standing.ranking else { return standing }
+                let entries = ranking.entries.map { entry in
+                    guard entry.profile.publicID == profile.publicID else { return entry }
+                    return GroupRankingEntry(
+                        rank: entry.rank,
+                        profile: entry.profile.withNickname(profile.nickname),
+                        competitionSteps: entry.competitionSteps,
+                        isCurrentUser: entry.isCurrentUser,
+                        role: entry.role,
+                        reachedGoalToday: entry.reachedGoalToday
+                    )
+                }
+                return GroupStanding(
+                    group: standing.group,
+                    ranking: GroupRanking(
+                        totalParticipants: ranking.totalParticipants,
+                        groupToday: ranking.groupToday,
+                        dailyGoal: ranking.dailyGoal,
+                        entries: entries
+                    )
+                )
+            })
+        }
+    }
+
     public static var friendsLocative: String {
         PaceLocalization.text(de: "unter deinen Freunden", en: "among your friends", ru: "среди друзей")
     }

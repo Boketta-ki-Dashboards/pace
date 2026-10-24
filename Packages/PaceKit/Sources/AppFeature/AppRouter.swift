@@ -165,7 +165,12 @@ public final class AppRouter {
         let navigation = MainNavigation()
         let social = SocialViewModel(
             repository: services.social,
-            chats: ChatListViewModel(repository: services.chat, media: services.media, social: services.social),
+            chats: ChatListViewModel(
+                repository: services.chat,
+                media: services.media,
+                social: services.social,
+                ownPublicID: { [store] in store.profile.publicID }
+            ),
             media: services.media,
             ownUsername: { [store] in store.profile.username }
         )
@@ -234,6 +239,8 @@ public final class AppRouter {
         )
         navigation.main = main
         social.openPrivacySettings = { [navigation] in navigation.openProfileSettings(.privacy) }
+        // Spitznamen gelten überall sofort, auch in Rankings → Freunde und Gruppen.
+        social.onNicknameChange = { [weak leaderboard] profile in leaderboard?.nicknameDidChange(profile) }
         route = .main(main)
 
         if let link = pendingLink {

@@ -109,6 +109,34 @@ struct ChatMessageActionsTests {
         #expect(chat.pending.isEmpty)
     }
 
+    /// Antwort auf eine eigene, ältere (nicht geladene) Nachricht: Der Verweis zeigt „Du“, nicht den eigenen Namen.
+    @Test func replyToOwnUnloadedMessageShowsYou() async {
+        let me = SocialProfile(publicID: UUID(uuidString: "aaaaaaaa-0000-4000-8000-000000000099")!, username: "niklas", displayName: "Niklas")
+        let conversation = ChatFixtures.direct()
+        let reply = ChatFixtures.message(
+            in: conversation.id, from: ChatFixtures.mia, text: "Ja, gern!", at: base,
+            replyPreview: ChatReplyPreview(id: UUID(), sender: me, kind: .text, text: "Laufen wir morgen?", mediaDuration: nil, isDeleted: false)
+        )
+        let repository = ChatRepositoryStub { state in
+            state.conversations = [conversation]
+            state.messages[conversation.id] = [reply]
+        }
+        let list = ChatListViewModel(
+            repository: repository, media: nil, calendar: Fixtures.activityCalendar, now: { [base] in base },
+            sleep: { try await ManualTicker().sleep($0) }, ownPublicID: { me.publicID }
+        )
+        await list.load()
+        let chat = list.chat(for: ChatTarget(conversation))
+        await chat.load()
+        let preview = try? #require(chat.messages.first?.replyPreview)
+
+        let author = PaceLocalization.$languageOverride.withValue(.german) { preview.map { chat.replyAuthor(of: $0) } }
+        #expect(author == "Du")
+        // Antwort auf Mia bleibt „Mia“.
+        let other = ChatReplyPreview(id: UUID(), sender: ChatFixtures.mia, kind: .text, text: "Hi", mediaDuration: nil, isDeleted: false)
+        #expect(chat.replyAuthor(of: other) == "Mia")
+    }
+
     @Test func replyCanBeCancelled() async {
         let conversation = ChatFixtures.direct()
         let original = message("Hi", in: conversation)
