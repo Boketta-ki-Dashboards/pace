@@ -477,7 +477,8 @@ Neue Fehler-Tokens: `invalid_nickname` → `SocialError.invalidNickname`, `pin_l
 
 ### Sprachnachrichten (Speicher)
 
-- Bucket `chat-media`: `allowed_mime_types` zusätzlich `audio/mp4`, `audio/x-m4a`, `audio/aac`; Grenze bleibt
+- Bucket `chat-media`: `allowed_mime_types` zusätzlich `audio/mp4`, `audio/x-m4a`, `audio/aac` (Vereinigung mit
+  den vorhandenen Typen, Reihenfolge bleibt, nichts doppelt; `null` = alle erlaubt bleibt unverändert); Grenze bleibt
   10 MB (5 Minuten AAC liegen weit darunter), die Dauer begrenzt der Server auf 5 Minuten.
 - Pfade `<conversation_id>/<UUID>.m4a` (bzw. `.aac`). `pace_access.chat_media_folder` akzeptiert dafür zusätzlich
   die Audio-Endungen; `can_read_chat_media`/`can_write_chat_media` nutzen sie – gleiche Regeln wie für Bilder

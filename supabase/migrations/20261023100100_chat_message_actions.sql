@@ -116,11 +116,18 @@ revoke all on table public.chat_message_pins from anon, authenticated;
 -- Storage: Sprachnachrichten im Bucket chat-media
 -- ---------------------------------------------------------------------------------------------------------------
 
--- Gleiche Größengrenze (10 MB), zusätzlich AAC-Audio (Aufnahme in der App als AAC in .m4a).
-update storage.buckets
-   set allowed_mime_types = array['image/jpeg', 'image/png', 'image/gif', 'image/heic', 'image/webp',
-                                  'audio/mp4', 'audio/x-m4a', 'audio/aac']
- where id = 'chat-media';
+-- Gleiche Größengrenze (10 MB), zusätzlich AAC-Audio (Aufnahme in der App als AAC in .m4a). Vereinigung statt
+-- Überschreiben: Bisherige (auch von Hand ergänzte) Typen bleiben in ihrer Reihenfolge, fehlende Audio-Typen kommen
+-- hinten dazu, nichts doppelt. allowed_mime_types = null heißt in Supabase „alle Typen erlaubt“ – dann bleibt es so.
+update storage.buckets b
+   set allowed_mime_types = b.allowed_mime_types || array(
+         select t
+           from unnest(array['audio/mp4', 'audio/x-m4a', 'audio/aac']) with ordinality as a(t, n)
+          where t <> all (b.allowed_mime_types)
+          order by n
+       )
+ where b.id = 'chat-media'
+   and b.allowed_mime_types is not null;
 
 -- Ordner (Unterhaltung) einer Chat-Datei: wie pace_access.object_folder, zusätzlich mit Audio-Endungen. Profil- und
 -- Gruppenbilder prüfen weiter nur Bildendungen.
