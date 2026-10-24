@@ -43,6 +43,7 @@ struct ChatInputBar: View {
                         cancelLabel: ChatUIText.cancelEditing,
                         onCancel: { viewModel.cancelEditing() }
                     )
+                    .disabled(viewModel.isSavingEdit)
                 } else if let reply = viewModel.replyingTo {
                     contextBanner(
                         systemImage: "arrowshape.turn.up.left",
@@ -173,7 +174,7 @@ struct ChatInputBar: View {
     }
 
     private var sendButton: some View {
-        let enabled = sendsVoice || viewModel.canSubmitText
+        let enabled = sendsVoice || (viewModel.canSubmitText && !viewModel.isSavingEdit)
         return Button {
             if sendsVoice {
                 onSendVoice()

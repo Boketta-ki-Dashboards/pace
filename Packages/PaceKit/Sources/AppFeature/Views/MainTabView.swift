@@ -72,6 +72,12 @@ struct MainTabView: View {
         .onChange(of: viewModel.dashboard.healthKitStepsToday) {
             Task { await viewModel.profile.notifications.progressDidChange() }
         }
+        // Beim Verlassen der App ungedrosselt mit dem letzten Stand planen (keine veralteten Restschritte).
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                Task { await viewModel.profile.notifications.appWillLeaveForeground() }
+            }
+        }
         // Bewegungsdaten und Sync laufen für die ganze Main App, nicht nur, solange der Home-Tab offen ist.
         .activityUpdates(viewModel.home)
         // Chatliste und Ungelesen-Badge app-weit aktuell halten (Echtzeit, sonst regelmäßige Abfrage), solange die
@@ -102,6 +108,7 @@ struct MainTabView: View {
                 if rootVisible[tab] != isVisible { rootVisible[tab] = isVisible }
             }
         ))
+        .environment(\.paceTabIsActive, viewModel.selectedTab == tab)
         .accessibilityHidden(viewModel.selectedTab != tab)
     }
 

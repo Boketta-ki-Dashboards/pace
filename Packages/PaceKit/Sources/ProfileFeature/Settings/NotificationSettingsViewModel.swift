@@ -32,6 +32,8 @@ public final class NotificationSettingsViewModel {
     @ObservationIgnored private var lastPlan: [PlannedNotification]?
     @ObservationIgnored private var lastScheduledAt: Date?
     @ObservationIgnored private var lastPlanLanguage: AppLanguage?
+    /// Die letzte Planung kannte schon einen Schrittstand von heute (sonst wird der erste Stand nicht gedrosselt).
+    @ObservationIgnored private var lastPlanUsedProgress = false
     /// Tag, an dem Pace das Ziel zuletzt noch offen gesehen hat – „Geschafft!“ nur nach einem selbst erlebten Wechsel.
     @ObservationIgnored private var sawGoalOpenOn: LocalDate?
 
@@ -249,6 +251,12 @@ public final class NotificationSettingsViewModel {
         await reschedule(force: false)
     }
 
+    /// Pace geht in den Hintergrund: mit dem zuletzt bekannten Stand neu planen (ungedrosselt), damit keine Erinnerung
+    /// eine veraltete Restschrittzahl nennt.
+    public func appWillLeaveForeground() async {
+        await reschedule(force: true)
+    }
+
     /// Plant die Erinnerungen passend zu Uhrzeiten, Sprache, Ziel und Stand – nur, wenn sich etwas geändert hat.
     /// - Parameter force: `false` bei reinen Schritt-Aktualisierungen: dann höchstens alle
     ///   ``minimumRescheduleInterval`` neu, außer heutige Erinnerungen fallen weg (Ziel erreicht).
@@ -257,9 +265,11 @@ public final class NotificationSettingsViewModel {
         let currentDate = now()
         let progress = todayProgress()
         var planned: [PlannedNotification] = []
+        var usesProgress = false
         if reminder.isEnabled {
             let today = calendar.day(containing: currentDate)
             var planProgress = progress?.day == today ? progress : nil
+            usesProgress = planProgress != nil
             if isTodayGoalReached(), planProgress?.isGoalReached != true {
                 // Laut Serie heute erreicht, der Schrittstand fehlt aber: die heutigen Erinnerungen entfallen trotzdem.
                 planProgress = GoalProgressSnapshot(
@@ -276,7 +286,9 @@ public final class NotificationSettingsViewModel {
         }
         let language = PaceLocalization.shared.effectiveLanguage
         if let lastPlan, lastPlan == planned, lastPlanLanguage == language { return }
+        // Gedrosselt wird nur, wenn sich bloß die Texte ändern – nie beim ersten bekannten Stand des Tages.
         if !force, let lastPlan, let lastScheduledAt, lastPlanLanguage == language,
+           lastPlanUsedProgress || !usesProgress,
            lastPlan.map(\.identifier) == planned.map(\.identifier),
            currentDate.timeIntervalSince(lastScheduledAt) < Self.minimumRescheduleInterval {
             return
@@ -284,6 +296,7 @@ public final class NotificationSettingsViewModel {
         lastPlan = planned
         lastScheduledAt = currentDate
         lastPlanLanguage = language
+        lastPlanUsedProgress = usesProgress
         if planned.isEmpty {
             await notifications.cancelGoalReminders()
         } else {

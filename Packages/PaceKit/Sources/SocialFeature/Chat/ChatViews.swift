@@ -39,6 +39,7 @@ public struct ChatView: View {
     private let onOpenProfile: (SocialProfile) -> Void
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.paceTabIsActive) private var isTabActive
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsPhotoPicker = false
     @State private var pickerItem: PhotosPickerItem?
@@ -105,9 +106,27 @@ public struct ChatView: View {
         }
         .paceScreenBackground()
         .paceSubpage()
-        .task(id: scenePhase == .active) { [viewModel, scenePhase] in
-            guard scenePhase == .active else { return }
+        // Sichtbar heißt: App aktiv und der Social-Tab gewählt (andere Tabs lassen den Chat im Pager stehen) – nur dann
+        // gilt er als gelesen und unterdrückt Hinweise auf neue Nachrichten.
+        .task(id: scenePhase == .active && isTabActive) { [viewModel, scenePhase, isTabActive] in
+            guard scenePhase == .active, isTabActive else { return }
             await viewModel.observe()
+        }
+        .onChange(of: isTabActive) { _, isActive in
+            if !isActive {
+                recorder.interrupt()
+                voicePlayer.pause()
+            }
+        }
+        // Während einer Aufnahme keine Wiedergabe (der Wechsel der Audio-Sitzung würde die Aufnahme beenden).
+        .onChange(of: recorder.isRecording) { _, isRecording in
+            voicePlayer.isBlocked = isRecording
+        }
+        // Nicht mehr schreibberechtigt (z. B. blockiert, aus der Gruppe entfernt): laufende Aufnahme verwerfen.
+        .onChange(of: viewModel.canSend) { _, canSend in
+            if !canSend {
+                discardVoice()
+            }
         }
         // Hintergrund oder Unterbrechung (Anruf): Aufnahme als Vorschau behalten, Wiedergabe pausieren. Kurzes
         // „inaktiv“ (Kontrollzentrum, Mitteilungsbanner) unterbricht nicht.

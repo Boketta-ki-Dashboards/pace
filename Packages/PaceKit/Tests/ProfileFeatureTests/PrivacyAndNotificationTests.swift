@@ -250,6 +250,42 @@ struct PrivacyAndNotificationTests {
         #expect(updated.body == "Dein Tagesziel ist fast geschafft.")
     }
 
+    @Test func firstKnownProgressIsNotThrottledAndLeavingTheAppUsesTheLatestCount() async throws {
+        let scheduler = NotificationSchedulerStub { $0.authorization = .authorized }
+        let clock = Locked(Fixtures.date(2026, 10, 20, 17, 20))
+        let steps = Locked<Int?>(nil)
+        let (viewModel, _, _) = makeNotifications(
+            scheduler: scheduler,
+            reminder: StreakReminderSettings(isEnabled: true, hour: 18, minute: 0),
+            progress: {
+                steps.withLock { $0 }.map { value in
+                    GoalProgressSnapshot(day: Fixtures.day(2026, 10, 20), steps: value, goal: 10_000, measuredAt: clock.withLock { $0 })
+                }
+            },
+            now: { clock.withLock { $0 } }
+        )
+
+        // Start ohne Stand: allgemeiner Text.
+        await viewModel.reschedule()
+        #expect(scheduler.state.withLock { $0.scheduled.last?.first?.body.contains("fehlen") } == false)
+
+        // Eine Minute später kommt der erste Stand – trotz Drosselung sofort mit Zahl.
+        clock.withLock { $0 = Fixtures.date(2026, 10, 20, 17, 21) }
+        steps.withLock { $0 = 7_000 }
+        await viewModel.progressDidChange()
+        #expect(scheduler.state.withLock { $0.scheduled.last?.first?.body } == "Dir fehlen noch 3.000 Schritte bis zu deinem Tagesziel.")
+
+        // Neuer Stand kurz danach: gedrosselt …
+        clock.withLock { $0 = Fixtures.date(2026, 10, 20, 17, 23) }
+        steps.withLock { $0 = 8_500 }
+        await viewModel.progressDidChange()
+        #expect(scheduler.state.withLock { $0.scheduled.last?.first?.body } == "Dir fehlen noch 3.000 Schritte bis zu deinem Tagesziel.")
+
+        // … aber beim Verlassen der App wird mit dem letzten Stand geplant.
+        await viewModel.appWillLeaveForeground()
+        #expect(scheduler.state.withLock { $0.scheduled.last?.first?.body } == "Dir fehlen noch 1.500 Schritte bis zu deinem Tagesziel.")
+    }
+
     @Test func successIsAnnouncedOnceWhenTheGoalIsCrossed() async {
         let scheduler = NotificationSchedulerStub { $0.authorization = .authorized }
         let steps = Locked(9_800)

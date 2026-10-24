@@ -26,6 +26,12 @@ public extension EnvironmentValues {
     }
 }
 
+extension EnvironmentValues {
+    /// Die Seite gehört zum gerade gewählten Haupttab. Seiten anderer Tabs bleiben im Pager aufgebaut (ohne
+    /// `onDisappear`) – z. B. ein offener Chat gilt dann nicht mehr als sichtbar.
+    @Entry public var paceTabIsActive: Bool = true
+}
+
 public extension View {
     /// Für den Inhalt der Startseite eines Haupttabs **innerhalb** ihrer Scrollansicht.
     ///
