@@ -236,15 +236,23 @@ public struct ChatMessage: Equatable, Sendable, Identifiable {
 
 /// Eine angepinnte Nachricht (Hinweis oben im Chat; Antippen springt zur Nachricht).
 public struct ChatPin: Equatable, Sendable, Identifiable {
+    /// Die Nachricht. Bei `isHidden` nur ein Platzhalter: ID, Unterhaltung, Art und Sendezeitpunkt – ohne Text,
+    /// Medien und Absender.
     public let message: ChatMessage
-    /// Wer angepinnt hat; `nil`, wenn das Konto gelöscht wurde.
+    /// Wer angepinnt hat; `nil`, wenn das Konto gelöscht wurde (und immer bei `isHidden`).
     public let pinnedBy: SocialProfile?
     public let pinnedAt: Date
+    /// Die Nachricht ist für mich verborgen (gelöscht oder von einer Person, die ich blockiert habe). Solche Pins
+    /// zählen weiter zu `ChatRules.maximumPinnedMessages`; nur wer anpinnen darf (`ConversationSummary.canPin`),
+    /// bekommt sie – zum Lösen über `ChatRepository.setPinned(_:isPinned:)` mit `message.id`. Anzeige z. B. als
+    /// „Nachricht nicht verfügbar“, ohne Sprung in den Verlauf (dort fehlt sie).
+    public let isHidden: Bool
 
-    public init(message: ChatMessage, pinnedBy: SocialProfile?, pinnedAt: Date) {
+    public init(message: ChatMessage, pinnedBy: SocialProfile?, pinnedAt: Date, isHidden: Bool = false) {
         self.message = message
         self.pinnedBy = pinnedBy
         self.pinnedAt = pinnedAt
+        self.isHidden = isHidden
     }
 
     public var id: UUID { message.id }

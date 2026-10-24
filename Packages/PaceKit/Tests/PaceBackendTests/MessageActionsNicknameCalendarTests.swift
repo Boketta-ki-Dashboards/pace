@@ -292,6 +292,31 @@ struct MessageActionsNicknameCalendarTests {
             == .object(["p_conversation_id": .string(Self.conversationID.uuidString)]))
     }
 
+    /// Verborgene Pins (gelöscht bzw. Absender blockiert) bekommt nur, wer anpinnen darf – als Platzhalter zum Lösen.
+    @Test func hiddenPinsDecodeAsPlaceholders() async throws {
+        let harness = BackendTestHarness()
+        harness.stub("POST", "/rest/v1/rpc/chat_pins", .json(#"""
+        [{"message":\#(Self.voiceMessageJSON),"pinned_by":null,"pinned_at":"2026-10-23T09:11:00Z"},
+         {"message":{"id":"eeeeeeee-0000-4000-8000-000000000009","conversation_id":"dddddddd-0000-4000-8000-000000000001",
+                     "client_id":null,"sender":null,"is_own":false,"kind":"image","body":null,"media_path":null,
+                     "media_duration_ms":null,"shared_profile":null,"reply_to":null,"edited_at":null,"is_favorite":false,
+                     "is_pinned":true,"created_at":"2026-10-23T08:00:00Z","is_deleted":true},
+          "pinned_by":null,"pinned_at":"2026-10-23T09:10:00Z"}]
+        """#))
+
+        let pins = try await harness.backend.chat.pins(conversationID: Self.conversationID)
+
+        #expect(pins.map(\.isHidden) == [false, true])
+        let hidden = try #require(pins.last)
+        #expect(hidden.id == Self.replyID)
+        #expect(hidden.message.conversationID == Self.conversationID)
+        #expect(hidden.message.kind == .image)
+        #expect(hidden.message.sender == nil)
+        #expect(hidden.message.text == nil)
+        #expect(hidden.message.media == nil)
+        #expect(hidden.pinnedBy == nil)
+    }
+
     @Test func invalidEditTextIsRejectedWithoutARequest() async {
         let harness = BackendTestHarness()
 

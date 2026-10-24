@@ -135,7 +135,11 @@ Wiedergabe) baut der Hauptstrang darauf auf. Bis dahin zeigt der Verlauf Sprachn
 - **Anpinnen:** `ConversationSummary.canPin` (Gruppe: Owner; Privatchat: beide mit Schreibrecht),
   `setPinned(_:isPinned:)` → alle Pins, `pins(conversationID:)` → `[ChatPin]` (zuletzt angepinnte zuerst),
   `ChatMessage.isPinned`; höchstens `ChatRules.maximumPinnedMessages` (5, sonst `pinLimitReached`), Nicht-Owner
-  `notAllowed`. Änderungen kommen als `ChatConversationEvent.pinsChanged`.
+  `notAllowed`. Änderungen kommen als `ChatConversationEvent.pinsChanged`. Pins auf Nachrichten, die für mich
+  verborgen sind (Absender blockiert), zählen weiter zur Höchstzahl: Wer anpinnen darf, bekommt sie als
+  `ChatPin.isHidden` (Platzhalter ohne Text, Medien, Absender und `pinnedBy`) und löst sie mit
+  `setPinned(pin.id, isPinned: false)`; Anzeige z. B. „Nachricht nicht verfügbar“, ohne Sprung (im Verlauf fehlt sie).
+  Wer nicht anpinnen darf, bekommt verborgene Pins gar nicht.
 - **Echtzeit:** `conversationActivity(in:)` liefert `.message`, `.messageUpdated`, `.pinsChanged` über einen Kanal
   (endet sofort ohne Realtime → Polling wie bisher). `messageEvents(in:)` bleibt für neue/gelöschte Nachrichten.
 - **Sprachnachrichten:** Aufnahme als AAC in `.m4a`, Upload `media.upload(data, contentType:

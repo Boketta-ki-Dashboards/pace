@@ -131,6 +131,9 @@ struct ChatMessageRow: Decodable {
     let editedAt: Date?
     let isFavorite: Bool
     let isPinned: Bool
+    /// Platzhalter eines verborgenen Pins (`chat_pins`): Nachricht gelöscht oder von einer Person, die ich blockiert
+    /// habe – ohne Inhalt und Absender.
+    let isDeleted: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -148,6 +151,7 @@ struct ChatMessageRow: Decodable {
         case editedAt = "edited_at"
         case isFavorite = "is_favorite"
         case isPinned = "is_pinned"
+        case isDeleted = "is_deleted"
     }
 
     init(from decoder: Decoder) throws {
@@ -168,6 +172,7 @@ struct ChatMessageRow: Decodable {
         editedAt = try container.decodeTimestampIfPresent(forKey: .editedAt)
         isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
         isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        isDeleted = try container.decodeIfPresent(Bool.self, forKey: .isDeleted) ?? false
     }
 
     var message: ChatMessage {
@@ -231,7 +236,8 @@ struct ChatReplyRow: Decodable {
     }
 }
 
-/// Ein Pin (`chat_pins`, `chat_set_pinned`).
+/// Ein Pin (`chat_pins`, `chat_set_pinned`). Verborgene Pins kommen nur für Personen, die anpinnen dürfen, als
+/// Platzhalter (`message.is_deleted = true`, ohne Inhalt, Absender und `pinned_by`).
 struct ChatPinRow: Decodable {
     let message: ChatMessageRow
     let pinnedBy: SocialProfileRow?
@@ -251,7 +257,7 @@ struct ChatPinRow: Decodable {
     }
 
     var pin: ChatPin {
-        ChatPin(message: message.message, pinnedBy: pinnedBy?.profile, pinnedAt: pinnedAt)
+        ChatPin(message: message.message, pinnedBy: pinnedBy?.profile, pinnedAt: pinnedAt, isHidden: message.isDeleted)
     }
 }
 

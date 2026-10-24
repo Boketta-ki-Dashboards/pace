@@ -14,7 +14,9 @@
 --   an chat:<conversation_id> (und conversation an user:<public_id>) – weiterhin ohne Inhalt.
 -- * Favoriten (chat_message_favorites): privat je Person, höchstens 1000; nie für andere sichtbar.
 -- * Anpinnen (chat_message_pins): höchstens 5 je Unterhaltung. Gruppenchat: nur der Gruppen-Owner; Privatchat:
---   beide Teilnehmer, solange sie schreiben dürfen. Echtzeit-Hinweis pins_changed an chat:<conversation_id>.
+--   beide Teilnehmer, solange sie schreiben dürfen. Echtzeit-Hinweis pins_changed an chat:<conversation_id>. Pins
+--   auf Nachrichten, die für mich verborgen sind (Absender von mir blockiert), zählen weiter zur Höchstzahl; wer
+--   anpinnen darf, bekommt sie als Platzhalter ohne Inhalt und Absender (is_deleted: true) und kann sie lösen.
 -- * Gelöschte Nachrichten verlieren Pins, Favoriten und ihre Dauer (Trigger).
 -- * Sprachnachrichten: kind 'voice', Datei (AAC in .m4a bzw. .aac) im Bucket chat-media unter <conversation_id>/,
 --   vom Absender hochgeladen (audio/mp4, audio/x-m4a oder audio/aac), Dauer 1 ms – 5 min (media_duration_ms).
@@ -357,27 +359,61 @@ begin
 end;
 $$;
 
--- Angepinnte, für p_me sichtbare Nachrichten einer Unterhaltung, zuletzt angepinnte zuerst.
+-- Angepinnte Nachrichten einer Unterhaltung, zuletzt angepinnte zuerst. Für p_me sichtbare vollständig. Verborgene
+-- (gelöscht oder von einer Person, die p_me blockiert hat) zählen weiter zur Höchstzahl der Unterhaltung; wer
+-- anpinnen darf, bekommt sie deshalb als Platzhalter, um sie lösen zu können: gleiche Felder wie eine Nachricht, aber
+-- ohne Inhalt und Absender (nur id, conversation_id, kind, created_at, is_pinned, is_deleted = true; pinned_by null).
+-- Alle anderen sehen verborgene Pins gar nicht.
 create function private.chat_pins_json(p_conversation_id uuid, p_me uuid)
 returns jsonb
 language sql
 stable
 set search_path = ''
 as $$
+  with pins as (
+    select pn.message_id, pn.pinned_by, pn.pinned_at, m as message, private.chat_message_visible(m, p_me) as visible
+      from public.chat_message_pins pn
+      join public.chat_messages m on m.id = pn.message_id
+     where pn.conversation_id = p_conversation_id
+  )
   select coalesce(
            jsonb_agg(
-             jsonb_build_object(
-               'message', private.chat_message_json(m, p_me),
-               'pinned_by', (select private.profile_json(pb) from public.profiles pb where pb.id = pn.pinned_by),
-               'pinned_at', pn.pinned_at
-             ) order by pn.pinned_at desc, pn.message_id
+             case when p.visible then
+               jsonb_build_object(
+                 'message', private.chat_message_json(p.message, p_me),
+                 'pinned_by', (select private.profile_json(pb) from public.profiles pb where pb.id = p.pinned_by),
+                 'pinned_at', p.pinned_at
+               )
+             else
+               jsonb_build_object(
+                 'message', jsonb_build_object(
+                   'id', (p.message).id,
+                   'conversation_id', (p.message).conversation_id,
+                   'client_id', null,
+                   'sender', null,
+                   'is_own', false,
+                   'kind', (p.message).kind,
+                   'body', null,
+                   'media_path', null,
+                   'media_duration_ms', null,
+                   'shared_profile', null,
+                   'reply_to', null,
+                   'edited_at', null,
+                   'is_favorite', false,
+                   'is_pinned', true,
+                   'created_at', (p.message).created_at,
+                   'is_deleted', true
+                 ),
+                 'pinned_by', null,
+                 'pinned_at', p.pinned_at
+               )
+             end
+             order by p.pinned_at desc, p.message_id
            ),
            '[]'::jsonb
          )
-    from public.chat_message_pins pn
-    join public.chat_messages m on m.id = pn.message_id
-   where pn.conversation_id = p_conversation_id
-     and private.chat_message_visible(m, p_me);
+    from pins p
+   where p.visible or private.can_pin_conversation(p_conversation_id, p_me);
 $$;
 revoke all on function private.chat_pins_json(uuid, uuid) from public, anon, authenticated;
 
@@ -804,7 +840,7 @@ $$;
 revoke all on function public.chat_pins(uuid) from public, anon;
 grant execute on function public.chat_pins(uuid) to authenticated;
 comment on function public.chat_pins(uuid) is
-  'Pace: angepinnte Nachrichten einer lesbaren Unterhaltung ({message, pinned_by, pinned_at}), zuletzt angepinnte zuerst.';
+  'Pace: angepinnte Nachrichten einer lesbaren Unterhaltung ({message, pinned_by, pinned_at}), zuletzt angepinnte zuerst. Verborgene Nachrichten (gelöscht bzw. Absender blockiert) nur für Personen, die anpinnen dürfen, als Platzhalter ohne Inhalt und Absender (message.is_deleted = true).';
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- Datenschutz: Auskunft mit Antworten, Bearbeitungen, Sprachnachrichten, Favoriten und Pins

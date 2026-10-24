@@ -1,7 +1,7 @@
 -- Pace: Nachrichtenaktionen – Sprachnachrichten, Antworten, Bearbeiten, Favoriten, Pins; Rechte, Privatsphäre,
 -- Echtzeit-Hinweise und Storage-Zugriff auf Audio.
 begin;
-select plan(111);
+select plan(118);
 
 -- =============================================================================================================
 -- Struktur
@@ -428,22 +428,58 @@ select is(
 select ok(exists (select 1 from realtime.messages m where m.event = 'pins_changed'), 'Echtzeit: pins_changed nach dem Löschen');
 set local role authenticated;
 
--- Blockierte Absender: Pins anderer bleiben, sind für die blockierende Person aber verborgen.
+-- Blockierte Absender: Der Pin bleibt und zählt zur Höchstzahl. Wer anpinnen darf, sieht ihn als Platzhalter ohne
+-- Inhalt und Absender und kann ihn lösen; alle anderen, die den Absender blockiert haben, sehen ihn nicht.
 select pg_temp.as_user(1);
 select pg_temp.send('anna_pin', pg_temp.id('group'), 'text', 'Annas Hinweis');
 select pg_temp.as_user(3);
 select pg_temp.send('cara_pin', pg_temp.id('group'), 'text', 'Caras Hinweis');
 select pg_temp.as_user(1);
-select lives_ok(format('select public.chat_set_pinned(%L, true)', pg_temp.id('cara_pin')), 'Owner pinnt caras Nachricht');
+select is(jsonb_array_length(public.chat_set_pinned(pg_temp.id('cara_pin'), true)), 4, 'Owner pinnt caras Nachricht (4 Pins)');
 select lives_ok(format('select public.social_block_user(%L)', pg_temp.pid(3)), 'anna blockiert cara');
-select ok(
-  not exists (select 1 from jsonb_array_elements(public.chat_pins(pg_temp.id('group'))) e where e->'message'->>'id' = pg_temp.id('cara_pin')::text),
-  'blockierende Person sieht den Pin nicht'
-);
 select is(
-  jsonb_array_length(public.chat_set_pinned(pg_temp.id('cara_pin'), false)) >= 0, true,
-  'Owner kann den verborgenen Pin trotzdem lösen'
+  (select e - 'pinned_at' || jsonb_build_object('message', (e->'message') - 'created_at')
+     from jsonb_array_elements(public.chat_pins(pg_temp.id('group'))) e where e->'message'->>'id' = pg_temp.id('cara_pin')::text),
+  jsonb_build_object(
+    'pinned_by', null,
+    'message', jsonb_build_object(
+      'id', pg_temp.id('cara_pin'), 'conversation_id', pg_temp.id('group'), 'client_id', null, 'sender', null,
+      'is_own', false, 'kind', 'text', 'body', null, 'media_path', null, 'media_duration_ms', null,
+      'shared_profile', null, 'reply_to', null, 'edited_at', null, 'is_favorite', false, 'is_pinned', true,
+      'is_deleted', true)),
+  'Owner sieht den verborgenen Pin als Platzhalter: id, Art, is_deleted – ohne Inhalt und Absender'
 );
+select ok(
+  public.chat_pins(pg_temp.id('group'))::text not like '%Caras Hinweis%'
+  and public.chat_pins(pg_temp.id('group'))::text not like '%cara_c%',
+  'Platzhalter verrät weder Text noch Absender'
+);
+select is(jsonb_array_length(public.chat_set_pinned(pg_temp.id('p5'), true)), 5, 'fünfter Pin: Owner sieht alle 5 (einer als Platzhalter)');
+select throws_ok(
+  format('select public.chat_set_pinned(%L, true)', pg_temp.id('p6')),
+  'P0001', 'pin_limit_reached', 'verborgener Pin zählt zur Höchstzahl'
+);
+select pg_temp.as_user(6);
+select lives_ok(format('select public.social_block_user(%L)', pg_temp.pid(3)), 'fritz (Mitglied ohne Anpinn-Recht) blockiert cara');
+select is(
+  (select array_agg(e->'message'->>'id' order by e->'message'->>'id') from jsonb_array_elements(public.chat_pins(pg_temp.id('group'))) e),
+  (select array_agg(pg_temp.id(n)::text order by pg_temp.id(n)::text) from unnest(array['p2', 'p3', 'p4', 'p5']) n),
+  'Mitglied ohne Anpinn-Recht: verborgener Pin fehlt ganz (kein Platzhalter)'
+);
+select pg_temp.as_user(1);
+select is(
+  (select array_agg(e->'message'->>'id' order by e->'message'->>'id') from jsonb_array_elements(public.chat_set_pinned(pg_temp.id('cara_pin'), false)) e),
+  (select array_agg(pg_temp.id(n)::text order by pg_temp.id(n)::text) from unnest(array['p2', 'p3', 'p4', 'p5']) n),
+  'Owner löst den verborgenen Pin über die ID des Platzhalters'
+);
+reset role;
+select is(
+  (select count(*)::int from public.chat_message_pins pn where pn.message_id = (select (result->>'id')::uuid from t_r where name = 'cara_pin')),
+  0, 'verborgener Pin ist wirklich entfernt'
+);
+set local role authenticated;
+select pg_temp.as_user(1);
+select is(jsonb_array_length(public.chat_set_pinned(pg_temp.id('p6'), true)), 5, 'danach ist wieder Platz für einen Pin');
 select pg_temp.as_user(2);
 select ok(
   not exists (select 1 from jsonb_array_elements(public.chat_pins(pg_temp.id('group'))) e where e->'message'->>'id' = pg_temp.id('cara_pin')::text),
@@ -498,7 +534,7 @@ insert into t_r select 'export', public.account_export();
 select is(
   (select jsonb_build_object('favorites', jsonb_array_length(result->'chat_message_favorites'), 'pins', jsonb_array_length(result->'chat_message_pins'))
      from t_r where name = 'export'),
-  jsonb_build_object('favorites', 1, 'pins', 4),
+  jsonb_build_object('favorites', 1, 'pins', 6),
   'Export: eigene Favoriten und von mir gesetzte Pins'
 );
 select ok(
