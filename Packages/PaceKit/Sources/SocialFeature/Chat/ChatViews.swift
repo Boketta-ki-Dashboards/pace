@@ -101,9 +101,10 @@ public struct ChatView: View {
             guard scenePhase == .active else { return }
             await viewModel.observe()
         }
-        // Hintergrund oder Unterbrechung (Anruf): Aufnahme als Vorschau behalten, Wiedergabe pausieren.
+        // Hintergrund oder Unterbrechung (Anruf): Aufnahme als Vorschau behalten, Wiedergabe pausieren. Kurzes
+        // „inaktiv“ (Kontrollzentrum, Mitteilungsbanner) unterbricht nicht.
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active {
+            if phase == .background {
                 recorder.interrupt()
                 voicePlayer.pause()
             }
