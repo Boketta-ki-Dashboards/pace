@@ -692,7 +692,13 @@ begin
     return;
   end if;
 
-  select * into v_message from public.chat_messages m where m.id = p_message_id;
+  -- Die Nachricht bis zum Ende der Transaktion gegen paralleles Löschen sperren (for share): chat_delete_message
+  -- wartet dann, bis der Favorit steht, und sein Trigger entfernt ihn wieder. Läuft das Löschen schon, wartet diese
+  -- Abfrage und findet die Nachricht danach nicht mehr (deleted_at is null wird neu geprüft).
+  select * into v_message
+    from public.chat_messages m
+   where m.id = p_message_id and m.deleted_at is null
+     for share;
   if not found
      or not private.chat_message_visible(v_message, v_me)
      or not private.can_read_conversation(v_message.conversation_id, v_me) then
@@ -772,12 +778,24 @@ begin
     raise exception 'invalid_input';
   end if;
 
-  select * into v_message from public.chat_messages m where m.id = p_message_id;
+  if p_pinned then
+    -- Anpinnen nur nicht gelöschte Nachrichten, bis zum Ende der Transaktion gegen paralleles Löschen gesperrt
+    -- (for share): chat_delete_message wartet dann, bis der Pin steht, und sein Trigger entfernt ihn wieder. Läuft
+    -- das Löschen schon, wartet diese Abfrage und findet die Nachricht danach nicht mehr (deleted_at is null wird
+    -- neu geprüft) – so bleibt kein Pin an einer gelöschten Nachricht hängen.
+    select * into v_message
+      from public.chat_messages m
+     where m.id = p_message_id and m.deleted_at is null
+       for share;
+  else
+    -- Lösen auch, wenn die Nachricht für mich verborgen ist (z. B. blockierter Absender).
+    select * into v_message from public.chat_messages m where m.id = p_message_id;
+  end if;
   if not found then
     raise exception 'not_found';
   end if;
   v_conversation := private.require_conversation(v_message.conversation_id, v_me);
-  -- Anpinnen nur sichtbare Nachrichten; Lösen auch, wenn sie für mich verborgen ist (z. B. blockierter Absender).
+  -- Anpinnen nur Nachrichten, die ich sehe (geprüft nach der Sperre).
   if p_pinned and not private.chat_message_visible(v_message, v_me) then
     raise exception 'not_found';
   end if;
@@ -788,8 +806,10 @@ begin
     raise exception 'read_only';
   end if;
 
-  -- Pins einer Unterhaltung nacheinander ändern (Höchstzahl). „no key update“ blockiert das Senden nicht.
-  perform 1 from public.conversations c where c.id = v_conversation.id for no key update;
+  -- Pins einer Unterhaltung nacheinander ändern (Höchstzahl prüfen, dann einfügen). Advisory-Lock je Unterhaltung
+  -- statt einer Zeilensperre auf conversations: Eine Sperre „for no key update“ kollidierte mit dem
+  -- UPDATE conversations (last_message_at) im Insert-Trigger von chat_send – Senden müsste warten.
+  perform pg_advisory_xact_lock(hashtextextended('pace.chat_pins:' || v_conversation.id::text, 0));
 
   if p_pinned then
     if not exists (

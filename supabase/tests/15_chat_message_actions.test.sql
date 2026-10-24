@@ -1,7 +1,7 @@
 -- Pace: Nachrichtenaktionen – Sprachnachrichten, Antworten, Bearbeiten, Favoriten, Pins; Rechte, Privatsphäre,
 -- Echtzeit-Hinweise und Storage-Zugriff auf Audio.
 begin;
-select plan(118);
+select plan(120);
 
 -- =============================================================================================================
 -- Struktur
@@ -427,6 +427,10 @@ select is(
 );
 select ok(exists (select 1 from realtime.messages m where m.event = 'pins_changed'), 'Echtzeit: pins_changed nach dem Löschen');
 set local role authenticated;
+select pg_temp.as_user(1);
+select throws_ok(format('select public.chat_set_pinned(%L, true)', pg_temp.id('c1')), 'P0001', 'not_found', 'gelöschte Nachricht: nicht anpinnbar');
+select pg_temp.as_user(3);
+select throws_ok(format('select public.chat_set_favorite(%L, true)', pg_temp.id('c1')), 'P0001', 'not_found', 'gelöschte Nachricht: kein Favorit');
 
 -- Blockierte Absender: Der Pin bleibt und zählt zur Höchstzahl. Wer anpinnen darf, sieht ihn als Platzhalter ohne
 -- Inhalt und Absender und kann ihn lösen; alle anderen, die den Absender blockiert haben, sehen ihn nicht.
