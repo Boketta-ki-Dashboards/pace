@@ -147,6 +147,43 @@ struct MediaAccountIntegrationTests {
         #expect(try await raw.upload(bucket: "group-images", path: "\(foreign)/fremd.png", contentType: "image/png", data: Self.png) != 200)
     }
 
+    /// Chat-Medien liest die hochladende Person immer (Vorschau vor dem Senden), alle anderen nur über eine sichtbare
+    /// Nachricht – auch über signierte URLs (`createSignedURL` prüft dieselbe Storage-Policy).
+    @Test func chatMediaIsOnlyReadableThroughVisibleMessages() async throws {
+        let anna = try await RawSupabaseUser.make()
+        let ben = try await RawSupabaseUser.make()
+        let outsider = try await RawSupabaseUser.make()
+        let request = try #require(try await anna.rpc("social_send_friend_request", ["p_public_id": ben.publicID.uuidString]) as? [String: Any])
+        let requestID = try #require(request["request_id"] as? String)
+        try await ben.rpc("social_respond_friend_request", ["p_request_id": requestID, "p_accept": true])
+        let direct = try #require(try await anna.rpc("chat_open_direct", ["p_public_id": ben.publicID.uuidString]) as? [String: Any])
+        let conversationID = try #require(direct["id"] as? String)
+        let path = "\(conversationID)/\(UUID().uuidString.lowercased()).png"
+        #expect(try await anna.upload(bucket: "chat-media", path: path, contentType: "image/png", data: Self.png) == 200)
+
+        // Vor dem Senden: nur Anna (Vorschau), weder Ben noch Fremde.
+        #expect(try await anna.downloadStatus(bucket: "chat-media", path: path) == 200)
+        #expect(try await anna.signedURLStatus(bucket: "chat-media", path: path) == 200)
+        #expect(try await ben.downloadStatus(bucket: "chat-media", path: path) != 200)
+        #expect(try await ben.signedURLStatus(bucket: "chat-media", path: path) != 200)
+
+        // Nach dem Senden: auch Ben, Fremde weiterhin nicht.
+        let message = try #require(try await anna.rpc("chat_send", [
+            "p_conversation_id": conversationID, "p_client_id": UUID().uuidString, "p_kind": "image", "p_media_path": path,
+        ]) as? [String: Any])
+        let messageID = try #require(message["id"] as? String)
+        #expect(try await ben.downloadStatus(bucket: "chat-media", path: path) == 200)
+        #expect(try await ben.signedURLStatus(bucket: "chat-media", path: path) == 200)
+        #expect(try await outsider.downloadStatus(bucket: "chat-media", path: path) != 200)
+        #expect(try await outsider.signedURLStatus(bucket: "chat-media", path: path) != 200)
+
+        // Nach dem Löschen der Nachricht: nur noch Anna (sie löscht die Datei danach).
+        try await anna.rpc("chat_delete_message", ["p_message_id": messageID])
+        #expect(try await ben.downloadStatus(bucket: "chat-media", path: path) != 200)
+        #expect(try await ben.signedURLStatus(bucket: "chat-media", path: path) != 200)
+        #expect(try await anna.signedURLStatus(bucket: "chat-media", path: path) == 200)
+    }
+
     @Test func exportFeedbackAndAccountDeletion() async throws {
         let leaving = try await IntegrationUser.make("Abschied", steps: 7_000)
         let friend = try await IntegrationUser.make("Bleibt", steps: 3_000)
@@ -263,13 +300,53 @@ private struct RawSupabaseUser {
         ).status
     }
 
+    /// RPC über PostgREST aufrufen; liefert das JSON der Antwort (`nil` bei leerer Antwort, z. B. `void`).
+    @discardableResult
+    func rpc(_ name: String, _ parameters: [String: Any]) async throws -> Any? {
+        let response = try await Self.send(
+            configuration: configuration,
+            path: "rest/v1/rpc/\(name)",
+            method: "POST",
+            token: accessToken,
+            headers: ["Content-Type": "application/json"],
+            body: try JSONSerialization.data(withJSONObject: parameters)
+        )
+        #expect([200, 204].contains(response.status), "\(name): \(String(decoding: response.data, as: UTF8.self))")
+        guard !response.data.isEmpty else { return nil }
+        return try JSONSerialization.jsonObject(with: response.data, options: .fragmentsAllowed)
+    }
+
+    /// HTTP-Status beim Erstellen einer signierten URL (`createSignedURL`; 200 = erstellt).
+    func signedURLStatus(bucket: String, path: String) async throws -> Int {
+        try await Self.send(
+            configuration: configuration,
+            path: "storage/v1/object/sign/\(bucket)/\(path)",
+            method: "POST",
+            token: accessToken,
+            headers: ["Content-Type": "application/json"],
+            body: Data(#"{"expiresIn":60}"#.utf8)
+        ).status
+    }
+
+    /// HTTP-Status des angemeldeten Downloads (wie `MediaRepository.data(for:)`; 200 = gelesen).
+    func downloadStatus(bucket: String, path: String) async throws -> Int {
+        try await Self.send(
+            configuration: configuration,
+            path: "storage/v1/object/authenticated/\(bucket)/\(path)",
+            method: "GET",
+            token: accessToken,
+            headers: [:],
+            body: nil
+        ).status
+    }
+
     private static func send(
         configuration: BackendConfiguration,
         path: String,
         method: String,
         token: String?,
         headers: [String: String],
-        body: Data
+        body: Data?
     ) async throws -> (status: Int, data: Data) {
         var request = URLRequest(url: configuration.supabaseURL.appendingPathComponent(path))
         request.httpMethod = method

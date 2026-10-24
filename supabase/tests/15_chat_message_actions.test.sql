@@ -1,7 +1,7 @@
 -- Pace: Nachrichtenaktionen – Sprachnachrichten, Antworten, Bearbeiten, Favoriten, Pins; Rechte, Privatsphäre,
 -- Echtzeit-Hinweise und Storage-Zugriff auf Audio.
 begin;
-select plan(120);
+select plan(140);
 
 -- =============================================================================================================
 -- Struktur
@@ -74,6 +74,7 @@ values ('af000000-0000-4000-8000-000000000001', 'af000000-0000-4000-8000-0000000
 
 create temporary table t_r (name text primary key, result jsonb) on commit drop;
 grant select, insert, update on t_r to authenticated;
+grant select on t_r to service_role;
 create function pg_temp.r(p_name text) returns jsonb language sql stable as $$
   select r.result from t_r r where r.name = p_name;
 $$;
@@ -545,6 +546,73 @@ select ok(
   (select bool_and(e ? 'reply_to_id' and e ? 'edited_at' and e ? 'media_duration_ms')
      from t_r, jsonb_array_elements(result->'chat_messages') e where name = 'export'),
   'Export: Nachrichten mit reply_to_id, edited_at, media_duration_ms'
+);
+
+-- =============================================================================================================
+-- Storage: Lesen nur für die hochladende Person oder über eine sichtbare Nachricht (Bilder, GIFs, Audio)
+-- =============================================================================================================
+
+-- Privatchat (inzwischen schreibgeschützt): bild.jpg und kurz.aac hat anna hochgeladen, aber nie gesendet;
+-- sprache.m4a gehört zur Sprachnachricht 'voice'.
+select pg_temp.as_user(1);
+select ok(
+  pg_temp.visible(pg_temp.id('direct') || '/bild.jpg') and pg_temp.visible(pg_temp.id('direct') || '/kurz.aac'),
+  'hochladende Person liest eigene, nie gesendete Dateien (Bild, Audio)'
+);
+select pg_temp.as_user(2);
+select ok(not pg_temp.visible(pg_temp.id('direct') || '/bild.jpg'), 'Bild ohne Nachricht: für das Gegenüber nicht lesbar');
+select ok(not pg_temp.visible(pg_temp.id('direct') || '/kurz.aac'), 'Audio ohne Nachricht: für das Gegenüber nicht lesbar');
+select ok(pg_temp.visible(pg_temp.id('direct') || '/sprache.m4a'), 'Audio einer sichtbaren Nachricht: lesbar (auch schreibgeschützt)');
+
+-- Gruppe: emma (von anna blockiert) schickt ein GIF, ben ein Bild.
+select pg_temp.as_user(5);
+select lives_ok(format('select pg_temp.upload(%L, %L)', pg_temp.id('group') || '/emma.gif', 'image/gif'), 'emma lädt ein GIF hoch');
+select pg_temp.send('emma_gif', pg_temp.id('group'), 'gif', null, pg_temp.id('group') || '/emma.gif');
+select pg_temp.as_user(2);
+select lives_ok(format('select pg_temp.upload(%L, %L)', pg_temp.id('group') || '/ben.jpg', 'image/jpeg'), 'ben lädt ein Bild hoch');
+select ok(not pg_temp.visible(pg_temp.id('group') || '/gruppe.m4a'), 'Gruppe: nie gesendete Audiodatei anderer nicht lesbar');
+select pg_temp.send('ben_img', pg_temp.id('group'), 'image', null, pg_temp.id('group') || '/ben.jpg');
+select ok(pg_temp.visible(pg_temp.id('group') || '/emma.gif'), 'GIF einer sichtbaren Nachricht: Mitglied liest');
+select pg_temp.as_user(1);
+select ok(pg_temp.visible(pg_temp.id('group') || '/ben.jpg'), 'Bild einer sichtbaren Nachricht: Mitglied liest');
+select ok(not pg_temp.visible(pg_temp.id('group') || '/emma.gif'), 'Absender von mir blockiert: Datei nicht lesbar');
+select pg_temp.as_user(6);
+select ok(not pg_temp.visible(pg_temp.id('group') || '/ben.jpg'), 'ehemaliges Mitglied: Datei nicht lesbar');
+select pg_temp.as_user(4);
+select ok(
+  not pg_temp.visible(pg_temp.id('group') || '/ben.jpg') and not pg_temp.visible(pg_temp.id('group') || '/emma.gif'),
+  'Nicht-Mitglied: Dateien nicht lesbar'
+);
+
+-- Gelöschte (auch gemeldete) Nachrichten: Die Datei liest nur noch die hochladende Person bzw. die Moderation.
+select pg_temp.as_user(2);
+select is(
+  public.chat_delete_message(pg_temp.id('ben_img'))->>'media_path', pg_temp.id('group') || '/ben.jpg',
+  'ben löscht seine Bildnachricht'
+);
+select ok(pg_temp.visible(pg_temp.id('group') || '/ben.jpg'), 'gelöschte Nachricht: hochladende Person liest die Datei weiter');
+select ok(not pg_temp.visible(pg_temp.id('group') || '/beweis.m4a'), 'gemeldete, gelöschte Sprachnachricht: meldende Person liest nicht mehr');
+select pg_temp.as_user(1);
+select ok(not pg_temp.visible(pg_temp.id('group') || '/ben.jpg'), 'gelöschte Nachricht: andere lesen die Datei nicht mehr');
+select ok(pg_temp.visible(pg_temp.id('group') || '/beweis.m4a'), 'gemeldete Sprachnachricht: hochladende Person liest weiter');
+set local role service_role;
+select ok(pg_temp.visible(pg_temp.id('group') || '/beweis.m4a'), 'gemeldete Sprachnachricht: Moderation (service_role) liest');
+set local role authenticated;
+
+-- Auflisten des Ordners zeigt nur, was man lesen darf.
+select pg_temp.as_user(1);
+select is(
+  (select array_agg(o.name::text order by o.name) from storage.objects o
+    where o.bucket_id = 'chat-media' and o.name like pg_temp.id('group') || '/%'),
+  array[pg_temp.id('group') || '/beweis.m4a', pg_temp.id('group') || '/gruppe.m4a'],
+  'Ordnerliste anna: nur eigene Dateien (GIF der blockierten Person und gelöschtes Bild fehlen)'
+);
+select pg_temp.as_user(2);
+select is(
+  (select array_agg(o.name::text order by o.name) from storage.objects o
+    where o.bucket_id = 'chat-media' and o.name like pg_temp.id('group') || '/%'),
+  array[pg_temp.id('group') || '/ben.jpg', pg_temp.id('group') || '/emma.gif'],
+  'Ordnerliste ben: eigene Datei und Dateien sichtbarer Nachrichten'
 );
 
 select * from finish();

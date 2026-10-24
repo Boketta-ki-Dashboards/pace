@@ -1,6 +1,6 @@
 -- Pace: Storage-Buckets und -Policies (Profilbilder, Gruppenbilder, Chat-Medien) und Realtime-Zugriff.
 begin;
-select plan(55);
+select plan(59);
 
 -- =============================================================================================================
 -- Struktur
@@ -210,8 +210,15 @@ select is(pg_temp.delete_all('group-images'), 1, 'group-images: nach der Moderat
 
 select pg_temp.as_user(2);
 select lives_ok($$select pg_temp.upload('chat-media', 'dc000000-0000-4000-8000-000000000001/foto.jpg')$$, 'chat-media: Teilnehmer lädt hoch');
+select ok(
+  pg_temp.visible('chat-media', 'dc000000-0000-4000-8000-000000000001/foto.jpg'),
+  'chat-media: hochladende Person liest die eigene, noch nicht gesendete Datei (Vorschau)'
+);
 select pg_temp.as_user(1);
-select ok(pg_temp.visible('chat-media', 'dc000000-0000-4000-8000-000000000001/foto.jpg'), 'chat-media: anderer Teilnehmer liest');
+select ok(
+  not pg_temp.visible('chat-media', 'dc000000-0000-4000-8000-000000000001/foto.jpg'),
+  'chat-media: nicht gesendete Datei ist für andere Teilnehmer nicht lesbar'
+);
 select pg_temp.as_user(3);
 select ok(not pg_temp.visible('chat-media', 'dc000000-0000-4000-8000-000000000001/foto.jpg'), 'chat-media: Fremder liest nicht');
 select throws_ok($$select pg_temp.upload('chat-media', 'dc000000-0000-4000-8000-000000000001/fremd.jpg')$$, '42501', null, 'chat-media: Fremder lädt nicht hoch');
@@ -229,6 +236,7 @@ insert into t_message
 select (public.chat_send('dc000000-0000-4000-8000-000000000001', gen_random_uuid(), 'image', null,
                          'dc000000-0000-4000-8000-000000000001/foto.jpg')->>'id')::uuid;
 select pg_temp.as_user(1);
+select ok(pg_temp.visible('chat-media', 'dc000000-0000-4000-8000-000000000001/foto.jpg'), 'chat-media: gesendetes Bild liest der andere Teilnehmer');
 select lives_ok(
   format('select public.social_report(%L, %L, %L)', 'message', (select id from t_message), 'inappropriate'),
   'Nachricht mit Bild melden'
@@ -241,7 +249,12 @@ select is(
 );
 select is(pg_temp.delete_all('chat-media'), 0, 'chat-media: gemeldetes Bild auch für die Absenderin nicht löschbar');
 select pg_temp.as_user(1);
-select ok(pg_temp.visible('chat-media', 'dc000000-0000-4000-8000-000000000001/foto.jpg'), 'chat-media: gemeldete Datei bleibt erhalten');
+select ok(
+  not pg_temp.visible('chat-media', 'dc000000-0000-4000-8000-000000000001/foto.jpg'),
+  'chat-media: Datei einer gelöschten Nachricht liest auch die meldende Person nicht mehr'
+);
+set local role service_role;
+select ok(pg_temp.visible('chat-media', 'dc000000-0000-4000-8000-000000000001/foto.jpg'), 'chat-media: gemeldete Datei bleibt für die Moderation erhalten (service_role)');
 reset role;
 update public.reports set status = 'resolved' where target_type = 'message';
 set local role authenticated;
@@ -256,6 +269,9 @@ reset role;
 delete from public.friendships where user_a = 'ac000000-0000-4000-8000-000000000001' and user_b = 'ac000000-0000-4000-8000-000000000002';
 insert into storage.objects (bucket_id, name, owner_id, metadata)
 values ('chat-media', 'dc000000-0000-4000-8000-000000000001/alt.jpg', 'ac000000-0000-4000-8000-000000000001', '{"mimetype":"image/jpeg"}');
+insert into public.chat_messages (conversation_id, sender_id, client_id, kind, media_path)
+values ('dc000000-0000-4000-8000-000000000001', 'ac000000-0000-4000-8000-000000000001', gen_random_uuid(), 'image',
+        'dc000000-0000-4000-8000-000000000001/alt.jpg');
 set local role authenticated;
 select pg_temp.as_user(2);
 select ok(pg_temp.visible('chat-media', 'dc000000-0000-4000-8000-000000000001/alt.jpg'), 'chat-media: Verlauf bleibt lesbar');
@@ -301,7 +317,10 @@ values ('ac000000-0000-4000-8000-000000000002', 'ac000000-0000-4000-8000-0000000
 set local role authenticated;
 select pg_temp.as_user(1);
 select ok(not pg_temp.receives('chat:dc000000-0000-4000-8000-000000000001'), 'nach Blockierung: kein Empfang');
+select pg_temp.as_user(2);
 select ok(not pg_temp.visible('chat-media', 'dc000000-0000-4000-8000-000000000001/alt.jpg'), 'nach Blockierung: Chat-Medien nicht lesbar');
+select pg_temp.as_user(1);
+select ok(pg_temp.visible('chat-media', 'dc000000-0000-4000-8000-000000000001/alt.jpg'), 'nach Blockierung: eigene hochgeladene Datei bleibt lesbar');
 
 select * from finish();
 rollback;

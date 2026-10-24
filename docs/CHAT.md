@@ -143,7 +143,8 @@ Wiedergabe) baut der Hauptstrang darauf auf. Bis dahin zeigt der Verlauf Sprachn
 - **Echtzeit:** `conversationActivity(in:)` liefert `.message`, `.messageUpdated`, `.pinsChanged` über einen Kanal
   (endet sofort ohne Realtime → Polling wie bisher). `messageEvents(in:)` bleibt für neue/gelöschte Nachrichten.
 - **Sprachnachrichten:** Aufnahme als AAC in `.m4a`, Upload `media.upload(data, contentType:
-  MediaRules.voiceContentType, to: .chat(conversationID:))` (privat im Bucket `chat-media`, nur Teilnehmer),
+  MediaRules.voiceContentType, to: .chat(conversationID:))` (privat im Bucket `chat-media`; lesen darf die
+  hochladende Person sofort, alle anderen erst über die gesendete, sichtbare Nachricht – gilt auch für Bilder/GIFs),
   danach `ChatMessageDraft.voice(mediaPath:duration:replyTo:)`. Dauer 1 ms bis `ChatRules.maximumVoiceDuration`
   (5 min, `ChatRules.validVoiceMilliseconds`), Datei ≤ 10 MB. Am besten erst nach der Vorschau beim Senden
   hochladen; wurde schon hochgeladen und dann verworfen, die Datei mit `media.delete(_:)` entfernen (kein

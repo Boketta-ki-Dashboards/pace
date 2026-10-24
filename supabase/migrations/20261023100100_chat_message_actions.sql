@@ -20,9 +20,11 @@
 -- * Gelöschte Nachrichten verlieren Pins, Favoriten und ihre Dauer (Trigger).
 -- * Sprachnachrichten: kind 'voice', Datei (AAC in .m4a bzw. .aac) im Bucket chat-media unter <conversation_id>/,
 --   vom Absender hochgeladen (audio/mp4, audio/x-m4a oder audio/aac), Dauer 1 ms – 5 min (media_duration_ms).
---   Lesen/Schreiben/Löschen der Dateien wie bei Bildern; Beweissicherung gemeldeter Sprachnachrichten über
+--   Schreiben/Löschen der Dateien wie bei Bildern; Beweissicherung gemeldeter Sprachnachrichten über
 --   reports.evidence_path (media_path) wie bei Chat-Bildern. Bilder und GIFs müssen jetzt ausdrücklich einen
 --   image/*-Typ haben.
+-- * Storage-Lesen (alle Chat-Medien): die hochladende Person immer, alle anderen nur Dateien sichtbarer, nicht
+--   gelöschter Nachrichten (Policy pace_chat_media_select ersetzt, siehe Abschnitt „Storage: Lesen …“).
 -- * Fehler-Tokens: not_found, not_allowed, read_only, invalid_message, invalid_input, limit_reached,
 --   pin_limit_reached, rate_limited.
 -- =============================================================================================================
@@ -145,19 +147,9 @@ $$;
 revoke all on function pace_access.chat_media_folder(text) from public, anon;
 grant execute on function pace_access.chat_media_folder(text) to authenticated;
 
--- Ersetzen die Fassungen aus 20261019100300_storage_realtime_access.sql (gleiche Regeln, Ordner mit Audio-Endungen).
--- Die Policies verweisen auf dieselben Funktionen und bleiben unverändert.
-create or replace function pace_access.can_read_chat_media(p_name text)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select auth.uid() is not null
-     and private.can_read_conversation(pace_access.chat_media_folder(p_name), auth.uid());
-$$;
-
+-- Ersetzt die Fassung aus 20261019100300_storage_realtime_access.sql (gleiche Regel, Ordner mit Audio-Endungen).
+-- Die Insert-Policy verweist auf dieselbe Funktion und bleibt unverändert. Lesen: siehe „Storage: Lesen nur
+-- sichtbarer Medien“ weiter unten.
 create or replace function pace_access.can_write_chat_media(p_name text)
 returns boolean
 language sql
@@ -423,6 +415,50 @@ as $$
    where p.visible or private.can_pin_conversation(p_conversation_id, p_me);
 $$;
 revoke all on function private.chat_pins_json(uuid, uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Storage: Lesen nur sichtbarer Medien (Bilder, GIFs, Sprachnachrichten)
+-- ---------------------------------------------------------------------------------------------------------------
+
+-- Bisher durfte jede Person, die die Unterhaltung lesen kann, jede Datei im Ordner <conversation_id>/ lesen und per
+-- Storage-list auflisten – auch nie gesendete Uploads, Dateien gelöschter (z. B. gemeldeter) Nachrichten und Medien
+-- von Personen, die sie blockiert hat. Jetzt: Die hochladende Person liest ihre eigenen Dateien immer (Vorschau vor
+-- dem Senden, Insert … returning der Storage-API); alle anderen nur, wenn eine für sie sichtbare, nicht gelöschte
+-- Nachricht genau diesen media_path in derselben Unterhaltung trägt (private.chat_message_visible) und sie die
+-- Unterhaltung lesen dürfen. chat_delete_message setzt media_path auf null – danach liest nur noch die hochladende
+-- Person. Beweise gemeldeter Nachrichten sichtet die Moderation mit Projektrechten (Dashboard/service_role, ohne
+-- RLS). Ältere App-Versionen laden ohnehin nur Medien sichtbarer Nachrichten (bzw. eigene Uploads) – für sie ändert
+-- sich nichts. Signierte URLs (createSignedURL) prüft Storage über dieselbe Policy.
+
+-- Policy-Prüfung je Datei (auch beim Auflisten eines Ordners): Nachricht über den Pfad finden.
+create index chat_messages_media_path_idx on public.chat_messages (media_path) where media_path is not null;
+
+-- Ersetzt die Fassung aus 20261019100300_storage_realtime_access.sql (Rechte bleiben: nur authenticated).
+create or replace function pace_access.can_read_chat_media(p_name text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select auth.uid() is not null
+     and private.can_read_conversation(pace_access.chat_media_folder(p_name), auth.uid())
+     and exists (
+       select 1
+         from public.chat_messages m
+        where m.media_path = p_name
+          and m.conversation_id = pace_access.chat_media_folder(p_name)
+          and private.chat_message_visible(m, auth.uid())
+     );
+$$;
+
+drop policy if exists pace_chat_media_select on storage.objects;
+create policy pace_chat_media_select on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'chat-media'
+    and (owner_id = (select auth.uid())::text or pace_access.can_read_chat_media(name))
+  );
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- Trigger: gelöschte Nachrichten

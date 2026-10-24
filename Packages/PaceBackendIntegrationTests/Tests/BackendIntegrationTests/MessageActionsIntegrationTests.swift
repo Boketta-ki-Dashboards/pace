@@ -120,6 +120,11 @@ struct MessageActionsIntegrationTests {
         let reference = try await anna.media.upload(audio, contentType: MediaRules.voiceContentType, to: .chat(conversationID: direct.id))
         #expect(reference.bucket == .chatMedia)
         #expect(reference.path.hasSuffix(".m4a"))
+        // Vor dem Senden liest nur Anna die Datei (Vorschau), Ben noch nicht.
+        #expect(try await anna.media.data(for: reference) == audio)
+        await #expect(throws: (any Error).self) {
+            try await ben.media.data(for: reference)
+        }
 
         let voice = try await anna.chat.send(.voice(mediaPath: reference.path, duration: .milliseconds(3_200)), to: direct.id)
         #expect(voice.kind == .voice)

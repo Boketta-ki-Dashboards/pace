@@ -333,7 +333,7 @@ mit dem Access Token. Dateinamen sind zufällig (`<Ordner>/<UUID>.<Endung>`), Ü
 |---|---|---|---|---|
 | `avatars` | 5 MB | Fremde nur das **aktuelle** Profilbild (`profiles.avatar_path`), nicht wenn die Besitzerin sie blockiert hat; die Besitzerin ihren ganzen Ordner | nur Ordner der eigenen `public_id` | nur eigener Ordner, außer Dateien unter offener Meldung |
 | `group-images` | 5 MB | Mitglieder und Personen mit offener Einladung | owner der Gruppe (Ordner = `group_id`) | owner oder wer die Datei hochgeladen hat |
-| `chat-media` | 10 MB | wer die Unterhaltung lesen darf | wer in ihr senden darf (Ordner = `conversation_id`) | wer die Datei hochgeladen hat, außer Dateien unter offener Meldung |
+| `chat-media` | 10 MB | wer die Unterhaltung lesen darf (ab 20261023100100: die hochladende Person immer, alle anderen nur Dateien sichtbarer, nicht gelöschter Nachrichten – siehe unten) | wer in ihr senden darf (Ordner = `conversation_id`) | wer die Datei hochgeladen hat, außer Dateien unter offener Meldung |
 
 Erlaubte Formate (`allowed_mime_types`, wie `MediaRules`): `image/jpeg`, `image/png`, `image/gif`, `image/heic`,
 `image/webp`. Die Policies rufen `security definer`-Funktionen im Schema `pace_access` auf (nicht über die Data API
@@ -482,8 +482,18 @@ Neue Fehler-Tokens: `invalid_nickname` → `SocialError.invalidNickname`, `pin_l
   10 MB (5 Minuten AAC liegen weit darunter), die Dauer begrenzt der Server auf 5 Minuten.
 - Pfade `<conversation_id>/<UUID>.m4a` (bzw. `.aac`). `pace_access.chat_media_folder` akzeptiert dafür zusätzlich
   die Audio-Endungen; `can_read_chat_media`/`can_write_chat_media` nutzen sie – gleiche Regeln wie für Bilder
-  (lesen: wer die Unterhaltung lesen darf; schreiben: wer senden darf; löschen: wer hochgeladen hat). Profil- und
+  (schreiben: wer senden darf; löschen: wer hochgeladen hat; lesen: siehe nächster Punkt). Profil- und
   Gruppenbilder bleiben bei Bildendungen.
+- **Lesen aller Chat-Medien (Bilder, GIFs, Audio):** Die Policy `pace_chat_media_select` wird ersetzt
+  (`drop policy if exists` + `create policy`). Lesen darf die hochladende Person (`owner_id`) immer – Vorschau vor
+  dem Senden, Löschen nach dem Löschen der Nachricht, `insert … returning` der Storage-API. Alle anderen nur, wenn
+  eine für sie sichtbare (`private.chat_message_visible`: nicht gelöscht, Absender nicht von ihnen blockiert),
+  Nachricht derselben Unterhaltung genau diesen `media_path` trägt und sie die Unterhaltung lesen dürfen. Das gilt
+  für Download, Ordnerliste (`list`) und signierte URLs (`createSignedURL` prüft dieselbe Policy). Nie gesendete
+  Uploads, Dateien gelöschter (auch gemeldeter) Nachrichten und Medien blockierter Absender sind damit für andere
+  Teilnehmer nicht mehr lesbar. Beweise sichtet die Moderation mit Projektrechten (Dashboard bzw. `service_role`,
+  ohne RLS). Neuer Index `chat_messages_media_path_idx` für die Prüfung je Datei. Ältere App-Versionen laden nur
+  Medien sichtbarer Nachrichten bzw. eigene Uploads – für sie ändert sich nichts.
 - Beweissicherung wie bei Chat-Bildern: Eine gemeldete Sprachnachricht hält ihre Datei über
   `reports.evidence_path` (= `media_path` im Schnappschuss); `chat_delete_message` gibt sie dann nicht zur Löschung
   frei, die Delete-Policy sperrt sie.
