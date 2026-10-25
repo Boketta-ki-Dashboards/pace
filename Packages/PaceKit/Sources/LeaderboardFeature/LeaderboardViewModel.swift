@@ -177,7 +177,6 @@ public final class LeaderboardViewModel {
         return nil
     }
 
-    /// „unter deinen Freunden“ für Hinweise im Freunde-Ranking.
     /// Ein eigener Spitzname für eine Person wurde geändert (Social-Tab): Freunde- und Gruppenrankings zeigen ihn
     /// sofort, ohne neu zu laden.
     public func nicknameDidChange(_ profile: SocialProfile) {
@@ -213,6 +212,7 @@ public final class LeaderboardViewModel {
         }
     }
 
+    /// „unter deinen Freunden“ für Hinweise im Freunde-Ranking.
     public static var friendsLocative: String {
         PaceLocalization.text(de: "unter deinen Freunden", en: "among your friends", ru: "среди друзей")
     }

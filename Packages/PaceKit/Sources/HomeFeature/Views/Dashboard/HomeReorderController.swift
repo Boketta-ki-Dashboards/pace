@@ -12,11 +12,12 @@ import UIKit
 /// - Der Fingerpunkt kommt global aus der Griff-Geste. Im Inhalt liegt er bei
 ///   `Finger − Inhaltsoberkante beim Start + (Scroll-Versatz jetzt − Scroll-Versatz beim Start)`, deshalb bleibt das
 ///   Widget auch beim automatischen Scrollen unter dem stillstehenden Finger.
-/// - Beim Start wird der Aufbau der Liste festgehalten (``HomeReorderLayout``: Oberkante, Abstand, Höhen). Daraus
-///   ergibt sich der Platz jedes Widgets für jede Reihenfolge sofort; das gezogene Widget wird um
-///   `Fingerpunkt − Griffabstand − Platz-Oberkante` verschoben. So springt es nach einem Platztausch nicht (gemessene
-///   Rahmen kämen erst nach dem nächsten Layout an).
-/// - Die Reihenfolge ändert sich live, gespeichert wird einmal beim Loslassen (``HomeDashboardViewModel/endDragging()``).
+/// - Während des Ziehens bleibt die Reihenfolge im Layout unverändert: Das gezogene Widget wird gegenüber seinem
+///   ursprünglichen Platz verschoben, die Widgets zwischen Ausgangs- und Zielplatz rücken nur sichtbar um seine Höhe
+///   auf bzw. ab (``HomeReorderMath/displacement(index:source:target:step:)``). Kein Neuaufbau des Layouts pro Tausch,
+///   keine Animation, die mit der Fingerposition konkurriert – das Widget springt nicht.
+/// - Beim Loslassen wird die neue Reihenfolge einmal übernommen und gespeichert (ohne Animation; sichtbar ändert sich
+///   dabei nichts), danach rastet das Widget an seinem neuen Platz ein.
 /// - Ende, Abbruch durch das System, Verlassen des Anpassen-Modus, der Seite oder der App beenden das Ziehen und das
 ///   automatische Scrollen sofort (``endDrag()``); es bleibt kein Display-Link übrig.
 @MainActor
@@ -29,10 +30,16 @@ final class HomeReorderController {
     /// Fingerpunkt im Scroll-Inhalt (nur während des Ziehens).
     private(set) var fingerContentY: CGFloat = 0
     private(set) var grabOffset: CGFloat = 0
+    /// Platz, an dem das gezogene Widget beim Loslassen landet (Index in der Reihenfolge beim Start).
+    private(set) var targetIndex: Int?
+    /// Das gerade abgelegte Widget, solange es an seinen neuen Platz gleitet.
+    private(set) var settlingID: HomeModule.ID?
+    private var settleOffset: CGFloat = 0
 
     @ObservationIgnored private var frames: [HomeModule.ID: CGRect] = [:]
-    /// Aufbau der Liste während des Ziehens (beobachtet, damit die Verschiebung mit der Reihenfolge Schritt hält).
+    /// Aufbau und Reihenfolge der Liste beim Start des Ziehens.
     private var layout: HomeReorderLayout<HomeModule.ID>?
+    private var dragOrder: [HomeModule.ID] = []
     @ObservationIgnored private weak var scrollView: UIScrollView?
     /// Sichtbarer Bereich des Scrollens (global) und Oberkante des Inhalts (global).
     @ObservationIgnored private var viewportFrame: CGRect = .zero
@@ -84,8 +91,12 @@ final class HomeReorderController {
             if let scrollView, HomeScrollViewFinder.scrollsHorizontally(scrollView) {
                 self.scrollView = nil
             }
+            settlingID = nil
+            settleOffset = 0
             self.dashboard = dashboard
             self.layout = layout
+            dragOrder = order
+            targetIndex = order.firstIndex(of: id)
             startContentMinY = contentMinY
             startScrollOffset = scrollView?.contentOffset.y ?? 0
             fingerContentY = currentFingerContentY
@@ -94,28 +105,74 @@ final class HomeReorderController {
             dashboard.beginDragging(id)
             startDisplayLink()
         } else {
+            guard draggingID == id else { return }
             fingerContentY = currentFingerContentY
         }
-        reorderIfNeeded()
+        updateTarget()
     }
 
-    /// Finger losgelassen oder Geste abgebrochen: Widget rastet an seinem Platz ein, die Reihenfolge wird gespeichert.
+    /// Finger losgelassen oder Geste abgebrochen: neue Reihenfolge übernehmen und speichern, Widget rastet ein.
     /// Mehrfaches Aufrufen schadet nicht.
-    func endDrag() {
+    func endDrag(animated: Bool = true) {
         stopDisplayLink()
-        guard draggingID != nil else { return }
-        draggingID = nil
-        layout = nil
-        dashboard?.endDragging()
-        dashboard = nil
+        guard let draggingID else { return }
+        let dashboard = dashboard
+        let source = dragOrder.firstIndex(of: draggingID)
+        let target = targetIndex ?? source
+        var order = dragOrder
+        if let source, let target, source != target {
+            order.remove(at: source)
+            order.insert(draggingID, at: min(target, order.count))
+        }
+        let landing = layout?.slotTop(of: draggingID, order: order)
+        let visibleTop = fingerContentY - grabOffset
+
+        // Ohne Animation: Reihenfolge übernehmen, Ausweich-Verschiebungen fallen weg – sichtbar ändert sich nichts.
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            if let target, target != source {
+                dashboard?.moveDragged(toIndex: target)
+            }
+            settlingID = animated ? draggingID : nil
+            settleOffset = animated ? landing.map { visibleTop - $0 } ?? 0 : 0
+            self.draggingID = nil
+            targetIndex = nil
+            layout = nil
+            dragOrder = []
+            dashboard?.endDragging()
+            self.dashboard = nil
+        }
+        guard animated, settleOffset != 0 else {
+            settlingID = nil
+            return
+        }
+        // Erst nach dem Zeichnen an der Fingerposition an den neuen Platz gleiten.
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self, self.settlingID == draggingID else { return }
+            withAnimation(.snappy(duration: 0.28)) {
+                self.settleOffset = 0
+            } completion: { [weak self] in
+                if self?.settlingID == draggingID { self?.settlingID = nil }
+            }
+        }
     }
 
-    /// Verschiebung des Widgets gegenüber seinem Platz in der aktuellen Reihenfolge (nur das gezogene).
+    /// Verschiebung eines Widgets gegenüber seinem Platz im Layout: das gezogene folgt dem Finger, die anderen weichen
+    /// aus; das abgelegte gleitet an seinen Platz.
     func offset(for id: HomeModule.ID) -> CGFloat {
-        guard id == draggingID, let layout, let dashboard,
-              let slotTop = layout.slotTop(of: id, order: dashboard.modules.map(\.id))
+        if id == settlingID { return settleOffset }
+        guard let draggingID, let layout,
+              let source = dragOrder.firstIndex(of: draggingID),
+              let index = dragOrder.firstIndex(of: id)
         else { return 0 }
-        return fingerContentY - grabOffset - slotTop
+        if id == draggingID {
+            guard let slotTop = layout.slotTop(of: id, order: dragOrder) else { return 0 }
+            return fingerContentY - grabOffset - slotTop
+        }
+        let step = (layout.heights[draggingID] ?? 0) + layout.spacing
+        return HomeReorderMath.displacement(index: index, source: source, target: targetIndex ?? source, step: step)
     }
 
     /// Läuft gerade automatisches Scrollen (Tests, Diagnose).
@@ -131,15 +188,15 @@ final class HomeReorderController {
         fingerGlobalY - startContentMinY + scrollDelta
     }
 
-    private func reorderIfNeeded() {
-        guard let draggingID, let dashboard, let layout, let height = layout.heights[draggingID] else { return }
-        let order = dashboard.modules.map(\.id)
+    /// Zielplatz aus der Mitte des gezogenen Widgets und den Plätzen der anderen beim Start.
+    private func updateTarget() {
+        guard let draggingID, let layout, let height = layout.heights[draggingID] else { return }
         let center = fingerContentY - grabOffset + height / 2
         guard let target = HomeReorderMath.targetIndex(
-            order: order, frames: layout.frames(order: order), dragging: draggingID, draggedCenterY: center
-        ), target != order.firstIndex(of: draggingID)
+            order: dragOrder, frames: layout.frames(order: dragOrder), dragging: draggingID, draggedCenterY: center
+        ), target != targetIndex
         else { return }
-        dashboard.moveDragged(toIndex: target)
+        targetIndex = target
     }
 
     private func startDisplayLink() {
@@ -184,7 +241,7 @@ final class HomeReorderController {
         guard offset != scrollView.contentOffset.y else { return }
         scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: offset), animated: false)
         fingerContentY = currentFingerContentY
-        reorderIfNeeded()
+        updateTarget()
     }
 }
 

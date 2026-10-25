@@ -40,13 +40,21 @@ public struct SocialView: View {
                         viewModel: viewModel,
                         onOpen: { navigator.open($0) },
                         onOpenChat: { navigator.openChat($0) },
-                        onReplace: { navigator.replaceTop(with: $0) },
-                        onPopToRoot: { navigator.popToRoot() },
-                        onReplaceWithChat: { navigator.replaceTop(withChat: $0) }
+                        // Abschlüsse nach dem Warten auf den Server wirken nur auf ihre eigene Seite.
+                        onReplace: { navigator.replace(route, with: $0) },
+                        onPopToRoot: {
+                            if case .groupSettings(let groupID) = route {
+                                navigator.closeGroup(groupID)
+                            } else {
+                                navigator.popToRoot()
+                            }
+                        },
+                        onReplaceWithChat: { navigator.replace(route, withChat: $0) }
                     )
                 case .chat(let target):
-                    ChatView(
-                        viewModel: viewModel.chats.chat(for: target),
+                    SocialChatDestination(
+                        chats: viewModel.chats,
+                        target: target,
                         onOpenRoute: { navigator.open($0) },
                         onOpenProfile: { navigator.open(.profile($0)) }
                     )
@@ -81,6 +89,29 @@ public struct SocialView: View {
         guard let groupID = viewModel.requestedGroup else { return }
         viewModel.clearRequestedGroup()
         navigator.show(.group(groupID))
+    }
+}
+
+/// Ein Chat im Navigationspfad: Das ViewModel wird einmal je Seite bestimmt und bleibt dieser Seite zugeordnet, auch
+/// wenn der Pfad oder die Chatliste später neu ausgewertet wird.
+private struct SocialChatDestination: View {
+    @State private var chat: ChatViewModel
+    let onOpenRoute: (SocialRoute) -> Void
+    let onOpenProfile: (SocialProfile) -> Void
+
+    init(
+        chats: ChatListViewModel,
+        target: ChatTarget,
+        onOpenRoute: @escaping (SocialRoute) -> Void,
+        onOpenProfile: @escaping (SocialProfile) -> Void
+    ) {
+        _chat = State(initialValue: chats.chat(for: target))
+        self.onOpenRoute = onOpenRoute
+        self.onOpenProfile = onOpenProfile
+    }
+
+    var body: some View {
+        ChatView(viewModel: chat, onOpenRoute: onOpenRoute, onOpenProfile: onOpenProfile)
     }
 }
 

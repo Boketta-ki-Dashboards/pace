@@ -92,7 +92,7 @@ public struct HomeView: View {
             if !isEditing { reorder.endDrag() }
         }
         // Seite verlassen (z. B. Galerie geöffnet) oder App verlassen: kein Ziehen und kein Auto-Scroll bleibt übrig.
-        .onDisappear { [reorder] in reorder.endDrag() }
+        .onDisappear { [reorder] in reorder.endDrag(animated: false) }
         .onChange(of: viewModel.streak.record) {
             viewModel.streak.saveRecordIfNeeded()
         }
@@ -101,7 +101,7 @@ public struct HomeView: View {
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else {
-                reorder.endDrag()
+                reorder.endDrag(animated: false)
                 return
             }
             // Zurück in der App: Schritte lesen, dann Platzierungen auffrischen, falls älter als eine Minute.
@@ -171,6 +171,12 @@ struct HomeDashboardContent: View {
     var onEditModule: (HomeModule.ID) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(HomeReorderController.self) private var reorder: HomeReorderController?
+
+    /// Gezogen oder gerade abgelegt: liegt über den anderen Widgets.
+    private func isLifted(_ module: HomeModule) -> Bool {
+        viewModel.draggingModuleID == module.id || reorder?.settlingID == module.id
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
@@ -179,12 +185,14 @@ struct HomeDashboardContent: View {
 
             ForEach(viewModel.modules) { module in
                 HomeEditableModule(module: module, viewModel: viewModel, onEdit: onEditModule)
-                    .zIndex(viewModel.draggingModuleID == module.id ? 2 : viewModel.sizeMenuModuleID == module.id ? 1 : 0)
+                    .zIndex(isLifted(module) ? 2 : viewModel.sizeMenuModuleID == module.id ? 1 : 0)
             }
         }
         .animation(reduceMotion ? nil : .snappy, value: viewModel.modules.map(\.id))
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: viewModel.isEditing)
         .sensoryFeedback(.selection, trigger: viewModel.modules.map(\.id))
+        // Beim Ziehen: kurzes Feedback, wenn das Widget einen neuen Platz erreicht.
+        .sensoryFeedback(.selection, trigger: reorder?.targetIndex) { old, new in old != nil && new != nil }
         .sensoryFeedback(.impact(weight: .light), trigger: viewModel.draggingModuleID) { _, newValue in newValue != nil }
     }
 }

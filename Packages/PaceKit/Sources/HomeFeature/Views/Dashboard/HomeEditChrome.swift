@@ -35,8 +35,13 @@ struct HomeEditableModule: View {
 
     private var editing: some View {
         HomeModuleView(module: module, viewModel: viewModel, mode: .editing) {
-            // Ein offenes Größenmenü schließt zuerst; sonst öffnet Antippen die Galerie zum Bearbeiten.
-            viewModel.endDragging()
+            // Ein offenes Größenmenü schließt zuerst; sonst öffnet Antippen die Galerie zum Bearbeiten. Ein noch
+            // laufendes Ziehen (zweiter Finger) endet über den Controller – sonst bliebe es samt Auto-Scroll hängen.
+            if let reorder, reorder.isDragging {
+                reorder.endDrag()
+            } else {
+                viewModel.endDragging()
+            }
             if viewModel.sizeMenuModuleID != nil {
                 viewModel.sizeMenuModuleID = nil
             } else {
@@ -77,7 +82,9 @@ struct HomeEditableModule: View {
         .scaleEffect(isDragged && !reduceMotion ? 1.03 : 1)
         .shadow(color: .black.opacity(isDragged ? 0.22 : 0), radius: isDragged ? 18 : 0, y: isDragged ? 8 : 0)
         .offset(y: reorder?.offset(for: module.id) ?? 0)
-        // Das gezogene Widget folgt dem Finger ohne Verzögerung; die anderen gleiten animiert an ihren neuen Platz.
+        // Die anderen gleiten animiert zur Seite, sobald sich der Zielplatz ändert; das gezogene folgt dem Finger ohne
+        // Verzögerung.
+        .animation(isDragged || reduceMotion ? nil : .snappy(duration: 0.25), value: reorder?.targetIndex)
         .transaction { [isDragged] transaction in
             if isDragged { transaction.animation = nil }
         }

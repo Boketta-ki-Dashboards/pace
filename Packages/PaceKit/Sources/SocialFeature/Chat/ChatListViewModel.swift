@@ -319,7 +319,11 @@ public final class ChatListViewModel {
     /// ViewModel für einen einzelnen Chat. Für dieselbe Unterhaltung – egal ob über die Liste, ein Profil oder eine
     /// Gruppe geöffnet – gibt es immer dieselbe Instanz.
     public func chat(for target: ChatTarget) -> ChatViewModel {
-        if let existing = chats.first(where: { $0.matches(target) }) {
+        // Stabile Zuordnung, auch wenn es (selten) zwei passende gibt – z. B. ein früh geöffneter Chat, dessen Laden
+        // scheiterte: zuerst exakt dasselbe Ziel, dann ein Chat mit geladener Unterhaltung, dann jeder passende.
+        if let existing = chats.first(where: { $0.target == target })
+            ?? chats.first(where: { $0.conversation != nil && $0.matches(target) })
+            ?? chats.first(where: { $0.matches(target) }) {
             return touched(existing)
         }
         let known = knownConversation(for: target)

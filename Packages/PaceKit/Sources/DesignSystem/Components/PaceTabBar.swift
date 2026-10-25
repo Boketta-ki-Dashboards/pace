@@ -1,5 +1,6 @@
 import PaceCore
 import SwiftUI
+import UIKit
 
 /// Eintrag der Tab-Leiste.
 public struct PaceTabItem<Value: Hashable>: Identifiable {
@@ -34,8 +35,9 @@ public struct PaceTabBar<Value: Hashable>: View {
     private let onReselect: ((Value) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Höhe des Bereichs am unteren Rand mit Home-Indikator (0 bei iPhones mit Home-Taste).
-    @State private var homeIndicatorInset: CGFloat = 0
+    /// Höhe des Bereichs am unteren Rand mit Home-Indikator (0 bei iPhones mit Home-Taste). Startwert ist die zuletzt
+    /// gemessene Höhe, damit die Leiste nicht springt, wenn sie (z. B. nach dem Schließen der Tastatur) neu erscheint.
+    @State private var homeIndicatorInset: CGFloat = PaceTabBarInset.lastMeasured
 
     private static var spacing: CGFloat { PaceSpacing.xxs }
 
@@ -103,6 +105,7 @@ public struct PaceTabBar<Value: Hashable>: View {
                     proxy.safeAreaInsets.bottom
                 } action: { inset in
                     homeIndicatorInset = inset
+                    PaceTabBarInset.lastMeasured = inset
                 }
         }
     }
@@ -202,4 +205,10 @@ private struct TabBadge: View {
             ru: ("\(count) непрочитанное", "\(count) непрочитанных", "\(count) непрочитанных")
         )
     }
+}
+
+/// Zuletzt gemessene Höhe des Home-Indikator-Bereichs – Startwert für neu eingeblendete Tab-Leisten.
+@MainActor
+enum PaceTabBarInset {
+    static var lastMeasured: CGFloat = 0
 }

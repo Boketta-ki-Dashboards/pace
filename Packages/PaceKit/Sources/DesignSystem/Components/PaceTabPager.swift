@@ -36,6 +36,8 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
     @State private var lastPosition: Double?
     /// Wie weit die Tastatur die Seitenleiste von unten überdeckt (0 ohne Tastatur).
     @State private var keyboardOverlap: CGFloat = 0
+    /// Nur für Tests: feste Überdeckung statt der gemessenen (der Simulator zeigt oft keine Bildschirmtastatur).
+    var keyboardOverlapForTesting: CGFloat?
     /// Startpunkt beim ersten Anzeigen: die Seite des anfangs gewählten Tabs (nicht immer Home).
     private let initialAnchor: UnitPoint
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -64,7 +66,8 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
             HStack(spacing: 0) {
                 ForEach(tabs, id: \.self) { tab in
                     page(tab)
-                        .safeAreaPadding(.bottom, keyboardOverlap)
+                        // Nur die sichtbare Seite bekommt die Tastatur (die anderen müssen nicht neu angeordnet werden).
+                        .safeAreaPadding(.bottom, tab == selection ? keyboardOverlapForTesting ?? keyboardOverlap : 0)
                         .containerRelativeFrame(.horizontal)
                         .id(tab)
                 }
@@ -174,12 +177,20 @@ struct PaceKeyboardOverlapReader: UIViewRepresentable {
             fatalError("init(coder:) is not supported")
         }
 
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            setNeedsLayout()
+        }
+
         override func layoutSubviews() {
             super.layoutSubviews()
             let overlap = window == nil ? 0 : min(max(bounds.height - keyboardLayoutGuide.layoutFrame.minY, 0), bounds.height)
             guard abs(overlap - lastOverlap) > 0.5 else { return }
             lastOverlap = overlap
-            onChange?(overlap)
+            // Nicht während des laufenden Layouts in SwiftUI-Zustand schreiben.
+            DispatchQueue.main.async { [weak self] in
+                self?.onChange?(overlap)
+            }
         }
     }
 }

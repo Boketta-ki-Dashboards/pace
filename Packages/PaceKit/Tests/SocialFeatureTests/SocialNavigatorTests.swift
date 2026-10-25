@@ -236,8 +236,8 @@ struct SocialNavigatorTests {
 /// liegende und Chats mit Entwurf bleiben.
 @MainActor
 struct ChatCacheTrimmingTests {
-    @Test func idleChatsAreReleasedButOpenAndDraftChatsStay() async {
-        let conversations = (0..<14).map { index in
+    private func makeChats(_ count: Int) async -> (ChatListViewModel, SocialViewModel, [ConversationSummary]) {
+        let conversations = (0..<count).map { index in
             ChatFixtures.group(id: UUID(), groupID: UUID(), title: "Gruppe \(index)")
         }
         let repository = ChatRepositoryStub { $0.conversations = conversations }
@@ -247,22 +247,129 @@ struct ChatCacheTrimmingTests {
         )
         await chats.load()
         let social = SocialViewModel(repository: SocialRepositoryStub(), chats: chats, calendar: Fixtures.activityCalendar)
-        let navigator = social.navigator
+        return (chats, social, conversations)
+    }
 
-        // Ein Chat mit Entwurf, dann nacheinander alle anderen öffnen und wieder schließen.
+    /// Wie die Ziel-Ansicht im `NavigationStack`: Chat öffnen erzeugt bzw. holt sein ViewModel.
+    private func open(_ conversation: ConversationSummary, in social: SocialViewModel) -> ChatViewModel {
+        social.navigator.openChat(ChatTarget(conversation))
+        return social.chats.chat(for: ChatTarget(conversation))
+    }
+
+    @Test func oldestIdleChatsAreReleasedFirst() async {
+        let (chats, social, conversations) = await makeChats(14)
+        var models: [ChatViewModel] = []
+        for conversation in conversations {
+            models.append(open(conversation, in: social))
+            social.navigator.popToRoot()
+        }
+        // Höchstens 8 nicht offene Chats bleiben – die zuletzt benutzten.
+        #expect(chats.cachedChatCount == ChatListViewModel.maximumIdleChats)
+        #expect(chats.chat(for: ChatTarget(conversations[13])) === models[13])
+        #expect(chats.chat(for: ChatTarget(conversations[6])) === models[6])
+        // Der älteste wurde freigegeben und kommt beim nächsten Öffnen neu.
+        #expect(chats.chat(for: ChatTarget(conversations[0])) !== models[0])
+    }
+
+    @Test func draftsAndChatsInThePathStay() async {
+        let (chats, social, conversations) = await makeChats(14)
+        let navigator = social.navigator
         let draft = chats.chat(for: ChatTarget(conversations[0]))
         draft.draftText = "Bis gleich"
-        for conversation in conversations.dropFirst() {
-            navigator.openChat(ChatTarget(conversation))
-            navigator.popToRoot()
+        // Chat 1 liegt verdeckt im Pfad (darüber ein Profil).
+        let covered = open(conversations[1], in: social)
+        navigator.open(.profile(ChatFixtures.mia))
+        for conversation in conversations.dropFirst(2) {
+            _ = open(conversation, in: social)
+            navigator.open(.profile(ChatFixtures.mia)) // geht zurück zum Profil, der Chat darüber schließt sich
         }
-        // Der zuletzt geöffnete Chat liegt offen im Pfad.
-        navigator.openChat(ChatTarget(conversations[13]))
-
-        #expect(chats.cachedChatCount <= ChatListViewModel.maximumIdleChats + 2)
         #expect(chats.chat(for: ChatTarget(conversations[0])) === draft)
-        let open = chats.chat(for: ChatTarget(conversations[13]))
-        navigator.openChat(ChatTarget(conversations[13]))
-        #expect(chats.chat(for: ChatTarget(conversations[13])) === open)
+        #expect(chats.chat(for: ChatTarget(conversations[1])) === covered)
+        #expect(chats.cachedChatCount <= ChatListViewModel.maximumIdleChats + 2)
+    }
+
+    @Test func theBackGestureAlsoReleasesChats() async {
+        let (chats, social, conversations) = await makeChats(12)
+        let navigator = social.navigator
+        for conversation in conversations.prefix(11) {
+            _ = open(conversation, in: social)
+            // Zurück-Geste des Systems: schreibt den Pfad direkt.
+            navigator.path.removeLast()
+        }
+        #expect(chats.cachedChatCount == ChatListViewModel.maximumIdleChats)
+    }
+
+    @Test func aDuplicateViewModelNeverReplacesTheOpenOne() async {
+        let (chats, _, conversations) = await makeChats(1)
+        let group = conversations[0]
+        // Früh über die Gruppe geöffnet (noch ohne geladene Unterhaltung) und später über die Liste.
+        let fromList = chats.chat(for: ChatTarget(group))
+        let first = chats.chat(for: ChatTarget(group))
+        let again = chats.chat(for: ChatTarget(group))
+        #expect(first === fromList)
+        #expect(again === fromList)
+    }
+}
+
+/// Abschlüsse nach dem Warten auf den Server wirken nur auf ihre eigene Seite; Verlassen einer Gruppe schließt nur deren
+/// Seiten.
+@MainActor
+struct SocialNavigatorCompletionTests {
+    private let groupID = UUID(uuidString: "a5000000-0000-4000-8000-000000000001")!
+    private let otherGroupID = UUID(uuidString: "a5000000-0000-4000-8000-000000000002")!
+
+    @Test func replaceOnlyActsWhenItsPageIsStillOnTop() {
+        let navigator = SocialNavigator()
+        navigator.open(.groups)
+        navigator.open(.createGroup)
+        navigator.replace(.createGroup, with: .group(groupID))
+        #expect(navigator.path == [.route(.groups), .route(.group(groupID))])
+
+        // Inzwischen zurückgegangen: Die neue Gruppe wird geöffnet, „Meine Gruppen“ bleibt.
+        navigator.popToRoot()
+        navigator.open(.groups)
+        navigator.open(.createGroup)
+        navigator.path.removeLast()
+        navigator.replace(.createGroup, with: .group(otherGroupID))
+        #expect(navigator.path == [.route(.groups), .route(.group(otherGroupID))])
+
+        navigator.popToRoot()
+        navigator.open(.profile(ChatFixtures.leon))
+        navigator.open(.shareProfile(ChatFixtures.leon))
+        navigator.replace(.shareProfile(ChatFixtures.leon), withChat: .direct(ChatFixtures.mia))
+        #expect(navigator.path == [.route(.profile(ChatFixtures.leon)), .chat(.direct(ChatFixtures.mia))])
+    }
+
+    @Test func leavingAGroupClosesOnlyItsPages() {
+        let navigator = SocialNavigator()
+        navigator.open(.group(otherGroupID))
+        navigator.open(.profile(ChatFixtures.mia))
+        navigator.open(.group(groupID))
+        navigator.openChat(.group(id: groupID, name: "Smoking red"))
+        navigator.open(.groupSettings(groupID))
+
+        navigator.closeGroup(groupID)
+
+        #expect(navigator.path == [.route(.group(otherGroupID)), .route(.profile(ChatFixtures.mia))])
+    }
+}
+
+/// Mediendaten je Chat: nach Bytes begrenzt, älteste zuerst entfernt.
+struct ChatMediaDataCacheTests {
+    @Test func oldestEntriesLeaveFirst() {
+        var cache = ChatMediaDataCache(byteLimit: 10)
+        cache["a"] = Data(count: 4)
+        cache["b"] = Data(count: 4)
+        cache["c"] = Data(count: 4)
+        #expect(cache["a"] == nil)
+        #expect(cache["b"]?.count == 4)
+        #expect(cache["c"]?.count == 4)
+        #expect(cache.totalBytes == 8)
+        // Ein großer Eintrag bleibt allein erhalten.
+        cache["big"] = Data(count: 20)
+        #expect(cache.count == 1)
+        #expect(cache["big"]?.count == 20)
+        cache["big"] = nil
+        #expect(cache.totalBytes == 0)
     }
 }

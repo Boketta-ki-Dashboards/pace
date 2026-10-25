@@ -207,7 +207,10 @@ struct ChatInputBar: View {
             .animation(.easeOut(duration: 0.15), value: isRecording)
             .contentShape(Circle())
             .gesture(
-                DragGesture(minimumDistance: 0)
+                // Globale Koordinaten: Schließt sich beim Start der Aufnahme die Tastatur, rutscht die Eingabeleiste unter
+                // dem ruhenden Finger nach unten – lokal gemessen sähe das wie „nach oben gewischt“ aus und sperrte die
+                // Aufnahme ungewollt.
+                DragGesture(minimumDistance: 0, coordinateSpace: .global)
                     .updating($micPressed) { _, state, _ in state = true }
                     .onChanged { value in micChanged(value.translation) }
                     .onEnded { _ in endMicGesture() }

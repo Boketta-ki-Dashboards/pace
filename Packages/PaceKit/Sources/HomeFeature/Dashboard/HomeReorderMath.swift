@@ -54,6 +54,15 @@ public enum HomeReorderMath {
         return 0
     }
 
+    /// Verschiebung eines anderen Widgets an `index`, während das gezogene von `source` nach `target` unterwegs ist. Die
+    /// Reihenfolge selbst ändert sich erst beim Loslassen; bis dahin rücken die Widgets dazwischen um Höhe + Abstand des
+    /// gezogenen auf (nach oben, `-step`) bzw. ab (`+step`).
+    public static func displacement(index: Int, source: Int, target: Int, step: CGFloat) -> CGFloat {
+        if source < target, index > source, index <= target { return -step }
+        if target < source, index >= target, index < source { return step }
+        return 0
+    }
+
     /// Abstand zwischen den Widgets aus ihren Rahmen (häufigster Abstand untereinander); ohne Messung `fallback`.
     public static func spacing(of frames: [CGRect], fallback: CGFloat) -> CGFloat {
         let sorted = frames.sorted { $0.minY < $1.minY }

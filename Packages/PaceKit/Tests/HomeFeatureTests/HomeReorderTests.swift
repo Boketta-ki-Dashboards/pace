@@ -245,3 +245,38 @@ struct HomeReorderSavingTests {
         #expect(store.saves == 2)
     }
 }
+
+/// Ausweichen der anderen Widgets während des Ziehens (die Reihenfolge ändert sich erst beim Loslassen).
+struct HomeReorderDisplacementTests {
+    @Test func widgetsBetweenSourceAndTargetMoveAside() {
+        // Von Platz 1 nach Platz 3: Plätze 2 und 3 rücken nach oben, die anderen bleiben.
+        #expect(HomeReorderMath.displacement(index: 0, source: 1, target: 3, step: 112) == 0)
+        #expect(HomeReorderMath.displacement(index: 2, source: 1, target: 3, step: 112) == -112)
+        #expect(HomeReorderMath.displacement(index: 3, source: 1, target: 3, step: 112) == -112)
+        #expect(HomeReorderMath.displacement(index: 4, source: 1, target: 3, step: 112) == 0)
+        // Von Platz 3 nach Platz 0: Plätze 0–2 rücken nach unten.
+        #expect(HomeReorderMath.displacement(index: 0, source: 3, target: 0, step: 50) == 50)
+        #expect(HomeReorderMath.displacement(index: 2, source: 3, target: 0, step: 50) == 50)
+        #expect(HomeReorderMath.displacement(index: 4, source: 3, target: 0, step: 50) == 0)
+        // Noch am Ausgangsplatz: niemand weicht aus.
+        #expect((0..<5).allSatisfy { HomeReorderMath.displacement(index: $0, source: 2, target: 2, step: 80) == 0 })
+    }
+
+    @Test func visiblePositionsMatchTheFinalOrderOnRelease() {
+        // Sichtbare Oberkanten während des Ziehens (Start-Layout + Ausweichen) = Oberkanten nach dem Übernehmen.
+        let heights: [String: CGFloat] = ["a": 100, "b": 320, "c": 100, "d": 210]
+        let layout = HomeReorderLayout(top: 0, spacing: 12, heights: heights)
+        let order = ["a", "b", "c", "d"]
+        let (source, target) = (0, 2)
+        let step = heights["a"]! + 12
+        var final = order
+        final.remove(at: source)
+        final.insert("a", at: target)
+        let start = layout.frames(order: order)
+        let end = layout.frames(order: final)
+        for (index, id) in order.enumerated() where id != "a" {
+            let visible = start[id]!.minY + HomeReorderMath.displacement(index: index, source: source, target: target, step: step)
+            #expect(abs(visible - end[id]!.minY) < 0.001, "\(id) springt beim Loslassen")
+        }
+    }
+}

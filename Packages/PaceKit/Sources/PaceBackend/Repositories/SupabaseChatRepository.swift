@@ -177,6 +177,7 @@ struct SupabaseChatRepository: ChatRepository {
         do {
             return try await operation()
         } catch {
+            if BackendFailure.isCancellation(error) { throw CancellationError() }
             throw BackendErrorMapping.socialError(error)
         }
     }

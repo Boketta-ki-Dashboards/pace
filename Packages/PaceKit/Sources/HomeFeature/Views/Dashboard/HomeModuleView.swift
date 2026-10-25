@@ -339,15 +339,14 @@ struct HomeReorderHandle: View {
                 if !touching { endDrag() }
             }
             .onDisappear {
-                if viewModel.draggingModuleID == module.id { reorder?.endDrag() }
+                if reorder?.draggingID == module.id { reorder?.endDrag(animated: false) }
             }
             .accessibilityHidden(true)
     }
 
+    /// Ende über den Zustand des Controllers (nicht des Dashboards) – so kann kein Ziehen hängen bleiben.
     private func endDrag() {
-        guard viewModel.draggingModuleID == module.id else { return }
-        withAnimation(reduceMotion ? nil : .snappy) {
-            reorder?.endDrag()
-        }
+        guard let reorder, reorder.draggingID == module.id else { return }
+        reorder.endDrag(animated: !reduceMotion)
     }
 }

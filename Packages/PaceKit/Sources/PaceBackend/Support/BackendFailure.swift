@@ -35,6 +35,14 @@ enum BackendFailure: Equatable {
         }
     }
 
+    /// Abgebrochene Anfrage (Seite verlassen, Aufgabe beendet) – kein Netzwerkfehler. Die ViewModels behandeln
+    /// `CancellationError` still; als „keine Verbindung“ gemeldet, blitzte beim Zurückgehen ein Fehler auf.
+    static func isCancellation(_ error: any Error) -> Bool {
+        if error is CancellationError { return true }
+        if let error = error as? URLError, error.code == .cancelled { return true }
+        return false
+    }
+
     private static func classify(_ error: PostgrestError) -> BackendFailure {
         let code = error.code ?? ""
         if code == "42501" {

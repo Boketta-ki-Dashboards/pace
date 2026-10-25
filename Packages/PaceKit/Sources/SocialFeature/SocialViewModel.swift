@@ -107,7 +107,7 @@ public final class SocialViewModel {
         let chats = chats ?? ChatListViewModel(repository: nil, media: media)
         self.chats = chats
         let navigator = SocialNavigator { [weak chats] lhs, rhs in
-            chats?.isSameChat(lhs, rhs) ?? (lhs == rhs)
+            chats?.isSameChat(lhs, rhs) ?? SocialNavigator.sameChatTarget(lhs, rhs)
         }
         // Geschlossene Chats geben ihren Speicher frei (höchstens wenige bleiben für schnelles Wiederöffnen).
         navigator.onPathChange = { [weak chats, weak navigator] _ in

@@ -97,20 +97,29 @@ struct ChatMediaImage: View {
     let localData: Data?
     let animates: Bool
     let contentMode: ContentMode
+    /// Blase oder Vollbild – jeweils in passender Auflösung dekodiert.
+    let size: PaceImageLoader.Size
 
     @Environment(\.paceImageLoader) private var loader
     @State private var image: UIImage?
     @State private var failed = false
 
-    init(reference: MediaReference?, localData: Data?, animates: Bool, contentMode: ContentMode = .fill) {
+    init(
+        reference: MediaReference?,
+        localData: Data?,
+        animates: Bool,
+        contentMode: ContentMode = .fill,
+        size: PaceImageLoader.Size = .bubble
+    ) {
         self.reference = reference
         self.localData = localData
         self.animates = animates
         self.contentMode = contentMode
+        self.size = size
     }
 
     var body: some View {
-        let shown = image ?? reference.flatMap { loader?.cachedImage(for: $0) }
+        let shown = image ?? reference.flatMap { loader?.cachedImage(for: $0, size: size) }
         ZStack {
             if let shown {
                 if animates, shown.images != nil {
@@ -141,18 +150,24 @@ struct ChatMediaImage: View {
         .task(id: reference) {
             await load()
         }
+        // Außer Sicht gibt die Blase ihr Bild frei (der begrenzte Bildspeicher behält es, solange Platz ist) – lange
+        // Chats mit vielen GIFs halten so nicht alle Bilder gleichzeitig im Arbeitsspeicher.
+        .onDisappear {
+            image = nil
+        }
     }
 
     private func load() async {
         if let reference, let loader {
-            if let localData, loader.cachedImage(for: reference) == nil {
+            if let localData {
+                // Nur die Daten ablegen; dekodiert wird beim Laden, nicht auf dem Main Thread.
                 loader.store(localData, for: reference)
             }
-            if let cached = loader.cachedImage(for: reference) {
+            if let cached = loader.cachedImage(for: reference, size: size) {
                 image = cached
                 return
             }
-            let loaded = await loader.image(for: reference)
+            let loaded = await loader.image(for: reference, size: size)
             image = loaded
             failed = loaded == nil
         } else if let localData {
@@ -210,7 +225,9 @@ struct ChatImageViewer: View {
         ZStack(alignment: .topTrailing) {
             PaceColor.background
                 .ignoresSafeArea()
-            ChatMediaImage(reference: item.reference, localData: nil, animates: item.isGIF && !reduceMotion, contentMode: .fit)
+            ChatMediaImage(
+                reference: item.reference, localData: nil, animates: item.isGIF && !reduceMotion, contentMode: .fit, size: .full
+            )
                 .scaleEffect(scale)
                 .offset(offset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

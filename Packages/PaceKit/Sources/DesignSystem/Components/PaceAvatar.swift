@@ -50,10 +50,12 @@ public struct PaceAvatar: View {
                 photo = nil
                 return
             }
-            if let cached = loader.cachedImage(for: image) {
+            // In Anzeigegröße dekodiert (nicht das ganze hochgeladene Bild).
+            let size = PaceImageLoader.Size.avatar(points: self.size)
+            if let cached = loader.cachedImage(for: image, size: size) {
                 photo = cached
             } else {
-                photo = await loader.image(for: image)
+                photo = await loader.image(for: image, size: size)
             }
         }
     }

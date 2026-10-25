@@ -98,6 +98,8 @@ final class ChatVoicePlayer {
         ticker?.cancel()
         ticker = nil
         update()
+        // Pausiert: andere Apps dürfen wieder spielen; „Weiter“ aktiviert die Sitzung erneut.
+        deactivateSession()
     }
 
     func stop() {

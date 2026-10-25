@@ -1,4 +1,4 @@
-import DesignSystem
+@testable import DesignSystem
 import Foundation
 import PaceCore
 import PaceTestSupport
@@ -62,6 +62,47 @@ struct KeyboardLayoutTests {
         #expect(closedFrame.maxY < 852 - 34)
     }
 
+    /// Ohne Bildschirmtastatur im Simulator: feste Überdeckung von 300 pt an die Seitenleiste geben. Die Eingabe muss
+    /// genau um diese Höhe nach oben rücken – nicht weniger (verdeckt) und nicht mehr (doppelter Abstand).
+    @Test func chatInputMovesUpByExactlyTheKeyboardOverlap() async throws {
+        let (list, _) = await ChatSnapshotData.groupSetup()
+        let chat = list.chat(for: .group(id: ChatSnapshotData.groupID, name: "Smoking red"))
+        await chat.load()
+
+        func inputBottom(overlap: CGFloat?) async throws -> (field: CGFloat, pager: CGFloat) {
+            let controller = UIHostingController(rootView: KeyboardHarness(chat: chat, overlap: overlap))
+            controller.additionalSafeAreaInsets = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 393, height: 852))
+            window.rootViewController = controller
+            window.isHidden = false
+            defer {
+                window.isHidden = true
+                window.rootViewController = nil
+            }
+            try await Task.sleep(for: .milliseconds(800))
+            controller.view.layoutIfNeeded()
+            let field = try #require(Self.textInput(in: controller.view))
+            let pager = try #require(Self.pager(in: controller.view))
+            return (field.convert(field.bounds, to: window).maxY, pager.convert(pager.bounds, to: window).maxY)
+        }
+
+        let closed = try await inputBottom(overlap: nil)
+        let open = try await inputBottom(overlap: 300)
+        print("KeyboardLayoutTests: Eingabe endet bei \(closed.field) (ohne) bzw. \(open.field) (mit 300 pt), Seitenleiste bis \(open.pager).")
+        #expect(abs((closed.field - open.field) - 300) < 2, "Die Eingabe rückt nicht genau um die Tastaturhöhe nach oben")
+        #expect(open.field <= open.pager - 300 + 1)
+    }
+
+    private static func pager(in view: UIView) -> UIScrollView? {
+        if let scrollView = view as? UIScrollView, scrollView.contentSize.width > scrollView.bounds.width + 1 {
+            return scrollView
+        }
+        for subview in view.subviews {
+            if let found = pager(in: subview) { return found }
+        }
+        return nil
+    }
+
     /// Das Textfeld der Eingabeleiste (mehrzeiliges `TextField` → `UITextView`, sonst `UITextField`).
     private static func textInput(in view: UIView) -> UIView? {
         if view is UITextView || view is UITextField { return view }
@@ -100,22 +141,29 @@ private final class KeyboardFrameRecorder {
 /// Pager mit Chat auf der Social-Seite und Tab-Leiste, die bei offener Tastatur verschwindet – wie `MainTabView`.
 private struct KeyboardHarness: View {
     let chat: ChatViewModel
+    var overlap: CGFloat?
 
     @State private var selection = 2
     @State private var isKeyboardVisible = false
 
+    private var pager: some View {
+        var pager = PaceTabPager(tabs: [0, 1, 2, 3], selection: $selection, isPagingEnabled: false, onPositionChange: { _ in }) { tab in
+            if tab == 2 {
+                NavigationStack {
+                    ChatView(viewModel: chat, onOpenProfile: { _ in })
+                }
+            } else {
+                Color.clear
+            }
+        }
+        pager.keyboardOverlapForTesting = overlap
+        return pager
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            PaceTabPager(tabs: [0, 1, 2, 3], selection: $selection, isPagingEnabled: false, onPositionChange: { _ in }) { tab in
-                if tab == 2 {
-                    NavigationStack {
-                        ChatView(viewModel: chat, onOpenProfile: { _ in })
-                    }
-                } else {
-                    Color.clear
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            pager
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             if !isKeyboardVisible {
                 PaceTabBar(
                     items: [

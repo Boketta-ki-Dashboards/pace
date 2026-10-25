@@ -30,18 +30,19 @@ struct ImageDecodingTests {
 
     @Test func longLargeGifsAreThinnedAndDownsampled() throws {
         // 100 Bilder à 520 px: mehr als erlaubt und größer als die Grenze (klein genug, damit das Erzeugen schnell geht).
-        let image = try #require(PaceImageLoader.decode(try gif(frames: 100, side: 520)))
+        let image = try #require(PaceImageLoader.decode(try gif(frames: 100, side: 520), size: .bubble))
         let frames = try #require(image.images)
         #expect(frames.count <= PaceImageLoader.maximumAnimationFrames)
-        #expect(frames.allSatisfy { max($0.size.width, $0.size.height) <= CGFloat(PaceImageLoader.maximumAnimationPixels) })
-        #expect(frames.count == 50)
+        #expect(frames.allSatisfy { max($0.size.width, $0.size.height) <= CGFloat(PaceImageLoader.Size.bubble.animationPixels) })
+        // Byte-Budget je GIF: 480 × 480 × 4 Bytes je Bild passen 18-mal in 16 MB → jedes 6. Bild (17 Bilder).
+        #expect(PaceImageLoader.byteCost(of: image) <= PaceImageLoader.Size.bubble.animationByteBudget)
+        #expect(frames.count == 17)
         // Laufzeit bleibt (100 × 0,05 s = 5 s).
         #expect(abs(image.duration - 5) < 0.3)
-        #expect(PaceImageLoader.byteCost(of: image) <= PaceImageLoader.maximumAnimationFrames * 480 * 480 * 4)
     }
 
     @Test func smallGifsKeepAllFramesAndSize() throws {
-        let image = try #require(PaceImageLoader.decode(try gif(frames: 12, side: 120)))
+        let image = try #require(PaceImageLoader.decode(try gif(frames: 12, side: 120), size: .bubble))
         #expect(image.images?.count == 12)
         #expect(image.images?.first?.size == CGSize(width: 120, height: 120))
     }
@@ -56,9 +57,14 @@ struct ImageDecodingTests {
             UIColor.systemTeal.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 4_000, height: 3_000))
         }
-        let image = try #require(PaceImageLoader.decode(data))
-        #expect(image.images == nil)
-        #expect(max(image.size.width, image.size.height) <= CGFloat(PaceImageLoader.maximumPhotoPixels))
-        #expect(abs(image.size.width / image.size.height - 4.0 / 3.0) < 0.01)
+        let bubble = try #require(PaceImageLoader.decode(data, size: .bubble))
+        #expect(bubble.images == nil)
+        #expect(max(bubble.size.width, bubble.size.height) == CGFloat(PaceImageLoader.Size.bubble.photoPixels))
+        #expect(abs(bubble.size.width / bubble.size.height - 4.0 / 3.0) < 0.01)
+        // Vollbild schärfer, Profilbild klein – jeweils eigene Größe.
+        let full = try #require(PaceImageLoader.decode(data, size: .full))
+        #expect(max(full.size.width, full.size.height) == CGFloat(PaceImageLoader.Size.full.photoPixels))
+        let avatar = try #require(PaceImageLoader.decode(data, size: .avatar(points: 44)))
+        #expect(max(avatar.size.width, avatar.size.height) == 192)
     }
 }

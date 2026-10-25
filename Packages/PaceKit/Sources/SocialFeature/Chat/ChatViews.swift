@@ -333,7 +333,9 @@ public struct ChatView: View {
 
     /// Ausgewähltes Foto bzw. GIF vorbereiten und senden.
     private func send(_ item: PhotosPickerItem) {
-        Task {
+        viewModel.beginPreparingMedia()
+        Task { [viewModel] in
+            defer { viewModel.endPreparingMedia() }
             let data = try? await item.loadTransferable(type: Data.self)
             pickerItem = nil
             guard let data, let prepared = ChatMediaProcessing.prepare(data) else {

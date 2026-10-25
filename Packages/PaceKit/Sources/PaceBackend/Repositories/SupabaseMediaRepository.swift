@@ -73,6 +73,7 @@ struct SupabaseMediaRepository: MediaRepository {
         do {
             return try await operation()
         } catch {
+            if BackendFailure.isCancellation(error) { throw CancellationError() }
             throw BackendErrorMapping.mediaError(error)
         }
     }

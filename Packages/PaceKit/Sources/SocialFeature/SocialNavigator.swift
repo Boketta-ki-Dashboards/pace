@@ -86,9 +86,19 @@ public final class SocialNavigator {
     @ObservationIgnored private let isSameChat: @MainActor (ChatTarget, ChatTarget) -> Bool
 
     /// - Parameter isSameChat: Ob zwei Ziele dieselbe Unterhaltung zeigen (z. B. Gruppenchat über die Gruppe und über
-    ///   die Chatliste). Ohne Angabe nur bei gleichen Zielen.
-    public init(isSameChat: @escaping @MainActor (ChatTarget, ChatTarget) -> Bool = { $0 == $1 }) {
+    ///   die Chatliste). Ohne Angabe nach Gruppe, Person bzw. Unterhaltung (Namen zählen nicht).
+    public init(isSameChat: @escaping @MainActor (ChatTarget, ChatTarget) -> Bool = SocialNavigator.sameChatTarget) {
         self.isSameChat = isSameChat
+    }
+
+    /// Gleiche Gruppe, gleiche Person bzw. gleiche Unterhaltung – ohne Wissen über geladene Unterhaltungen.
+    public static func sameChatTarget(_ lhs: ChatTarget, _ rhs: ChatTarget) -> Bool {
+        switch (lhs, rhs) {
+        case (.group(let a, _), .group(let b, _)): a == b
+        case (.direct(let a), .direct(let b)): a.publicID == b.publicID
+        case (.conversation(let a, _, _), .conversation(let b, _, _)): a == b
+        default: false
+        }
     }
 
     public var isAtRoot: Bool { path.isEmpty }
@@ -118,6 +128,49 @@ public final class SocialNavigator {
     /// Ersetzt die aktuelle Seite durch einen Chat (z. B. nach „Profil teilen“ an genau einen Chat).
     public func replaceTop(withChat target: ChatTarget) {
         set(PaceNavigationRules.replacingTop(with: .chat(target), in: path, isSamePage: isSamePage))
+    }
+
+    /// Ersetzt die oberste Seite nur, wenn sie noch `expected` ist (z. B. „Gruppe erstellen“ nach dem Erstellen). Hat
+    /// die Person inzwischen woandershin navigiert, wird das Ziel normal geöffnet – keine fremde Seite verschwindet.
+    public func replace(_ expected: SocialRoute, with route: SocialRoute) {
+        if isTop(expected) {
+            replaceTop(with: route)
+        } else {
+            open(route)
+        }
+    }
+
+    /// Wie ``replace(_:with:)``, mit einem Chat als Ziel (z. B. nach „Profil teilen“ an genau einen Chat).
+    public func replace(_ expected: SocialRoute, withChat target: ChatTarget) {
+        if isTop(expected) {
+            replaceTop(withChat: target)
+        } else {
+            openChat(target)
+        }
+    }
+
+    /// Schließt alle Seiten einer Gruppe (nach Verlassen oder Löschen): Details, Mitglieder, Einstellungen, Kalender,
+    /// Meldung und den Gruppenchat. Andere Seiten bleiben, in ihrer Reihenfolge.
+    public func closeGroup(_ groupID: UUID) {
+        set(path.filter { item in
+            switch item {
+            case .route(let route):
+                switch route.page {
+                case .group(let id), .groupMembers(let id), .groupSettings(let id), .groupCalendar(let id), .reportGroup(let id):
+                    return id != groupID
+                default:
+                    return true
+                }
+            case .chat(let target):
+                if case .group(let id, _) = target, id == groupID { return false }
+                return !isSameChat(target, .group(id: groupID, name: ""))
+            }
+        })
+    }
+
+    private func isTop(_ route: SocialRoute) -> Bool {
+        guard case .route(let top) = path.last else { return false }
+        return top.page == route.page
     }
 
     /// Öffnet eine Seite von außen (geteilter Link, Home-Widget): genau diese Seite über der Hauptseite.

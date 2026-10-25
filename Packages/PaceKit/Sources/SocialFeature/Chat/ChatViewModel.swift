@@ -85,11 +85,24 @@ public final class ChatViewModel {
     /// Etwas ist noch nicht gesendet (Entwurf, Antwort, Bearbeitung, ausstehende Nachricht) – der Chat bleibt im
     /// Speicher.
     var hasUnsentContent: Bool {
-        !draftText.isEmpty || replyingTo != nil || editingMessage != nil || !pending.isEmpty
+        !draftText.isEmpty || replyingTo != nil || editingMessage != nil || !pending.isEmpty || preparingMediaCount > 0
+    }
+
+    /// Ein Foto wird gerade aus der Mediathek geladen und vorbereitet (noch nicht ausstehend).
+    @ObservationIgnored private(set) var preparingMediaCount = 0
+
+    /// Die Vorbereitung eines Fotos beginnt bzw. endet (vor ``sendMedia(_:contentType:)``) – solange bleibt der Chat im
+    /// Speicher, damit ein späterer Fehler sichtbar wird.
+    public func beginPreparingMedia() {
+        preparingMediaCount += 1
+    }
+
+    public func endPreparingMedia() {
+        preparingMediaCount = max(preparingMediaCount - 1, 0)
     }
     /// Gerade hochgeladene Bilder und Sprachnachrichten (Pfad → Daten), damit sie nicht noch einmal geladen werden
     /// müssen.
-    @ObservationIgnored private var uploadedMedia: [String: Data] = [:]
+    @ObservationIgnored private var uploadedMedia = ChatMediaDataCache()
     /// Entwurf vor dem Bearbeiten – kommt nach Speichern oder Abbrechen zurück ins Eingabefeld.
     @ObservationIgnored private var draftBeforeEditing: String?
 

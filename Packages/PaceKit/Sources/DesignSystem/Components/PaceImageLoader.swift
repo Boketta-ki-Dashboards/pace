@@ -6,73 +6,163 @@ import UIKit
 /// Lädt Bilder aus den privaten Storage-Buckets (Profil-, Gruppen- und Chatbilder) und hält sie im Speicher vor.
 /// Animierte GIFs werden als animiertes `UIImage` geliefert.
 ///
-/// Speicher: Bilder werden beim Dekodieren verkleinert (Fotos höchstens ``maximumPhotoPixels``, GIF-Bilder höchstens
-/// ``maximumAnimationPixels`` Pixel Kantenlänge, höchstens ``maximumAnimationFrames`` Einzelbilder) und der Speicher
-/// ist nach dekodierter Größe begrenzt (``cacheByteLimit``) – ein langer Chat mit vielen Fotos und GIFs lässt den
-/// Arbeitsspeicher so nicht unbegrenzt wachsen.
+/// Speicher und Leistung:
+/// - Dekodiert wird in der Größe, in der das Bild erscheint (``Size``): Profilbilder klein, Chatbilder in der Blase
+///   mittel, im Vollbild groß. Jede Größe hat ihren eigenen Eintrag.
+/// - Die heruntergeladenen (komprimierten) Daten liegen getrennt im Speicher; eine andere Größe braucht deshalb keinen
+///   zweiten Download. Gleichzeitige Anfragen derselben Datei teilen sich einen Download.
+/// - GIFs haben ein Byte-Budget je Bild: lange GIFs werden gleichmäßig ausgedünnt (die Laufzeit bleibt).
+/// - Beide Speicher sind nach Bytes begrenzt. Dekodiert wird nie auf dem Main Thread.
 public final class PaceImageLoader: @unchecked Sendable {
-    /// Längste Kante eines Fotos nach dem Dekodieren (reicht für Vollbild auf allen iPhones).
-    static let maximumPhotoPixels = 1_600
-    /// Längste Kante eines GIF-Einzelbilds.
-    static let maximumAnimationPixels = 480
-    /// Höchstens so viele Einzelbilder je GIF (längere werden gleichmäßig ausgedünnt, die Laufzeit bleibt).
+    /// Größe, in der ein Bild gebraucht wird.
+    public enum Size: Hashable, Sendable {
+        /// Profil- und Gruppenbilder: längste Kante in Pixeln.
+        case pixels(Int)
+        /// Bild bzw. GIF in einer Chatblase.
+        case bubble
+        /// Vollbild mit Zoom.
+        case full
+
+        /// Profilbild für `points` Punkte Durchmesser (3-fache Auflösung, in Stufen, damit Einträge geteilt werden).
+        public static func avatar(points: CGFloat) -> Size {
+            let pixels = Int((points * 3).rounded(.up))
+            return .pixels([96, 192, 384].first { $0 >= pixels } ?? 512)
+        }
+
+        var photoPixels: Int {
+            switch self {
+            case .pixels(let pixels): pixels
+            case .bubble: 1_200
+            case .full: 2_048
+            }
+        }
+
+        var animationPixels: Int {
+            switch self {
+            case .pixels(let pixels): min(pixels, 480)
+            case .bubble: 480
+            case .full: 720
+            }
+        }
+
+        /// Höchstens so viele Bytes dekodierte Einzelbilder je GIF.
+        var animationByteBudget: Int {
+            switch self {
+            case .pixels, .bubble: 16 * 1_024 * 1_024
+            case .full: 40 * 1_024 * 1_024
+            }
+        }
+
+        var key: String {
+            switch self {
+            case .pixels(let pixels): "p\(pixels)"
+            case .bubble: "bubble"
+            case .full: "full"
+            }
+        }
+    }
+
+    /// Höchstens so viele Einzelbilder je GIF (längere werden gleichmäßig ausgedünnt).
     static let maximumAnimationFrames = 90
-    /// Obergrenze des Bildspeichers in Bytes (dekodiert).
-    static let cacheByteLimit = 96 * 1_024 * 1_024
+    /// Obergrenze der dekodierten Bilder in Bytes.
+    static let imageByteLimit = 96 * 1_024 * 1_024
+    /// Obergrenze der heruntergeladenen (komprimierten) Daten in Bytes.
+    static let dataByteLimit = 32 * 1_024 * 1_024
 
     private let repository: any MediaRepository
-    private let cache = NSCache<NSString, UIImage>()
+    private let images = NSCache<NSString, UIImage>()
+    private let downloaded = NSCache<NSString, NSData>()
+    private let lock = NSLock()
+    private var downloads: [String: Task<Data?, Never>] = [:]
 
     public init(repository: any MediaRepository) {
         self.repository = repository
-        cache.countLimit = 200
-        cache.totalCostLimit = Self.cacheByteLimit
+        images.totalCostLimit = Self.imageByteLimit
+        downloaded.totalCostLimit = Self.dataByteLimit
     }
 
     /// Bild aus dem Speicher, ohne zu laden.
-    public func cachedImage(for reference: MediaReference) -> UIImage? {
-        cache.object(forKey: Self.key(reference))
+    public func cachedImage(for reference: MediaReference, size: Size = .bubble) -> UIImage? {
+        images.object(forKey: Self.imageKey(reference, size))
     }
 
-    /// Lädt das Bild (oder liefert es aus dem Speicher); `nil` bei Fehlern.
-    public func image(for reference: MediaReference) async -> UIImage? {
-        if let cached = cachedImage(for: reference) { return cached }
-        guard let data = try? await repository.data(for: reference), let image = Self.decode(data) else { return nil }
-        cache.setObject(image, forKey: Self.key(reference), cost: Self.byteCost(of: image))
+    /// Lädt das Bild in der gewünschten Größe (oder liefert es aus dem Speicher); `nil` bei Fehlern. Läuft nicht auf dem
+    /// Main Thread.
+    public func image(for reference: MediaReference, size: Size = .bubble) async -> UIImage? {
+        if let cached = cachedImage(for: reference, size: size) { return cached }
+        guard let data = await data(for: reference), let image = Self.decode(data, size: size) else { return nil }
+        images.setObject(image, forKey: Self.imageKey(reference, size), cost: Self.byteCost(of: image))
         return image
     }
 
-    /// Legt ein gerade hochgeladenes Bild direkt in den Speicher (keine zweite Übertragung).
+    /// Legt die Daten eines gerade hochgeladenen Bilds in den Speicher (keine zweite Übertragung). Dekodiert wird erst
+    /// bei Bedarf – nicht hier auf dem Main Thread.
     public func store(_ data: Data, for reference: MediaReference) {
-        guard let image = Self.decode(data) else { return }
-        cache.setObject(image, forKey: Self.key(reference), cost: Self.byteCost(of: image))
+        downloaded.setObject(data as NSData, forKey: Self.dataKey(reference), cost: data.count)
     }
 
-    private static func key(_ reference: MediaReference) -> NSString {
+    /// Komprimierte Daten: aus dem Speicher oder per (geteiltem) Download.
+    private func data(for reference: MediaReference) async -> Data? {
+        let key = Self.dataKey(reference)
+        if let cached = downloaded.object(forKey: key) { return cached as Data }
+        let repository = repository
+        let task = lock.withLock {
+            if let running = downloads[key as String] { return running }
+            let task = Task<Data?, Never> { try? await repository.data(for: reference) }
+            downloads[key as String] = task
+            return task
+        }
+        let data = await task.value
+        lock.withLock { downloads[key as String] = nil }
+        if let data {
+            downloaded.setObject(data as NSData, forKey: key, cost: data.count)
+        }
+        return data
+    }
+
+    private static func dataKey(_ reference: MediaReference) -> NSString {
         "\(reference.bucket.rawValue)/\(reference.path)" as NSString
     }
 
+    private static func imageKey(_ reference: MediaReference, _ size: Size) -> NSString {
+        "\(reference.bucket.rawValue)/\(reference.path)@\(size.key)" as NSString
+    }
+
     /// Dekodiert Fotos und – bei mehreren Bildern – animierte GIFs, jeweils verkleinert.
-    static func decode(_ data: Data) -> UIImage? {
-        let options = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithData(data as CFData, options) else { return nil }
+    static func decode(_ data: Data, size: Size = .bubble) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let count = CGImageSourceGetCount(source)
         guard count > 1 else {
-            return thumbnail(source, index: 0, maximumPixels: maximumPhotoPixels).map { UIImage(cgImage: $0) } ?? UIImage(data: data)
+            return thumbnail(source, index: 0, maximumPixels: size.photoPixels).map { UIImage(cgImage: $0) } ?? UIImage(data: data)
         }
+        // Wie viele Einzelbilder ins Budget passen (aus der Größe des ersten Bilds nach dem Verkleinern).
+        let frameBytes = scaledFrameBytes(source, maximumPixels: size.animationPixels)
+        let affordable = max(1, size.animationByteBudget / max(frameBytes, 1))
+        let maximumFrames = min(maximumAnimationFrames, affordable)
         // Lange GIFs gleichmäßig ausdünnen; die Dauer übersprungener Bilder zählt zum vorigen, die Laufzeit bleibt.
-        let step = max(1, Int((Double(count) / Double(maximumAnimationFrames)).rounded(.up)))
+        let step = max(1, Int((Double(count) / Double(maximumFrames)).rounded(.up)))
         var frames: [UIImage] = []
         var duration: Double = 0
         for index in stride(from: 0, to: count, by: step) {
-            guard let frame = thumbnail(source, index: index, maximumPixels: maximumAnimationPixels) else { continue }
-            frames.append(UIImage(cgImage: frame))
             for skipped in index..<min(index + step, count) {
                 duration += frameDuration(source, skipped)
             }
+            guard let frame = thumbnail(source, index: index, maximumPixels: size.animationPixels) else { continue }
+            frames.append(UIImage(cgImage: frame))
         }
         guard !frames.isEmpty else { return UIImage(data: data) }
         return UIImage.animatedImage(with: frames, duration: max(duration, 0.1))
+    }
+
+    /// Bytes eines verkleinerten Einzelbilds (aus den Bildeigenschaften, ohne zu dekodieren).
+    private static func scaledFrameBytes(_ source: CGImageSource, maximumPixels: Int) -> Int {
+        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, height > 0
+        else { return maximumPixels * maximumPixels * 4 }
+        let scale = min(1, Double(maximumPixels) / Double(max(width, height)))
+        return Int(Double(width) * scale * Double(height) * scale) * 4
     }
 
     /// Verkleinertes, richtig gedrehtes Einzelbild (nie größer als das Original).
