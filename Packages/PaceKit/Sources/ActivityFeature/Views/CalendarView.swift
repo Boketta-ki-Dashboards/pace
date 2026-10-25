@@ -99,6 +99,9 @@ struct CalendarContent: View {
                         onOpenDetails(card.date)
                     }
                 }
+                if !month.bests.isEmpty {
+                    PersonalBestsCard(bests: month.bests)
+                }
             }
         }
     }
@@ -429,5 +432,49 @@ private struct CalendarDayCardView: View {
             .padding(.horizontal, PaceSpacing.m)
         }
         .paceScreenBackground()
+    }
+}
+
+/// „Deine Bestwerte“ unter den Tagesdetails: bester Tag der Woche und des Monats, bester Tag insgesamt, längste Serie.
+/// Ist der ausgewählte Tag selbst ein Bestwert, ist er hervorgehoben.
+struct PersonalBestsCard: View {
+    let bests: [PersonalBest]
+
+    var body: some View {
+        PaceCard {
+            VStack(alignment: .leading, spacing: PaceSpacing.xs) {
+                PaceCardHeader(PaceLocalization.text(de: "Deine Bestwerte", en: "Your bests", ru: "Твои рекорды"))
+                ForEach(bests) { best in
+                    HStack(spacing: PaceSpacing.s) {
+                        Image(systemName: best.kind == .longestStreak ? "flame.fill" : "trophy.fill")
+                            .foregroundStyle(best.kind == .longestStreak ? PaceColor.streak : PaceColor.accent)
+                            .frame(width: 24)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(best.title)
+                                .font(PaceFont.callout)
+                                .foregroundStyle(PaceColor.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if let detail = best.detail {
+                                Text(best.isThisDay
+                                    ? detail + " · " + PaceLocalization.text(de: "dieser Tag", en: "this day", ru: "этот день")
+                                    : detail)
+                                    .font(PaceFont.caption.weight(best.isThisDay ? .semibold : .regular))
+                                    .foregroundStyle(best.isThisDay ? PaceColor.accentStrong : PaceColor.textSecondary)
+                            }
+                        }
+                        Spacer(minLength: PaceSpacing.xs)
+                        Text(best.value)
+                            .font(PaceFont.headline)
+                            .monospacedDigit()
+                            .foregroundStyle(PaceColor.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .frame(minHeight: 40)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
     }
 }

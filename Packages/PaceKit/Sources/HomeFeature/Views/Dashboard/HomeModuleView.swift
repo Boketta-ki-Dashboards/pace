@@ -92,7 +92,7 @@ struct HomeModuleView: View {
                 .fixedSize()
             }
         case .week:
-            NavigationLink(value: StatisticsRoute(period: .week, metric: .steps)) {
+            NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .week, metric: .steps))) {
                 HomeWidgetTitleRow(title) { HomeChevron() }
                     .contentShape(Rectangle())
             }
@@ -103,7 +103,8 @@ struct HomeModuleView: View {
                 de: "Öffnet die Wochenstatistik", en: "Opens the weekly statistics", ru: "Открывает статистику за неделю"
             ))
         case .streak:
-            NavigationLink(value: StatisticsRoute(period: .month, metric: .steps)) {
+            // Persönliche Flamme → eigene Flammen-Seite (nie Gruppe oder Chat).
+            NavigationLink(value: HomeRoute.streak) {
                 HomeWidgetTitleRow(title) { HomeChevron() }
                     .contentShape(Rectangle())
             }
@@ -128,7 +129,7 @@ struct HomeModuleView: View {
             .buttonStyle(.pacePressable)
             .allowsHitTesting(mode.isInteractive)
         case .calendar:
-            NavigationLink(value: CalendarRoute()) {
+            NavigationLink(value: HomeRoute.calendar(CalendarRoute())) {
                 HomeWidgetTitleRow(title) { HomeChevron() }
                     .contentShape(Rectangle())
             }
@@ -175,13 +176,13 @@ struct HomeModuleView: View {
             case .week:
                 WeekWidgetContent(week: viewModel.week, size: module.size, unavailableText: viewModel.weekUnavailableText)
             case .streak:
-                NavigationLink(value: StatisticsRoute(period: .month, metric: .steps)) {
+                NavigationLink(value: HomeRoute.streak) {
                     StreakWidgetContent(widget: viewModel.streakWidget, state: viewModel.streak.history.state, size: module.size)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.pacePressable)
                 .accessibilityHint(PaceLocalization.text(
-                    de: "Öffnet die Monatsstatistik", en: "Opens the monthly statistics", ru: "Открывает статистику за месяц"
+                    de: "Öffnet deine Flamme mit Kalender", en: "Opens your flame with calendar", ru: "Открывает твою серию с календарём"
                 ))
             case .neighborhood:
                 NeighborhoodWidgetContent(

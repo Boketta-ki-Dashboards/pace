@@ -14,7 +14,7 @@ struct ActivityWidgetContent: View {
 
     var body: some View {
         if let widget {
-            NavigationLink(value: StatisticsRoute(period: .week, metric: Self.statisticsMetric(widget.metric))) {
+            NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .week, metric: Self.statisticsMetric(widget.metric)))) {
                 content(widget)
                     .contentShape(Rectangle())
             }

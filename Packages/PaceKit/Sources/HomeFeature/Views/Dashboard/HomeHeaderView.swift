@@ -62,7 +62,7 @@ struct HomeHeaderView: View {
                 HStack(alignment: .center, spacing: PaceSpacing.xxs) {
                     greeting
                     Spacer(minLength: PaceSpacing.xs)
-                    NavigationLink(value: CalendarRoute()) {
+                    NavigationLink(value: HomeRoute.calendar(CalendarRoute())) {
                         Image(systemName: "calendar")
                             .font(.title2)
                             .foregroundStyle(PaceColor.textPrimary)
@@ -71,7 +71,7 @@ struct HomeHeaderView: View {
                     }
                     .buttonStyle(.pacePressable)
                     .accessibilityLabel(HomeTexts.calendar)
-                    NavigationLink(value: HomeNotificationsRoute()) {
+                    NavigationLink(value: HomeRoute.notifications) {
                         Image(systemName: "bell")
                             .font(.title2)
                             .foregroundStyle(PaceColor.textPrimary)

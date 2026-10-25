@@ -38,7 +38,7 @@ struct WeekWidgetContent: View {
     }
 
     private func compact(_ week: WeekOverview) -> some View {
-        NavigationLink(value: StatisticsRoute(period: .week, metric: .steps)) {
+        NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .week, metric: .steps))) {
             HStack(spacing: PaceSpacing.s) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(PaceLocalization.text(
@@ -71,7 +71,7 @@ struct WeekWidgetContent: View {
                     WeekDayTile(day: day)
                         .accessibilityHidden(true)
                 } else {
-                    NavigationLink(value: StatisticsRoute(period: .day, metric: .steps, day: day.date)) {
+                    NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .day, metric: .steps, day: day.date))) {
                         WeekDayTile(day: day)
                             .contentShape(Rectangle())
                     }

@@ -86,7 +86,8 @@ public final class CalendarViewModel {
             today: today,
             firstMonth: firstMonth,
             formatter: formatter,
-            calendar: calendar
+            calendar: calendar,
+            record: streak.record
         )))
     }
 

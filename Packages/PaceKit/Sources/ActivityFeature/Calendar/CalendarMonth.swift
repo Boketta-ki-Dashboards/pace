@@ -62,6 +62,8 @@ public struct CalendarMonth: Equatable, Sendable {
     public let canShowNext: Bool
     /// Karte unter dem Raster für den ausgewählten Tag; `nil` ohne Auswahl in diesem Monat.
     public let selectedCard: DayCard?
+    /// „Deine Bestwerte“ rund um den ausgewählten Tag (Woche, Monat, insgesamt, längste Serie).
+    public let bests: [PersonalBest]
 
     /// Karte des ausgewählten Tages: „Samstag, 17. Oktober“, „8.432 Schritte“, „Tagesziel 10.000“, Balken, Ring.
     public struct DayCard: Equatable, Sendable {
@@ -103,6 +105,8 @@ public struct CalendarMonth: Equatable, Sendable {
         public var firstMonth: LocalDate
         public var formatter: ActivityFormatter
         public var calendar: ActivityCalendar
+        /// Längste Serie für die Bestwerte.
+        public var record: StepStreakRecord?
 
         public init(
             month: LocalDate,
@@ -112,8 +116,10 @@ public struct CalendarMonth: Equatable, Sendable {
             today: LocalDate,
             firstMonth: LocalDate,
             formatter: ActivityFormatter,
-            calendar: ActivityCalendar
+            calendar: ActivityCalendar,
+            record: StepStreakRecord? = nil
         ) {
+            self.record = record
             self.month = month
             self.selected = selected
             self.history = history
@@ -158,7 +164,15 @@ public struct CalendarMonth: Equatable, Sendable {
             cells: cells,
             canShowPrevious: first > firstMonth,
             canShowNext: first < currentMonth,
-            selectedCard: selected.map { card(for: $0, input: input) }
+            selectedCard: selected.map { card(for: $0, input: input) },
+            bests: selected.flatMap { day in
+                input.history.map { history in
+                    PersonalBests.around(
+                        day.date, history: history, today: input.today, record: input.record,
+                        calendar: calendar, formatter: formatter
+                    )
+                }
+            } ?? []
         )
     }
 

@@ -13,11 +13,16 @@ public struct HomeView: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var path = NavigationPath()
+    @State private var path: [HomeRoute] = []
     @State private var reorder = HomeReorderController()
 
     public init(viewModel: HomeDashboardViewModel) {
         self.viewModel = viewModel
+    }
+
+    private func open(_ route: HomeRoute) {
+        let opened = PaceNavigationRules.opening(route, in: path)
+        if opened != path { path = opened }
     }
 
     public var body: some View {
@@ -25,12 +30,12 @@ public struct HomeView: View {
             ScrollView {
                 HomeDashboardContent(
                     viewModel: viewModel,
-                    onAddWidget: { path.append(HomeWidgetGalleryRoute()) },
-                    onEditModule: { id in path.append(HomeWidgetGalleryRoute(editingID: id)) }
+                    onAddWidget: { open(.gallery(HomeWidgetGalleryRoute())) },
+                    onEditModule: { id in open(.gallery(HomeWidgetGalleryRoute(editingID: id))) }
                 )
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.l)
-                .paceTabRoot(isAtRoot: path.isEmpty) { path = NavigationPath() }
+                .paceTabRoot(isAtRoot: path.isEmpty) { path = [] }
                 // Bezugssystem für das Umsortieren: Rahmen der Widgets im Inhalt, Inhaltsoberkante global.
                 .coordinateSpace(.named(HomeReorderController.contentSpace))
                 .onGeometryChange(for: CGFloat.self) { proxy in
@@ -60,20 +65,31 @@ public struct HomeView: View {
             .overlay(alignment: .bottom) {
                 undoBanner
             }
-            .navigationDestination(for: StatisticsRoute.self) { route in
-                StatisticsView(viewModel: viewModel.statistics(for: route), backTitle: HomeTexts.home)
-            }
-            .navigationDestination(for: CalendarRoute.self) { route in
-                HomeCalendarScreen(viewModel: viewModel.calendar(for: route))
-            }
-            .navigationDestination(for: HomeWidgetGalleryRoute.self) { route in
-                HomeWidgetGalleryScreen(dashboard: viewModel, route: route)
-            }
-            .navigationDestination(for: HomeNotificationsRoute.self) { _ in
-                HomeNotificationsScreen(viewModel: viewModel) { notification in
-                    path = NavigationPath()
-                    viewModel.open(notification)
+            .navigationDestination(for: HomeRoute.self) { route in
+                switch route {
+                case .statistics(let route):
+                    StatisticsView(viewModel: viewModel.statistics(for: route), backTitle: HomeTexts.home)
+                case .calendar(let route):
+                    HomeCalendarScreen(viewModel: viewModel.calendar(for: route))
+                case .gallery(let route):
+                    HomeWidgetGalleryScreen(dashboard: viewModel, route: route)
+                case .notifications:
+                    HomeNotificationsScreen(viewModel: viewModel) { notification in
+                        path = []
+                        viewModel.open(notification)
+                    }
+                case .streak:
+                    StreakDetailView(viewModel: viewModel.streakDetail(), backTitle: HomeTexts.home)
                 }
+            }
+        }
+        // Dieselbe Seite nie doppelt (z. B. schnelles Doppeltippen auf ein Widget): zurück zur vorhandenen.
+        .onChange(of: path) { _, newPath in
+            let deduplicated = newPath.reduce(into: [HomeRoute]()) { result, route in
+                result = PaceNavigationRules.opening(route, in: result)
+            }
+            if deduplicated != newPath {
+                path = deduplicated
             }
         }
         .task(id: viewModel.standingsReloadKey) { [viewModel] in

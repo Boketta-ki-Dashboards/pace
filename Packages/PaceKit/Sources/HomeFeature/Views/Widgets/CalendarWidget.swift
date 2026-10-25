@@ -13,7 +13,7 @@ struct CalendarWidgetContent: View {
     let isLoading: Bool
 
     var body: some View {
-        NavigationLink(value: CalendarRoute()) {
+        NavigationLink(value: HomeRoute.calendar(CalendarRoute())) {
             VStack(alignment: .leading, spacing: PaceSpacing.xs) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(widget.periodTitle)

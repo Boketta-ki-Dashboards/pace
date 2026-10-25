@@ -64,7 +64,7 @@ struct StepsTodayWidgetContent: View {
     @ViewBuilder
     private func loaded(_ summary: StepsTodaySummary) -> some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
-            NavigationLink(value: StatisticsRoute(period: .day, metric: .steps)) {
+            NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .day, metric: .steps))) {
                 HStack(alignment: .center, spacing: PaceSpacing.m) {
                     VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
                         Text(summary.stepsText)
@@ -152,7 +152,7 @@ struct StepsTodayWidgetContent: View {
         PaceTile {
             HStack(spacing: 0) {
                 if let distance = summary.distanceText {
-                    NavigationLink(value: StatisticsRoute(period: .week, metric: .distance)) {
+                    NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .week, metric: .distance))) {
                         StepsMetricCell(systemImage: "shoeprints.fill", value: distance, caption: nil, showsChevron: true)
                     }
                     .buttonStyle(.pacePressable)
@@ -164,7 +164,7 @@ struct StepsTodayWidgetContent: View {
                 if summary.distanceText != nil {
                     Divider().frame(height: 32).padding(.horizontal, PaceSpacing.xs)
                 }
-                NavigationLink(value: StatisticsRoute(period: .week, metric: .activeEnergy)) {
+                NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .week, metric: .activeEnergy))) {
                     StepsMetricCell(
                         systemImage: "flame",
                         value: summary.energyText,
