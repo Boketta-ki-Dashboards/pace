@@ -196,6 +196,30 @@ struct StatisticsReportTests {
         #expect(report.canShowPrevious)
     }
 
+    /// Diagramme bei schnellem Wischen (Auftrag 5, C8): runde, feste Y-Achse je Zeitraum mit Platz für Ziel- und
+    /// Durchschnittslinie; ein anderer Zeitraum ist ein neues Diagramm.
+    @Test func chartsHaveAStableRoundAxisAndAnIdentityPerPeriod() {
+        let week = report(.week, history: history(steps: currentWeek))
+        // Höchster Balken 12.000 (+5 %) → 15.000.
+        #expect(week.chartMaximum == 15_000)
+        #expect(week.chartMaximum >= week.goalLine ?? 0)
+        let previous = report(.week, anchor: day(-7), history: history(steps: currentWeek))
+        #expect(previous.chartIdentity != week.chartIdentity)
+        #expect(report(.week, .distance, history: history(steps: currentWeek)).chartIdentity != week.chartIdentity)
+        #expect(report(.month, history: history(steps: currentWeek)).chartIdentity != week.chartIdentity)
+        // Derselbe Zeitraum mit neuen Werten bleibt dasselbe Diagramm.
+        var more = currentWeek
+        more[today] = 9_500
+        #expect(report(.week, history: history(steps: more)).chartIdentity == week.chartIdentity)
+
+        #expect(StatisticsReport.niceCeiling(0) == 1)
+        #expect(StatisticsReport.niceCeiling(6.4) == 8)
+        #expect(StatisticsReport.niceCeiling(450) == 500)
+        #expect(StatisticsReport.niceCeiling(9_600) == 12_000)
+        #expect(StatisticsReport.niceCeiling(10_000) == 12_000)
+        #expect(StatisticsReport.niceCeiling(2_400) == 3_000)
+    }
+
     @Test func goalDaysCountTodayOnceReached() {
         var steps = currentWeek
         steps[today] = 10_000

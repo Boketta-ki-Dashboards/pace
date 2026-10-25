@@ -201,11 +201,11 @@ struct HomeSettingsTests {
         #expect(settings.modules.last?.detailText == "Max · Kreis")
         #expect(settings.add(.week) == nil) // gibt es schon
 
-        // Die Schrittkarte lässt sich weder entfernen noch verkleinern, aber auf Max stellen.
+        // Die Schrittkarte lässt sich nicht entfernen, aber in jeder Größe zeigen (seit Auftrag 5 auch „Klein“).
         let steps = try #require(settings.modules.first { $0.kind == .stepsToday })
         #expect(settings.remove(steps.id) == nil)
         settings.setSize(.small, for: steps.id)
-        #expect(settings.module(id: steps.id)?.size == .medium)
+        #expect(settings.module(id: steps.id)?.size == .small)
         settings.setSize(.max, for: steps.id)
         #expect(settings.module(id: steps.id)?.size == .max)
 

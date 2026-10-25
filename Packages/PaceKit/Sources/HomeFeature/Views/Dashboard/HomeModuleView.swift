@@ -165,6 +165,13 @@ struct HomeModuleView: View {
                     if case .failed(let message) = viewModel.standings.state {
                         HomeWidgetHint(systemImage: "arrow.clockwise", text: message)
                     }
+                    // Im Anpassen-Modus sichtbar machen, warum weniger als vier Karten erscheinen.
+                    if mode == .editing, module.regionLevels.count < RegionLevel.allCases.count {
+                        HomeWidgetHint(
+                            systemImage: "eye.slash",
+                            text: HomeTexts.visibleLevels(module.regionLevels.count, of: RegionLevel.allCases.count)
+                        )
+                    }
                 }
             case .stepsToday:
                 StepsTodayWidgetContent(

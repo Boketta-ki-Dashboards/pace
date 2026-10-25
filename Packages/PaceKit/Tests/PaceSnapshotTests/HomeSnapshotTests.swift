@@ -85,6 +85,30 @@ struct HomeSnapshotTests {
         }
     }
 
+    /// Schrittkarte in allen vier Größen (Auftrag 5, A4): Klein, Mittel, Groß, Max mit 7-Tage-Diagramm.
+    @Test func stepsWidgetInAllSizes() async throws {
+        let (dashboard, _) = try await SnapshotFixtures.makeDashboard()
+        await dashboard.loadStreakIfNeeded()
+        for size in HomeModuleSize.allCases {
+            let module = HomeModule(id: "steps", kind: .stepsToday, size: size)
+            try Snapshot.render(
+                page(HomeModuleView(module: module, viewModel: dashboard, mode: .normal)),
+                name: "steps-\(size.rawValue)",
+                languages: size == .max ? languages : [.german]
+            )
+        }
+    }
+
+    /// Ebenen-Editor der regionalen Karten (Auftrag 5, A3): „3 von 4 Ebenen sichtbar“ mit „Alle vier zeigen“.
+    @Test func regionLevelEditor() async throws {
+        let (dashboard, _) = try await SnapshotFixtures.makeDashboard()
+        await dashboard.standings.load()
+        let id = try #require(dashboard.modules.first { $0.kind == .regionRanks }?.id)
+        let gallery = dashboard.gallery(for: HomeWidgetGalleryRoute(editingID: id))
+        gallery.toggleLevel(.country)
+        try Snapshot.render(page(HomeWidgetGalleryContent(gallery: gallery, dashboard: dashboard)), name: "widget-gallery-regions-hidden-level")
+    }
+
     /// „Ranking ausgeschaltet“: Ranking-Widgets bleiben an ihrem Platz, unscharf mit neutralen Platzhaltern.
     @Test func rankingOff() async throws {
         let (dashboard, store) = try await SnapshotFixtures.makeDashboard()
@@ -122,7 +146,7 @@ extension SnapshotFixtures {
     static let jonas = UUID(uuidString: "40000000-0000-4000-8000-000000000002")!
     static let classID = UUID(uuidString: "50000000-0000-4000-8000-000000000001")!
 
-    /// Jede Widget-Art in einer Größe (die Schrittkarte gibt es nicht klein).
+    /// Jede Widget-Art in einer Größe.
     static func allWidgets(size: HomeModuleSize) -> [HomeModule] {
         var modules: [HomeModule] = [
             HomeModule(id: "ranks", kind: .regionRanks, size: size),

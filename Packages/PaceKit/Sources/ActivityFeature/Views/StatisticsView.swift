@@ -84,6 +84,8 @@ struct StatisticsContent: View {
     var onOpenDayDetails: ((LocalDate) -> Void)?
     var onRetry: () -> Void = {}
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private var columns: [GridItem] {
         [
             GridItem(.flexible(), spacing: PaceSpacing.s, alignment: .top),
@@ -195,6 +197,7 @@ struct StatisticsContent: View {
                         Text(value)
                             .font(PaceFont.metric(size: 44))
                             .monospacedDigit()
+                            .contentTransition(.numericText())
                             .foregroundStyle(PaceColor.textPrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.5)
@@ -241,43 +244,49 @@ struct StatisticsContent: View {
                         .font(PaceFont.cardTitle)
                         .foregroundStyle(PaceColor.textPrimary)
                         .accessibilityAddTraits(.isHeader)
-                    if !report.isMetricAvailable {
-                        Text(StatisticsTexts.noData(for: report.metric))
-                            .font(PaceFont.callout)
-                            .foregroundStyle(PaceColor.textSecondary)
-                            .frame(maxWidth: .infinity, minHeight: 120)
-                    } else if let text = report.hourlyUnavailableText {
-                        Text(text)
-                            .font(PaceFont.callout)
-                            .foregroundStyle(PaceColor.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, minHeight: 120)
-                    } else if !report.bars.isEmpty {
-                        StatisticsChart(report: report, onSelectDay: onSelectDay)
-                            .frame(height: 180)
-                    } else if hourly == .failed {
-                        Text(CalendarTexts.hourlyFailed)
-                            .font(PaceFont.callout)
-                            .foregroundStyle(PaceColor.textSecondary)
-                            .frame(maxWidth: .infinity, minHeight: 180)
-                    } else {
-                        ProgressView()
-                            .frame(maxWidth: .infinity, minHeight: 180)
-                    }
-                } else if report.isMetricAvailable {
-                    StatisticsChart(report: report, onSelectDay: onSelectDay)
-                        .frame(height: 200)
+                }
+                chartArea(report)
+                    .frame(height: report.period == .day ? PaceChartStyle.dayHeight : PaceChartStyle.periodHeight)
+                    .clipped()
+                if report.period != .day, report.isMetricAvailable {
                     Text(StatisticsTexts.tapDayHint)
                         .font(PaceFont.caption)
                         .foregroundStyle(PaceColor.textSecondary)
-                } else {
-                    Text(StatisticsTexts.noData(for: report.metric))
-                        .font(PaceFont.callout)
-                        .foregroundStyle(PaceColor.textSecondary)
-                        .frame(maxWidth: .infinity, minHeight: 120)
                 }
             }
         }
+    }
+
+    /// Diagramm oder Platzhalter in immer derselben Höhe. Ein neuer Zeitraum ersetzt das Diagramm (kurzes Einblenden,
+    /// das alte verschwindet sofort) – auch bei schnellem Wischen überlagert sich nichts und nichts verformt sich.
+    @ViewBuilder
+    private func chartArea(_ report: StatisticsReport) -> some View {
+        Group {
+            if !report.isMetricAvailable {
+                chartPlaceholder(StatisticsTexts.noData(for: report.metric))
+            } else if report.period == .day, let text = report.hourlyUnavailableText {
+                chartPlaceholder(text)
+            } else if report.period != .day || !report.bars.isEmpty {
+                StatisticsChart(report: report, onSelectDay: onSelectDay)
+            } else if hourly == .failed {
+                chartPlaceholder(CalendarTexts.hourlyFailed)
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .id(report.chartIdentity)
+        .transition(.asymmetric(insertion: .opacity, removal: .identity))
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: report.chartIdentity)
+    }
+
+    private func chartPlaceholder(_ text: String) -> some View {
+        Text(text)
+            .font(PaceFont.callout)
+            .foregroundStyle(PaceColor.textSecondary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func dayDetailsLink(day: LocalDate, action: @escaping (LocalDate) -> Void) -> some View {

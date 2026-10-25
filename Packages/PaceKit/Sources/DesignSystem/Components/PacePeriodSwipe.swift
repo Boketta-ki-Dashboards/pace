@@ -43,13 +43,17 @@ private struct PacePeriodSwipeModifier: ViewModifier {
         content
             .offset(x: dragOffset + settleOffset)
             .simultaneousGesture(
-                DragGesture(minimumDistance: PaceSwipeNavigation.minimumDistance)
+                // Global gemessen, damit der Rand-Streifen der Zurück-Geste erkannt wird.
+                DragGesture(minimumDistance: PaceSwipeNavigation.minimumDistance, coordinateSpace: .global)
                     .updating($translation) { value, state, _ in
                         state = value.translation
                     }
                     .onChanged { value in
                         if gestureStart?.location != value.startLocation {
-                            gestureStart = (value.startLocation, PaceSwipeNavigation.isHorizontal(value.translation))
+                            // Vom linken Rand aus gehört die Bewegung der Zurück-Geste von iOS: nichts verschieben.
+                            let isHorizontal = PaceSwipeNavigation.isHorizontal(value.translation)
+                                && !PaceSwipeNavigation.belongsToBackSwipe(startX: value.startLocation.x)
+                            gestureStart = (value.startLocation, isHorizontal)
                         }
                     }
                     .onEnded { value in finish(value) }

@@ -460,6 +460,31 @@ struct HomeActivityWidgetTests {
         #expect(energy.totalText?.hasPrefix("≈") == true)
     }
 
+    /// Max-Widget (Auftrag 5, A4): Mini-Diagramm der letzten 7 Tage mit dem jeweils geltenden Ziel und Live-Schritten.
+    @Test func stepsSummaryHasTheLastSevenDaysForTheMaxChart() {
+        let yesterday = Fixtures.activityCalendar.adding(-1, to: today)
+        let summary = StepsTodaySummary(
+            overview: overview, goal: 10_000, formatter: formatter, liveCompetitionSteps: 7_600,
+            goalOn: { $0 == yesterday ? 5_000 : 10_000 }
+        )
+        #expect(summary.sevenDays.map(\.steps) == [1_000, 2_000, 3_000, 4_000, 5_000, 6_000, 7_600])
+        #expect(summary.sevenDays.last?.isToday == true)
+        #expect(summary.sevenDays.filter(\.isToday).count == 1)
+        #expect(summary.sevenDays.map(\.goal) == [10_000, 10_000, 10_000, 10_000, 10_000, 5_000, 10_000])
+        #expect(summary.sevenDayScale == 10_000)
+        PaceLocalization.$languageOverride.withValue(.german) {
+            let german = StepsTodaySummary(overview: overview, goal: 10_000, formatter: formatter, goalOn: { $0 == yesterday ? 5_000 : 10_000 })
+            // Heute (offen) zählt noch nicht mit.
+            #expect(german.sevenDayGoalText == "Ziel an 1 von 6 Tagen erreicht")
+        }
+        PaceLocalization.$languageOverride.withValue(.russian) {
+            let russian = StepsTodaySummary(overview: overview, goal: 3_000, formatter: formatter)
+            #expect(russian.sevenDayGoalText == "Цель выполнена в 5 из 7 дней")
+        }
+        // Nur der heutige Tag ohne Verlauf: kein Diagramm.
+        #expect(StepsTodaySummary(today: overview.today, goal: 10_000, formatter: formatter).sevenDays.isEmpty)
+    }
+
     @Test func stepsSummaryOffersYesterdayAndAverageForTheMaxCard() {
         let summary = StepsTodaySummary(overview: overview, goal: 10_000, formatter: formatter)
         #expect(summary.yesterdayText == "6.000")

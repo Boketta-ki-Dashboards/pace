@@ -5,6 +5,40 @@ import PaceCore
 /// Wiederkehrende Texte des Home-Dashboards in Deutsch, Englisch und Russisch. Alle Werte sind berechnet, damit sie
 /// einem Sprachwechsel sofort folgen.
 public enum HomeTexts {
+    /// z. B. `3 von 4 Ebenen sichtbar`.
+    public static func visibleLevels(_ count: Int, of total: Int) -> String {
+        PaceLocalization.text(
+            de: "\(count) von \(total) Ebenen sichtbar",
+            en: "\(count) of \(total) levels shown",
+            ru: "Показано уровней: \(count) из \(total)"
+        )
+    }
+
+    /// z. B. `Ziel an 4 von 6 Tagen erreicht`.
+    public static func goalReachedOnDays(_ reached: Int, of total: Int) -> String {
+        PaceLocalization.text(
+            de: "Ziel an \(reached) von \(total) Tagen erreicht",
+            en: "Goal reached on \(reached) of \(total) days",
+            ru: "Цель выполнена в \(reached) из \(total) " + PaceLocalization.plural(total, de: ("", ""), en: ("", ""), ru: ("дня", "дней", "дней"))
+        )
+    }
+
+    public static var lastSevenDays: String {
+        PaceLocalization.text(de: "Letzte 7 Tage", en: "Last 7 days", ru: "Последние 7 дней")
+    }
+
+    public static var showAllLevels: String {
+        PaceLocalization.text(de: "Alle vier zeigen", en: "Show all four", ru: "Показать все четыре")
+    }
+
+    public static var levelToggleHint: String {
+        PaceLocalization.text(
+            de: "Tippe auf eine Ebene, um ihre Karte ein- oder auszublenden. Mindestens eine bleibt.",
+            en: "Tap a level to show or hide its card. At least one stays.",
+            ru: "Нажми на уровень, чтобы показать или скрыть его карточку. Минимум одна остаётся."
+        )
+    }
+
     public static var customize: String {
         PaceLocalization.text(de: "Anpassen", en: "Customize", ru: "Настроить")
     }

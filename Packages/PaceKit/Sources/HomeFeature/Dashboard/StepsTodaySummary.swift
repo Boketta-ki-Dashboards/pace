@@ -37,6 +37,27 @@ public struct StepsTodaySummary: Equatable, Sendable {
     public let sevenDayAverageText: String?
     /// Hinweis, wenn heute Schritte in Apple Health nicht für Rankings zählen.
     public let manualStepsNote: String?
+    /// Die letzten 7 Tage bis heute (heute mit Live-Schritten) für das Mini-Diagramm im Max-Widget; leer ohne Verlauf.
+    public let sevenDays: [DayBar]
+    /// Höchster Wert der Achse: größter Tag oder Tagesziel.
+    public let sevenDayScale: Int
+    /// z. B. `Ziel an 4 von 6 Tagen erreicht` – heute zählt erst, wenn das Ziel erreicht ist.
+    public let sevenDayGoalText: String?
+
+    /// Ein Tag im Mini-Diagramm „Letzte 7 Tage“.
+    public struct DayBar: Equatable, Sendable, Identifiable {
+        public let date: LocalDate
+        /// z. B. `M`.
+        public let letter: String
+        public let steps: Int
+        /// Das an diesem Tag geltende Tagesziel.
+        public let goal: Int
+        public let isToday: Bool
+        public let accessibilityLabel: String
+
+        public var id: LocalDate { date }
+        public var reachedGoal: Bool { steps >= goal }
+    }
 
     public init(today: DailyActivitySummary, goal: Int, formatter: ActivityFormatter, bodyMetrics: BodyMetrics = BodyMetrics()) {
         self.init(
@@ -51,12 +72,14 @@ public struct StepsTodaySummary: Equatable, Sendable {
     /// - Parameter liveCompetitionSteps: Schritte von heute inklusive Live-Sensorwerten (nur Anzeige); ohne Angabe der
     ///   HealthKit-Wert.
     /// - Parameter bodyMetrics: Körperdaten für geschätzte Kalorien (nur ohne gemessene Werte).
+    /// - Parameter goalOn: Tagesziel eines früheren Tages (Zielverlauf); ohne Angabe gilt das heutige Ziel.
     public init(
         overview: ActivityOverview,
         goal: Int,
         formatter: ActivityFormatter,
         liveCompetitionSteps: Int? = nil,
-        bodyMetrics: BodyMetrics = BodyMetrics()
+        bodyMetrics: BodyMetrics = BodyMetrics(),
+        goalOn: ((LocalDate) -> Int)? = nil
     ) {
         self.init(
             // Erst die Live-Schritte, dann die Schätzung – sie passt so zur angezeigten Schrittzahl.
@@ -64,7 +87,8 @@ public struct StepsTodaySummary: Equatable, Sendable {
             yesterday: overview.yesterday,
             lastSevenDays: overview.lastSevenDays,
             goal: goal,
-            formatter: formatter
+            formatter: formatter,
+            goalOn: goalOn
         )
     }
 
@@ -89,7 +113,8 @@ public struct StepsTodaySummary: Equatable, Sendable {
         yesterday: DailyActivitySummary?,
         lastSevenDays: ActivityPeriodSummary?,
         goal rawGoal: Int,
-        formatter: ActivityFormatter
+        formatter: ActivityFormatter,
+        goalOn: ((LocalDate) -> Int)? = nil
     ) {
         let goal = max(rawGoal, 1)
         self.goal = goal
@@ -125,6 +150,23 @@ public struct StepsTodaySummary: Equatable, Sendable {
         yesterdayText = yesterday.map { formatter.steps($0.competitionSteps) }
         sevenDayAverageText = lastSevenDays.flatMap { $0.days.isEmpty ? nil : formatter.steps($0.averageCompetitionStepsPerDay) }
         manualStepsNote = today.hasNonCompetitionSteps ? HomeTexts.manualStepsNote : nil
+
+        let bars: [DayBar] = (lastSevenDays?.days ?? []).sorted { $0.date < $1.date }.map { day in
+            let isToday = day.date == today.date
+            let steps = isToday ? today.competitionSteps : day.competitionSteps
+            return DayBar(
+                date: day.date,
+                letter: HomeFormat.weekdayLetter(day.date, formatter: formatter),
+                steps: steps,
+                goal: max(isToday ? goal : (goalOn?(day.date) ?? goal), 1),
+                isToday: isToday,
+                accessibilityLabel: "\(formatter.dayLong(day.date)): \(PaceLocalization.steps(steps))"
+            )
+        }
+        sevenDays = bars
+        sevenDayScale = max(bars.map(\.steps).max() ?? 0, bars.map(\.goal).max() ?? goal, 1)
+        let counted = bars.filter { !$0.isToday || $0.reachedGoal }
+        sevenDayGoalText = bars.isEmpty ? nil : HomeTexts.goalReachedOnDays(counted.filter(\.reachedGoal).count, of: counted.count)
     }
 }
 

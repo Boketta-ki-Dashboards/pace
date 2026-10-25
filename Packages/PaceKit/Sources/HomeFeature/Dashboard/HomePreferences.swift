@@ -143,7 +143,7 @@ public enum HomeModuleKind: String, Codable, CaseIterable, Sendable, Identifiabl
     }
 
     public var supportedSizes: [HomeModuleSize] {
-        self == .stepsToday ? [.medium, .large, .max] : HomeModuleSize.allCases
+        HomeModuleSize.allCases
     }
 
     public var defaultSize: HomeModuleSize { .medium }

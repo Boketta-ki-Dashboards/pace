@@ -210,7 +210,26 @@ struct HomeWidgetGalleryContent: View {
             configurationCard {
                 configurationTitle(gallery.kind == .neighborhood
                     ? PaceLocalization.text(de: "Ranking-Ebene", en: "Ranking level", ru: "Уровень рейтинга")
-                    : PaceLocalization.text(de: "Ebenen auswählen", en: "Choose levels", ru: "Выбери уровни"))
+                    : PaceLocalization.text(de: "Gezeigte Ebenen", en: "Levels shown", ru: "Показанные уровни"))
+                if let summary = gallery.levelSummary {
+                    HStack(alignment: .firstTextBaseline, spacing: PaceSpacing.xs) {
+                        Text(summary)
+                            .font(PaceFont.callout.weight(.semibold))
+                            .foregroundStyle(gallery.hidesLevels ? PaceColor.textPrimary : PaceColor.textSecondary)
+                        Spacer(minLength: PaceSpacing.xs)
+                        if gallery.hidesLevels {
+                            Button(HomeTexts.showAllLevels) {
+                                withAnimation(.snappy) { gallery.showAllLevels() }
+                            }
+                            .font(PaceFont.callout.weight(.semibold))
+                            .buttonStyle(.paceSoft)
+                        }
+                    }
+                    Text(HomeTexts.levelToggleHint)
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 LazyVGrid(columns: columns, alignment: .leading, spacing: PaceSpacing.xs) {
                     ForEach(gallery.levelChoices, id: \.self) { level in
                         HomeGalleryChip(

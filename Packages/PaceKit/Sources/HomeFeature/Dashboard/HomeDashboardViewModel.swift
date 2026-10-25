@@ -134,7 +134,8 @@ public final class HomeDashboardViewModel {
                 goal: goals.goal(on: $0.today.date),
                 formatter: formatter,
                 liveCompetitionSteps: activity.liveCompetitionStepsToday,
-                bodyMetrics: bodyMetrics
+                bodyMetrics: bodyMetrics,
+                goalOn: { [goals] day in goals.goal(on: day) }
             )
         }
     }

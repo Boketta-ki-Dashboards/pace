@@ -20,6 +20,15 @@ struct PaceSwipeNavigationTests {
         )
     }
 
+    /// Zurück-Geste auf Unterseiten (Auftrag 5, C10): Vom linken Rand aus wechselt das Wischen keinen Zeitraum.
+    @Test func theLeftEdgeBelongsToTheBackSwipe() {
+        #expect(PaceSwipeNavigation.belongsToBackSwipe(startX: 0))
+        #expect(PaceSwipeNavigation.belongsToBackSwipe(startX: 20))
+        #expect(PaceSwipeNavigation.belongsToBackSwipe(startX: PaceSwipeNavigation.backSwipeEdgeWidth))
+        #expect(!PaceSwipeNavigation.belongsToBackSwipe(startX: 40))
+        #expect(!PaceSwipeNavigation.belongsToBackSwipe(startX: 200))
+    }
+
     @Test func fingerToTheRightShowsThePreviousPeriod() {
         #expect(step(120) == .previous)
     }

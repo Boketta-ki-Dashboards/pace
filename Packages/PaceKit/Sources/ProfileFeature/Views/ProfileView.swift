@@ -124,16 +124,8 @@ struct ProfileContent: View {
     // MARK: Kopf und Profil
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
-            PaceWordmark(height: 33)
-            Text(ProfileTexts.profileTitle)
-                .font(.system(.title, weight: .bold))
-                .foregroundStyle(PaceColor.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, PaceSpacing.xs)
-        .padding(.bottom, PaceSpacing.xxs)
+        PaceRootHeader(title: ProfileTexts.profileTitle)
+            .padding(.bottom, PaceSpacing.xxs)
     }
 
     private var identityCard: some View {

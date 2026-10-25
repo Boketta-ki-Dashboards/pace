@@ -205,12 +205,30 @@ public final class HomeWidgetGalleryViewModel {
         kind == .neighborhood ? standings.availableLevels : RegionLevel.allCases
     }
 
-    /// Name einer Ebene in der Auswahl, z. B. `Pfungstadt` oder – ohne geladene Region – `Stadt`.
+    /// Name einer Ebene in der Auswahl. Regionale Rankings: dieselbe Bezeichnung wie auf der Karte (`Stadt`,
+    /// `Landkreis`, `Bundesland`, `Land`); Umfeld: das Gebiet, z. B. `Pfungstadt` oder – ohne geladene Region – `Stadt`.
     public func levelTitle(_ level: RegionLevel) -> String {
+        let region = standings.hierarchy?.allLevels.first { $0.level == level }
         if kind == .regionRanks {
-            return level.widgetTitle
+            return HomeRegionCard.title(for: level, region: region)
         }
-        return standings.hierarchy?.allLevels.first { $0.level == level }?.localizedName ?? level.widgetTitle
+        return region?.localizedName ?? level.widgetTitle
+    }
+
+    /// Regionale Rankings: z. B. `4 von 4 Ebenen sichtbar` – damit klar ist, warum weniger Karten erscheinen.
+    public var levelSummary: String? {
+        guard kind == .regionRanks else { return nil }
+        return HomeTexts.visibleLevels(regionLevels.count, of: RegionLevel.allCases.count)
+    }
+
+    /// Ob Ebenen ausgeblendet sind (dann gibt es „Alle vier zeigen“).
+    public var hidesLevels: Bool {
+        kind == .regionRanks && regionLevels.count < RegionLevel.allCases.count
+    }
+
+    /// Zeigt wieder alle vier Ebenen.
+    public func showAllLevels() {
+        regionLevels = RegionLevel.allCases
     }
 
     public func isSelected(level: RegionLevel) -> Bool {
@@ -337,6 +355,14 @@ public final class HomeWidgetGalleryViewModel {
     /// Warum sich das Widget nicht hinzufügen lässt; `nil`, wenn alles passt.
     public var validationMessage: String? {
         if let duplicate {
+            if duplicate.kind == .regionRanks {
+                // Nicht dazu verleiten, Ebenen abzuwählen, nur um ein zweites Widget hinzufügen zu können.
+                return PaceLocalization.text(
+                    de: "„\(duplicate.title)“ zeigt diese Ebenen schon. Ändere lieber dort die Größe (Anpassen → „Größe auswählen“).",
+                    en: "“\(duplicate.title)” already shows these levels. Change its size there instead (Customize → “Choose size”).",
+                    ru: "«\(duplicate.title)» уже показывает эти уровни. Лучше измени там размер (Настроить → «Выбрать размер»)."
+                )
+            }
             return PaceLocalization.text(
                 de: "„\(duplicate.title)“ zeigt das schon auf deiner Übersicht.",
                 en: "“\(duplicate.title)” already shows this on your overview.",

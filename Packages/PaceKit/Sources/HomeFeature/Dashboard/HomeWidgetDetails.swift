@@ -14,6 +14,8 @@ public enum HomeWidgetDetail: String, Codable, CaseIterable, Sendable, Identifia
     case distanceEnergy
     /// Stockwerke und Trainingsminuten.
     case floorsExercise
+    /// Mini-Diagramm der letzten 7 Tage mit Ziellinie (ab „Groß“).
+    case weekChart
     /// Vergleich mit gestern und dem Durchschnitt der letzten 7 Tage.
     case comparison
     /// Persönlicher Tagesbestwert (bester Tag im geladenen Verlauf).
@@ -55,6 +57,8 @@ public enum HomeWidgetDetail: String, Codable, CaseIterable, Sendable, Identifia
             PaceLocalization.text(de: "Distanz & Kalorien", en: "Distance & calories", ru: "Расстояние и калории")
         case .floorsExercise:
             PaceLocalization.text(de: "Stockwerke & Training", en: "Floors & exercise", ru: "Этажи и тренировка")
+        case .weekChart:
+            PaceLocalization.text(de: "Mini-Diagramm: letzte 7 Tage", en: "Mini chart: last 7 days", ru: "Мини-диаграмма: последние 7 дней")
         case .comparison:
             PaceLocalization.text(de: "Vergleich: gestern & Ø 7 Tage", en: "Compare: yesterday & 7-day avg.", ru: "Сравнение: вчера и среднее за 7 дней")
         case .dayBest:
@@ -86,6 +90,7 @@ public enum HomeWidgetDetail: String, Codable, CaseIterable, Sendable, Identifia
         switch self {
         case .distanceEnergy: "shoeprints.fill"
         case .floorsExercise: "figure.stairs"
+        case .weekChart: "chart.bar.xaxis"
         case .comparison: "clock.arrow.circlepath"
         case .dayBest: "trophy"
         case .record: "trophy"
@@ -106,7 +111,7 @@ public extension HomeModuleKind {
     /// Alle Zusatzinhalte dieser Art in fester Reihenfolge (so erscheinen sie auch im Widget).
     var allDetails: [HomeWidgetDetail] {
         switch self {
-        case .stepsToday: [.distanceEnergy, .floorsExercise, .comparison, .dayBest]
+        case .stepsToday: [.distanceEnergy, .floorsExercise, .weekChart, .comparison, .dayBest]
         case .streak: [.record, .week, .milestone, .recentDays]
         case .friends: [.friendGap, .friendChart]
         case .groups: [.groupProgress, .groupGoal, .groupMembers]
@@ -115,12 +120,12 @@ public extension HomeModuleKind {
         }
     }
 
-    /// Zusatzinhalte, die in dieser Größe Platz haben. Klein zeigt nur das Wichtigste; das Freunde-Diagramm braucht
-    /// mindestens „Groß“.
+    /// Zusatzinhalte, die in dieser Größe Platz haben. Klein zeigt nur das Wichtigste; Diagramme (Freunde, 7 Tage)
+    /// brauchen mindestens „Groß“.
     func availableDetails(for size: HomeModuleSize) -> [HomeWidgetDetail] {
         guard size != .small || self == .neighborhood else { return [] }
         return allDetails.filter { detail in
-            detail != .friendChart || size >= .large
+            (detail != .friendChart && detail != .weekChart) || size >= .large
         }
     }
 
@@ -143,9 +148,11 @@ public extension HomeModuleKind {
     /// Standard ohne eigene Auswahl – genau das, was die Widgets bisher in der jeweiligen Größe zeigen.
     func defaultDetails(for size: HomeModuleSize) -> [HomeWidgetDetail] {
         switch (self, size) {
-        case (.stepsToday, .small), (.stepsToday, .medium): [.distanceEnergy]
+        case (.stepsToday, .small): []
+        case (.stepsToday, .medium): [.distanceEnergy]
         case (.stepsToday, .large): [.distanceEnergy, .floorsExercise]
-        case (.stepsToday, .max): [.distanceEnergy, .floorsExercise, .comparison]
+        // Max: Groß plus Analyse – 7-Tage-Verlauf mit Ziellinie und Vergleich mit gestern und Ø 7 Tagen.
+        case (.stepsToday, .max): [.distanceEnergy, .floorsExercise, .weekChart, .comparison]
         case (.streak, .small): []
         case (.streak, .medium): [.record]
         case (.streak, .large): [.record, .week]

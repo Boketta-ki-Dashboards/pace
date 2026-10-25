@@ -13,9 +13,8 @@ struct HomeHeaderView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.xs) {
-            HStack(alignment: .center) {
-                PaceWordmark(height: 33)
-                Spacer(minLength: PaceSpacing.s)
+            // Gleiche Maße wie Rankings, Social und Profil: Wortmarke und Titel springen beim Tabwechsel nicht.
+            PaceRootHeader {
                 if viewModel.isEditing {
                     Button(HomeTexts.done) {
                         viewModel.endEditing()
@@ -35,20 +34,25 @@ struct HomeHeaderView: View {
                         ru: "Удалять, перемещать и менять размер виджетов"
                     ))
                 }
+            } titleRow: {
+                if viewModel.isEditing {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .center, spacing: PaceSpacing.xs) {
+                            greeting.fixedSize()
+                            Spacer(minLength: PaceSpacing.xs)
+                            addButton.fixedSize()
+                        }
+                        VStack(alignment: .leading, spacing: PaceSpacing.xs) {
+                            greeting
+                            addButton
+                        }
+                    }
+                } else {
+                    greetingRow
+                }
             }
 
             if viewModel.isEditing {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .center, spacing: PaceSpacing.xs) {
-                        greeting.fixedSize()
-                        Spacer(minLength: PaceSpacing.xs)
-                        addButton.fixedSize()
-                    }
-                    VStack(alignment: .leading, spacing: PaceSpacing.xs) {
-                        greeting
-                        addButton
-                    }
-                }
                 HStack(spacing: PaceSpacing.s) {
                     HomeDragHandle()
                     Text(HomeTexts.editHint)
@@ -58,37 +62,38 @@ struct HomeHeaderView: View {
                 }
                 .padding(.top, PaceSpacing.xxs)
                 .padding(.bottom, PaceSpacing.xs)
-            } else {
-                HStack(alignment: .center, spacing: PaceSpacing.xxs) {
-                    greeting
-                    Spacer(minLength: PaceSpacing.xs)
-                    NavigationLink(value: HomeRoute.calendar(CalendarRoute())) {
-                        Image(systemName: "calendar")
-                            .font(.title2)
-                            .foregroundStyle(PaceColor.textPrimary)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.pacePressable)
-                    .accessibilityLabel(HomeTexts.calendar)
-                    NavigationLink(value: HomeRoute.notifications) {
-                        Image(systemName: "bell")
-                            .font(.title2)
-                            .foregroundStyle(PaceColor.textPrimary)
-                            .frame(width: 44, height: 44)
-                            .overlay(alignment: .topTrailing) {
-                                if viewModel.notificationCount > 0 {
-                                    HomeBellBadge(count: viewModel.notificationCount)
-                                }
-                            }
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.pacePressable)
-                    .accessibilityLabel(HomeNotifications.bellAccessibilityLabel(count: viewModel.notificationCount))
-                }
             }
         }
-        .padding(.top, PaceSpacing.xs)
+    }
+
+    private var greetingRow: some View {
+        HStack(alignment: .center, spacing: PaceSpacing.xxs) {
+            greeting
+            Spacer(minLength: PaceSpacing.xs)
+            NavigationLink(value: HomeRoute.calendar(CalendarRoute())) {
+                Image(systemName: "calendar")
+                    .font(.title2)
+                    .foregroundStyle(PaceColor.textPrimary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pacePressable)
+            .accessibilityLabel(HomeTexts.calendar)
+            NavigationLink(value: HomeRoute.notifications) {
+                Image(systemName: "bell")
+                    .font(.title2)
+                    .foregroundStyle(PaceColor.textPrimary)
+                    .frame(width: 44, height: 44)
+                    .overlay(alignment: .topTrailing) {
+                        if viewModel.notificationCount > 0 {
+                            HomeBellBadge(count: viewModel.notificationCount)
+                        }
+                    }
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pacePressable)
+            .accessibilityLabel(HomeNotifications.bellAccessibilityLabel(count: viewModel.notificationCount))
+        }
     }
 
     private var greeting: some View {

@@ -92,14 +92,7 @@ struct LeaderboardContent: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
-            PaceWordmark(height: 33)
-            Text(LeaderboardTexts.title)
-                .font(.system(.title, weight: .bold))
-                .foregroundStyle(PaceColor.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-        }
-        .padding(.top, PaceSpacing.xs)
+        PaceRootHeader(title: LeaderboardTexts.title)
     }
 
     // MARK: Regional

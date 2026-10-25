@@ -24,6 +24,15 @@ public enum PaceSwipeNavigation {
     /// Größte sichtbare Verschiebung des Inhalts während des Ziehens.
     public static let maximumOffset: CGFloat = 90
 
+    /// Breite des Streifens am linken Bildschirmrand, der der Zurück-Geste von iOS gehört: Dort beginnende Bewegungen
+    /// wechseln nie den Zeitraum (sonst schöbe das Zurückwischen zugleich das Diagramm oder wechselte den Zeitraum).
+    public static let backSwipeEdgeWidth: CGFloat = 28
+
+    /// Ob eine Bewegung, die bei `startX` (Punkte vom linken Bildschirmrand) beginnt, der Zurück-Geste gehört.
+    public static func belongsToBackSwipe(startX: CGFloat) -> Bool {
+        startX <= backSwipeEdgeWidth
+    }
+
     /// Ob eine Bewegung als waagerechtes Wischen gilt.
     public static func isHorizontal(_ translation: CGSize) -> Bool {
         abs(translation.width) > abs(translation.height) * horizontalDominance

@@ -6,11 +6,13 @@ import SwiftUI
 /// „Deine Schritte heute“ – der visuelle Mittelpunkt von Home: große Schrittzahl, Tagesziel mit Balken und Ring,
 /// Distanz und aktive Kalorien. Die Aktion „Tagesziel ändern“ ändert nur das Ziel, nie gemessene Schritte.
 ///
-/// Zusatzinhalte nach Auswahl im Bearbeitungsmodus (``HomeWidgetDetail``), ohne eigene Auswahl wie bisher:
-/// - Mittel: Distanz und Kalorien (wie im Home-Design).
-/// - Groß: zusätzlich Stockwerke und Trainingsminuten.
-/// - Max: zusätzlich gestern und der Durchschnitt der letzten 7 Tage.
-/// Wählbar außerdem der persönliche Tagesbestwert.
+/// Größen (Zusatzinhalte nach Auswahl im Bearbeitungsmodus, ``HomeWidgetDetail``; ohne eigene Auswahl der Standard):
+/// - Klein: Schrittzahl, Prozent und Fortschrittsbalken unter der Überschrift.
+/// - Mittel: große Schrittzahl, Ziel, Balken, „Noch … bis zu deinem Ziel“, Ring mit Prozent, Distanz und Kalorien.
+/// - Groß: zusätzlich Stockwerke und Training.
+/// - Max: Groß plus Analyse – Mini-Diagramm der letzten 7 Tage mit Ziellinie und der Vergleich mit gestern und dem
+///   Durchschnitt der letzten 7 Tage.
+/// Wählbar außerdem der persönliche Tagesbestwert. Geschätzte Kalorien sind gekennzeichnet („≈“, „Geschätzte …“).
 struct StepsTodayWidgetContent: View {
     let state: HomeViewModel.State
     let summary: StepsTodaySummary?
@@ -20,6 +22,7 @@ struct StepsTodayWidgetContent: View {
     let onRetry: () -> Void
 
     @ScaledMetric(relativeTo: .largeTitle) private var metricSize: CGFloat = 62
+    @ScaledMetric(relativeTo: .largeTitle) private var compactMetricSize: CGFloat = 34
     @ScaledMetric(relativeTo: .largeTitle) private var ringSize: CGFloat = 104
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -67,6 +70,51 @@ struct StepsTodayWidgetContent: View {
 
     @ViewBuilder
     private func loaded(_ summary: StepsTodaySummary) -> some View {
+        if size == .small {
+            compact(summary)
+        } else {
+            full(summary)
+        }
+    }
+
+    /// Klein: Schrittzahl und Prozent in einer Zeile, darunter der Balken.
+    private func compact(_ summary: StepsTodaySummary) -> some View {
+        NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .day, metric: .steps))) {
+            VStack(alignment: .leading, spacing: PaceSpacing.xs) {
+                HStack(alignment: .firstTextBaseline, spacing: PaceSpacing.xs) {
+                    Text(summary.stepsText)
+                        .font(PaceFont.metric(size: compactMetricSize))
+                        .monospacedDigit()
+                        .foregroundStyle(PaceColor.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .contentTransition(.numericText(value: Double(summary.steps)))
+                        .animation(.snappy, value: summary.steps)
+                    Text(summary.goalText)
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: PaceSpacing.xxs)
+                    Text(summary.percentText)
+                        .font(.system(.headline, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(summary.isGoalReached ? PaceColor.accent : PaceColor.textPrimary)
+                }
+                PaceProgressBar(progress: summary.progress)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.4), value: summary.progress)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pacePressable)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(PaceLocalization.text(
+            de: "Öffnet die Aktivitätsdetails von heute", en: "Opens today's activity details", ru: "Открывает подробности за сегодня"
+        ))
+    }
+
+    @ViewBuilder
+    private func full(_ summary: StepsTodaySummary) -> some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
             NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .day, metric: .steps))) {
                 HStack(alignment: .center, spacing: PaceSpacing.m) {
@@ -128,11 +176,22 @@ struct StepsTodayWidgetContent: View {
                         StepsMetricCell(
                             systemImage: "stopwatch",
                             value: summary.exerciseText ?? "–",
-                            caption: PaceLocalization.text(de: "Trainingsminuten", en: "Exercise minutes", ru: "Минуты тренировки")
+                            // Kurz, damit nichts mitten im Wort umbricht („Train-ingsminuten“); der Wert sagt „Min.“.
+                            caption: PaceLocalization.text(de: "Training", en: "Exercise", ru: "Тренировка")
                         )
                     }
                     .padding(.vertical, PaceSpacing.xxs)
                 }
+            }
+
+            if details.contains(.weekChart), !summary.sevenDays.isEmpty {
+                NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .week, metric: .steps))) {
+                    StepsSevenDayChart(summary: summary)
+                }
+                .buttonStyle(.pacePressable)
+                .accessibilityHint(PaceLocalization.text(
+                    de: "Öffnet die Wochenstatistik", en: "Opens the weekly statistics", ru: "Открывает статистику за неделю"
+                ))
             }
 
             if details.contains(.comparison) {
@@ -251,5 +310,80 @@ private struct StepsMetricCell: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Mini-Diagramm „Letzte 7 Tage“: ein Balken pro Tag (heute dunkel, erreichte Tage kräftig), gestrichelte Ziellinie,
+/// darunter wie oft das Ziel erreicht wurde. Keine Werte, die es nicht gibt: Tage ohne Schritte haben einen leeren Balken.
+struct StepsSevenDayChart: View {
+    let summary: StepsTodaySummary
+
+    @ScaledMetric(relativeTo: .body) private var chartHeight: CGFloat = 64
+
+    var body: some View {
+        PaceTile {
+            VStack(alignment: .leading, spacing: PaceSpacing.xs) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(HomeTexts.lastSevenDays)
+                        .font(PaceFont.headline)
+                        .foregroundStyle(PaceColor.textPrimary)
+                    Spacer(minLength: PaceSpacing.xs)
+                    if let average = summary.sevenDayAverageText {
+                        Text("Ø \(average)")
+                            .font(PaceFont.caption.weight(.semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(PaceColor.textSecondary)
+                    }
+                    HomeRowChevron()
+                }
+                HStack(alignment: .bottom, spacing: PaceSpacing.xs) {
+                    ForEach(summary.sevenDays) { day in
+                        VStack(spacing: 4) {
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(color(for: day))
+                                .frame(height: max(4, chartHeight * level(day.steps)))
+                                .frame(height: chartHeight, alignment: .bottom)
+                            Text(day.letter)
+                                .font(PaceFont.micro.weight(day.isToday ? .bold : .regular))
+                                .foregroundStyle(day.isToday ? PaceColor.textPrimary : PaceColor.textSecondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(day.accessibilityLabel)
+                    }
+                }
+                .overlay(alignment: .top) {
+                    // Ziellinie in Höhe des heutigen Ziels.
+                    GeometryReader { proxy in
+                        Path { path in
+                            let y = chartHeight * (1 - level(summary.goal))
+                            path.move(to: CGPoint(x: 0, y: y))
+                            path.addLine(to: CGPoint(x: proxy.size.width, y: y))
+                        }
+                        .stroke(PaceColor.accent.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    }
+                    .frame(height: chartHeight)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                }
+                if let goalText = summary.sevenDayGoalText {
+                    Text(goalText)
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.vertical, PaceSpacing.xxs)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func level(_ steps: Int) -> CGFloat {
+        min(CGFloat(steps) / CGFloat(max(summary.sevenDayScale, 1)), 1)
+    }
+
+    private func color(for day: StepsTodaySummary.DayBar) -> Color {
+        if day.isToday { return PaceColor.actionFill }
+        return day.reachedGoal ? PaceColor.accent.opacity(0.75) : PaceColor.accent.opacity(0.28)
     }
 }

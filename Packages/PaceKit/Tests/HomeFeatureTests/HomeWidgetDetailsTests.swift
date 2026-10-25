@@ -6,9 +6,11 @@ import Testing
 /// Eigene Inhalte je Widget (Auftrag 4, Punkt 12): Standard wie bisher, eigene Auswahl passend zur Größe, Speichern.
 struct HomeWidgetDetailsTests {
     @Test func withoutOwnChoiceWidgetsShowWhatTheyShowedBefore() {
+        #expect(HomeModule(kind: .stepsToday, size: .small).shownDetails.isEmpty)
         #expect(HomeModule(kind: .stepsToday, size: .medium).shownDetails == [.distanceEnergy])
         #expect(HomeModule(kind: .stepsToday, size: .large).shownDetails == [.distanceEnergy, .floorsExercise])
-        #expect(HomeModule(kind: .stepsToday, size: .max).shownDetails == [.distanceEnergy, .floorsExercise, .comparison])
+        // Max: Groß plus Analyse (7-Tage-Diagramm, Vergleich).
+        #expect(HomeModule(kind: .stepsToday, size: .max).shownDetails == [.distanceEnergy, .floorsExercise, .weekChart, .comparison])
         #expect(HomeModule(kind: .streak, size: .small).shownDetails.isEmpty)
         #expect(HomeModule(kind: .streak, size: .medium).shownDetails == [.record])
         #expect(HomeModule(kind: .streak, size: .large).shownDetails == [.record, .week])
@@ -39,6 +41,13 @@ struct HomeWidgetDetailsTests {
         let none = HomeWidgetConfiguration(details: [])
         #expect(HomeModule(kind: .stepsToday, size: .max, configuration: none).shownDetails.isEmpty)
         #expect(!HomeModule(kind: .neighborhood, size: .medium, configuration: none).shows(.rankGap))
+    }
+
+    @Test func theSevenDayChartNeedsAtLeastLarge() {
+        let chart = HomeWidgetConfiguration(details: [.weekChart, .dayBest])
+        #expect(HomeModule(kind: .stepsToday, size: .medium, configuration: chart).shownDetails == [.dayBest])
+        #expect(HomeModule(kind: .stepsToday, size: .large, configuration: chart).shownDetails == [.weekChart, .dayBest])
+        #expect(!HomeModuleKind.stepsToday.availableDetails(for: .medium).contains(.weekChart))
     }
 
     @Test func theFriendsChartNeedsAtLeastLarge() {

@@ -153,25 +153,16 @@ struct SocialContent: View {
     // MARK: Kopf
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
-            HStack(alignment: .center, spacing: PaceSpacing.xs) {
-                PaceWordmark(height: 33)
-                Spacer()
-                requestsButton
-                Button {
-                    onOpen(.settings)
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-                .buttonStyle(.paceIcon)
-                .accessibilityLabel(SocialText.socialSettings)
+        PaceRootHeader(title: SocialText.social) {
+            requestsButton
+            Button {
+                onOpen(.settings)
+            } label: {
+                Image(systemName: "gearshape")
             }
-            Text(SocialText.social)
-                .font(.system(.title, weight: .bold))
-                .foregroundStyle(PaceColor.textPrimary)
-                .accessibilityAddTraits(.isHeader)
+            .buttonStyle(.paceIcon)
+            .accessibilityLabel(SocialText.socialSettings)
         }
-        .padding(.top, PaceSpacing.xs)
     }
 
     /// Freundschaftsanfragen: gleicher Stil wie das Zahnrad, Zähler offener Anfragen als Badge. Briefumschlag mit

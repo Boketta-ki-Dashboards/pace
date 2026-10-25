@@ -126,6 +126,31 @@ public struct StatisticsReport: Equatable, Sendable {
     public let canShowPrevious: Bool
     public let canShowNext: Bool
 
+    /// Kennung des Diagramms: Ein anderer Zeitraum (oder eine andere Kennzahl) ist ein neues Diagramm, das ersetzt und
+    /// nicht aus dem alten „gemorpht“ wird – sonst entstehen beim schnellen Wischen schmale, verschobene oder sich
+    /// überlagernde Balken.
+    public var chartIdentity: String {
+        "\(period.rawValue)-\(metric.rawValue)-\(anchor.year)-\(anchor.month)-\(anchor.day)"
+    }
+
+    /// Obergrenze der Y-Achse: auf einen runden Wert aufgerundet (Balken, Ziel- und Durchschnittslinie haben Platz), damit
+    /// die Achse nicht bei jedem Wert springt und gut lesbare Schritte hat.
+    public var chartMaximum: Double {
+        let highest = ([goalLine, averageLine] + bars.map(\.value)).compactMap { $0 }.max() ?? 0
+        return Self.niceCeiling(highest)
+    }
+
+    /// Kleinster „runder“ Wert (1, 1,2, 1,5, 2, 2,5, 3, 4, 5, 6, 8, 10 × Zehnerpotenz) mit 5 % Luft über `value`.
+    public static func niceCeiling(_ value: Double) -> Double {
+        guard value > 0, value.isFinite else { return 1 }
+        let target = value * 1.05
+        let magnitude = pow(10, (log10(target)).rounded(.down))
+        for factor in [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10] as [Double] where factor * magnitude >= target - 1e-9 {
+            return factor * magnitude
+        }
+        return 10 * magnitude
+    }
+
     /// Eingaben für die Berechnung.
     public struct Input: Sendable {
         public var period: StatisticsPeriod

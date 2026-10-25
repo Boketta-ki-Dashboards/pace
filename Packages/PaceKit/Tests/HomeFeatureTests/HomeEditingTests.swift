@@ -425,10 +425,13 @@ struct HomeWidgetGalleryTests {
         let gallery = harness.dashboard.gallery(for: HomeWidgetGalleryRoute(editingID: steps.id))
 
         #expect(gallery.selectedCategory == .activity)
-        #expect(gallery.supportedSizes == [.medium, .large, .max])
+        // Auftrag 5: Die Schrittkarte gibt es in allen vier Größen; „Klein“ zeigt nur Zahl, Prozent und Balken.
+        #expect(gallery.supportedSizes == [.small, .medium, .large, .max])
         gallery.size = .small
-        // Nicht unterstützte Größen werden nicht übernommen.
-        #expect(gallery.draft.size == .medium)
+        #expect(gallery.draft.size == .small)
+        #expect(gallery.draft.shownDetails.isEmpty)
+        gallery.size = .max
+        #expect(gallery.draft.shownDetails == [.distanceEnergy, .floorsExercise, .weekChart, .comparison])
     }
 
     @Test func singleWidgetsAndDuplicatesAreExplained() async throws {
@@ -548,5 +551,121 @@ struct HomeWidgetGalleryTests {
         PaceLocalization.$languageOverride.withValue(.german) {
             #expect(best.title == "Tagesbestwert · Heute")
         }
+    }
+}
+
+/// Vier regionale Karten zuverlässig (Auftrag 5, A3): Standard, Speichern, Migration, Größe, Bearbeiten, Neustart und
+/// fehlende Daten – ohne eigene Auswahl zeigt das Widget immer alle vier Ebenen.
+@MainActor
+struct RegionCardsReliabilityTests {
+    private func regionWidget(in modules: [HomeModule]) throws -> HomeModule {
+        try #require(modules.first { $0.kind == .regionRanks })
+    }
+
+    @Test func theDefaultWidgetShowsAllFourLevelsAndStoresNoSelection() throws {
+        let module = try regionWidget(in: HomePreferences.defaultModules())
+        #expect(module.regionLevels == RegionLevel.allCases)
+        #expect(module.configuration.regionLevels == nil)
+        let json = String(decoding: try JSONEncoder().encode(module), as: UTF8.self)
+        #expect(!json.contains("levels"))
+    }
+
+    @Test func storingAndReloadingKeepsFourLevels() throws {
+        let suite = "pace.tests.regioncards.\(UUID().uuidString)"
+        defer { UserDefaults().removePersistentDomain(forName: suite) }
+        let store = UserDefaultsHomePreferencesStore(suiteName: suite)
+        let settings = HomeSettings(store: store)
+        let id = try regionWidget(in: settings.modules).id
+        settings.setSize(.large, for: id)
+        settings.setSize(.max, for: id)
+        settings.setSize(.small, for: id)
+        settings.move(id, toIndex: 3)
+
+        // „Neustart“: neue Einstellungen aus demselben Speicher.
+        let reloaded = HomeSettings(store: UserDefaultsHomePreferencesStore(suiteName: suite))
+        let module = try #require(reloaded.module(id: id))
+        #expect(module.size == .small)
+        #expect(module.regionLevels == RegionLevel.allCases)
+    }
+
+    @Test func storedSelectionsAreRepairedNotShrunk() throws {
+        func decodeLevels(_ levels: String) throws -> [RegionLevel] {
+            let json = #"{"version":3,"modules":[{"id":"r","kind":"regionRanks","size":"medium","config":{"levels":"# + levels + #"}}]}"#
+            let preferences = try JSONDecoder().decode(HomePreferences.self, from: Data(json.utf8)).normalized()
+            return try regionWidget(in: preferences.modules).regionLevels
+        }
+        // Leer, unbekannt oder alle vier: immer alle vier (gespeichert wird dann nichts).
+        #expect(try decodeLevels("[]") == RegionLevel.allCases)
+        #expect(try decodeLevels(#"["galaxy"]"#) == RegionLevel.allCases)
+        #expect(try decodeLevels(#"["country","state","district","municipality"]"#) == RegionLevel.allCases)
+        // Doppelt oder ungeordnet: bereinigt, in fester Reihenfolge.
+        #expect(try decodeLevels(#"["state","municipality","state"]"#) == [.municipality, .state])
+    }
+
+    @Test func versionOneMigrationKeepsFourLevels() throws {
+        let json = #"{"sections":[{"section":"regionRanks","isVisible":true},{"section":"stepsToday","isVisible":true}]}"#
+        let preferences = try JSONDecoder().decode(HomePreferences.self, from: Data(json.utf8))
+        #expect(try regionWidget(in: preferences.modules).regionLevels == RegionLevel.allCases)
+    }
+
+    @Test(arguments: [nil, Fixtures.pfungstadtHierarchy, Fixtures.frankfurtHierarchy, Fixtures.berlinHierarchy])
+    func cardsAlwaysCoverAllFourLevels(hierarchy: RegionHierarchy?) {
+        // Vor dem Laden, ohne Platzierungen, bei kreisfreier Stadt und Stadtstaat: vier Karten.
+        let cards = HomeRegionCards.cards(hierarchy: hierarchy, standings: nil)
+        #expect(cards.map(\.level) == RegionLevel.allCases)
+    }
+
+    @Test func missingMunicipalityCountsStillGiveFourCards() {
+        // Unvollständige Gebietsdaten (z. B. Zähler 0) dürfen keine Karte entfallen lassen.
+        let district = Region(id: "DE:06432", code: "06432", name: "Darmstadt-Dieburg", level: .district, kind: .landkreis, parentID: "DE:06", municipalityCount: 0)
+        let hierarchy = RegionHierarchy(municipality: Fixtures.pfungstadt, district: district, state: Fixtures.hessen, country: Fixtures.germany)
+        let cards = HomeRegionCards.cards(hierarchy: hierarchy, standings: nil)
+        #expect(cards.count == 4)
+        #expect(cards.map(\.name) == ["Pfungstadt", "Darmstadt-Dieburg", "Hessen", "Deutschland"])
+    }
+
+    @Test func editingSizeOrNameKeepsAllFourLevels() async throws {
+        let harness = await DashboardHarness()
+        let id = try regionWidget(in: harness.dashboard.modules).id
+        let gallery = harness.dashboard.gallery(for: HomeWidgetGalleryRoute(editingID: id))
+        #expect(gallery.regionLevels == RegionLevel.allCases)
+        #expect(!gallery.hidesLevels)
+        gallery.size = .max
+        gallery.name = "Meine Region"
+        #expect(gallery.save())
+        let saved = try #require(HomeSettings(store: harness.store).module(id: id))
+        #expect(saved.regionLevels == RegionLevel.allCases)
+        #expect(saved.configuration.regionLevels == nil)
+        #expect(harness.dashboard.regionCards(for: saved).count == 4)
+    }
+
+    @Test func theEditorSaysHowManyLevelsAreShownAndRestoresAllFour() async throws {
+        let harness = await DashboardHarness()
+        let id = try regionWidget(in: harness.dashboard.modules).id
+        let gallery = harness.dashboard.gallery(for: HomeWidgetGalleryRoute(editingID: id))
+        PaceLocalization.$languageOverride.withValue(.german) {
+            #expect(gallery.levelSummary == "4 von 4 Ebenen sichtbar")
+            #expect(gallery.levelChoices.map(gallery.levelTitle) == ["Stadt", "Landkreis", "Bundesland", "Land"])
+            gallery.toggleLevel(.country)
+            #expect(gallery.levelSummary == "3 von 4 Ebenen sichtbar")
+            #expect(gallery.hidesLevels)
+            #expect(gallery.draft.regionLevels == [.municipality, .district, .state])
+            gallery.showAllLevels()
+            #expect(gallery.levelSummary == "4 von 4 Ebenen sichtbar")
+        }
+        // Mindestens eine Ebene bleibt.
+        for level in RegionLevel.allCases { gallery.toggleLevel(level) }
+        #expect(gallery.regionLevels.count == 1)
+    }
+
+    @Test func aSecondRegionWidgetPointsToTheSizeInsteadOfHidingLevels() async throws {
+        let harness = await DashboardHarness()
+        let gallery = harness.dashboard.gallery(for: HomeWidgetGalleryRoute())
+        gallery.select(.regionRanks)
+        gallery.size = .max
+        PaceLocalization.$languageOverride.withValue(.german) {
+            #expect(gallery.validationMessage?.contains("Größe") == true)
+        }
+        #expect(!gallery.canSave)
     }
 }

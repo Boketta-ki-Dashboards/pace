@@ -17,7 +17,7 @@ struct StatisticsChart: View {
                     y: .value(report.metric.title, bar.value ?? 0)
                 )
                 .foregroundStyle(color(for: bar))
-                .cornerRadius(report.period == .week ? 6 : 3)
+                .cornerRadius(PaceChartStyle.cornerRadius(barCount: report.bars.count))
                 .accessibilityLabel(bar.accessibilityLabel)
                 .accessibilityValue(accessibilityValue(for: bar))
                 .accessibilityHidden(bar.value == nil)
@@ -54,13 +54,26 @@ struct StatisticsChart: View {
                 AxisValueLabel {
                     if let id = value.as(String.self), let bar = report.bars.first(where: { $0.id == id }) {
                         Text(bar.label)
+                            .font(PaceChartStyle.axisFont)
                     }
                 }
             }
         }
         .chartYAxis {
-            AxisMarks(position: .leading)
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
+                AxisGridLine(stroke: PaceChartStyle.gridStroke)
+                    .foregroundStyle(PaceColor.border)
+                AxisValueLabel()
+                    .font(PaceChartStyle.axisFont)
+            }
         }
+        // Feste, runde Achse je Zeitraum: kein Springen der Höhen, Ziel- und Durchschnittslinie immer im Bild.
+        .chartYScale(domain: 0...report.chartMaximum)
+        .chartPlotStyle { plot in
+            plot.padding(.top, PaceChartStyle.plotTopPadding)
+        }
+        // Daten innerhalb eines Diagramms ändern sich ohne Morphing; Wechsel des Zeitraums übernimmt die Karte.
+        .transaction { $0.animation = nil }
         .chartOverlay { proxy in
             GeometryReader { geometry in
                 Rectangle()
@@ -128,5 +141,22 @@ private extension View {
         padding(.horizontal, 4)
             .padding(.vertical, 1)
             .background(PaceColor.surface.opacity(0.9), in: Capsule())
+    }
+}
+
+/// Gemeinsamer Stil der Balkendiagramme (Statistik, Kalender, Widgets): Achsen, Raster, Ecken, Abstände. Farben
+/// bleiben die der Kennzahlen.
+enum PaceChartStyle {
+    static var axisFont: Font { PaceFont.micro }
+    static var gridStroke: StrokeStyle { StrokeStyle(lineWidth: 0.5, dash: [2, 3]) }
+    /// Platz über dem höchsten Balken für die Beschriftung von Ziel und Durchschnitt.
+    static let plotTopPadding: CGFloat = 6
+    /// Höhe der Diagrammfläche – auch für Platzhalter (Laden, keine Daten), damit nichts springt.
+    static let dayHeight: CGFloat = 180
+    static let periodHeight: CGFloat = 200
+
+    /// Schmale Balken (Monat, Stunden) mit kleineren Ecken, breite (Woche) mit größeren.
+    static func cornerRadius(barCount: Int) -> CGFloat {
+        barCount <= 7 ? 6 : 3
     }
 }
