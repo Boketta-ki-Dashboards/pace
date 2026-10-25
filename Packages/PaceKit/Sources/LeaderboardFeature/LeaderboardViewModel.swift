@@ -177,9 +177,20 @@ public final class LeaderboardViewModel {
         return nil
     }
 
-    /// Ein eigener Spitzname für eine Person wurde geändert (Social-Tab): Freunde- und Gruppenrankings zeigen ihn
-    /// sofort, ohne neu zu laden.
+    /// Ein eigener Spitzname für eine Person wurde geändert (Social-Tab): Freunde-, Gruppen- und regionale Rankings
+    /// zeigen ihn sofort, ohne neu zu laden.
     public func nicknameDidChange(_ profile: SocialProfile) {
+        if case .loaded(let snapshot) = state {
+            state = .loaded(LeaderboardSnapshot(
+                query: snapshot.query,
+                rows: snapshot.rows.map { row in
+                    guard case .entry(let entry) = row, entry.publicUserID == profile.publicID else { return row }
+                    return .entry(entry.withNickname(profile.nickname))
+                },
+                totalParticipants: snapshot.totalParticipants,
+                currentUserEntry: snapshot.currentUserEntry
+            ))
+        }
         if case .loaded(let entries) = friends {
             friends = .loaded(entries.map { entry in
                 entry.publicUserID == profile.publicID ? entry.withNickname(profile.nickname) : entry

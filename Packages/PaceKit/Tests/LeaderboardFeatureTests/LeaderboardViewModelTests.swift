@@ -396,6 +396,27 @@ struct LeaderboardViewModelTests {
         #expect(social.state.current.friendRankingPeriods.count == 1)
     }
 
+    /// Auch im regionalen Ranking steht der neue Spitzname sofort (Prüfbefund Auftrag 4).
+    @Test func changedNicknameShowsUpInTheRegionalRankingRightAway() async throws {
+        let leaderboards = LeaderboardRepositoryStub {
+            $0.rankings[Fixtures.pfungstadt.id] = Fixtures.ranking(count: 20, currentUserRank: 12)
+        }
+        let (viewModel, _) = makeViewModel(leaderboards: leaderboards)
+        await viewModel.loadIfNeeded()
+        let before = try #require(viewModel.snapshot)
+        let other = try #require(before.entries.first { !$0.isCurrentUser })
+
+        viewModel.nicknameDidChange(SocialProfile(
+            publicID: other.publicUserID, username: other.username, displayName: other.displayName, nickname: "Sprinter"
+        ))
+
+        let after = try #require(viewModel.snapshot)
+        #expect(after.entries.first { $0.publicUserID == other.publicUserID }?.shownName == "Sprinter")
+        #expect(after.entries.filter { $0.publicUserID != other.publicUserID } == before.entries.filter { $0.publicUserID != other.publicUserID })
+        #expect(after.query == before.query)
+        #expect(after.totalParticipants == before.totalParticipants)
+    }
+
     @Test func friendsHintsForLeaderAndLoneUser() async {
         let leader = SocialRepositoryStub { $0.ranking = Fixtures.ranking(count: 3, currentUserRank: 1) }
         let (leading, _) = makeViewModel(social: leader)
