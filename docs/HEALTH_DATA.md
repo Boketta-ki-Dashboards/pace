@@ -144,17 +144,39 @@ gemessenen aktiven Kalorien hat**, zeigt Pace einen Schätzwert (`CalorieEstimat
 ## Live-Schritte (Core Motion)
 
 Solange Pace im Vordergrund ist, zählt die Anzeige „Deine Schritte heute“ über `CMPedometer` live mit
-(`PedometerLiveSteps`, nur mit Erlaubnis „Bewegung & Fitness“, `NSMotionUsageDescription`). `LiveStepEstimator`
-verhindert doppeltes Zählen:
+(`PedometerLiveSteps`, nur mit Erlaubnis „Bewegung & Fitness“, `NSMotionUsageDescription`, kein Standort, kein GPS).
+`LiveStepEstimator` verbindet den Sensor mit HealthKit, ohne doppelt zu zählen (Stand Auftrag 5):
 
-- Grundlage bleibt der letzte HealthKit-Wert (Wettbewerbsschritte). Der Sensor liefert nur den Zuwachs seit diesem
-  Wert; jeder neue HealthKit-Wert setzt die Basis neu (die Schritte sind dann in Health enthalten).
-- Die Anzeige sinkt nie innerhalb eines Tages (hinkt Health hinterher, bleibt sie stehen, bis Health aufholt); ein
-  neuer Tag beginnt mit dem HealthKit-Wert; ein neu gestarteter Sensor (kleinerer Zählerstand) zählt nicht doppelt.
-- Die Live-Werte sind **nur Anzeige**: Rankings, Synchronisierung, Streak und Erinnerungen nutzen ausschließlich die
-  HealthKit-Wettbewerbsschritte (manuell eingetragene Schritte zählen weiterhin nicht – die Live-Vorschau umgeht das
-  nicht, weil der Sensor nur echte Bewegung misst und Health die Basis bleibt).
-- Ohne Erlaubnis oder ohne Sensor zeigt Pace wie bisher die HealthKit-Werte.
+- **Messung ab Tagesbeginn.** Der Bewegungscoprozessor speichert die Schritte der letzten Tage; der erste Wert ist
+  die Tagessumme des iPhones. Sie wird einmal abgefragt (sofort da) und danach laufend gemeldet. Abfrage und Meldungen
+  kommen auf verschiedenen Threads an; gemeldet wird nur, was größer ist als der letzte Wert.
+- **Angezeigt** wird das Größte aus HealthKit-Stand, Sensor-Tagessumme und `Basis + Sensor-Fortschritt seit der
+  Basis`. Sensor- und HealthKit-Werte werden nie addiert.
+- **Neue Basis nur bei geändertem HealthKit-Wert** (`Basis = max(angezeigt, HealthKit)`). Früher setzte jede Abfrage
+  im Vordergrund (alle 15 s) die Basis neu, auch ohne neuen HealthKit-Wert – hinkte Health hinterher, ging der
+  Sensor-Fortschritt verloren und die Anzeige stieg nur um etwa 25 Schritte pro Intervall („nur +24 in Minuten“).
+- Liegt ein neuer HealthKit-Wert über der Anzeige (z. B. Apple Watch ohne iPhone), gilt er. Ob er die schon
+  angezeigten Sensorschritte enthält, ist dann nicht erkennbar; Pace zählt sie deshalb nicht doppelt und holt die
+  Differenz mit dem nächsten HealthKit-Stand auf (keine erfundenen Schritte).
+- **App verlassen/zurück:** Der Sensor stoppt im Hintergrund (Akku). Beim Neustart zählt er weiter ab Tagesbeginn; die
+  Schritte aus der Pause kommen dazu, solange HealthKit sich in der Zwischenzeit nicht geändert hat.
+- Die Anzeige sinkt nie innerhalb eines Tages. Nach Mitternacht beginnt die Messung mit dem ersten Wert des neuen
+  Tages neu; Werte, die noch ab dem Vortag zählen, werden verworfen.
+- Die Live-Werte sind **nur Anzeige**: Rankings, Synchronisierung, Serie und Erinnerungen nutzen ausschließlich die
+  HealthKit-Wettbewerbsschritte. Manuell eingetragene Schritte zählen weiterhin nicht; der Sensor misst nur echte
+  Bewegung.
+- Ohne Erlaubnis oder ohne Sensor (z. B. Simulator) zeigt Pace die HealthKit-Werte.
+
+**Tests:** `LiveStepEstimatorTests` und `LiveStepSimulationTests` spielen 14 Szenarien mit **simulierten** Sensorwerten
+durch (100 Schritte/min: 30 s ≈ 50, 60 s ≈ 100, 120 s ≈ 200, 300 s ≈ 500; schneller, Pause, Fortsetzung, HealthKit
+verspätet/holt ein/höher, App verlassen, Sensor-Neustart, Mitternacht, kein Sensor, keine Erlaubnis, Apple Watch,
+neue Quelle) sowie zufällige Abfolgen (nie Rückgang, nie über HealthKit + Sensor-Fortschritt). Ein Test mit dem
+echten Sensor ist nur auf dem iPhone möglich (5-Minuten-Gehprobe in [IPHONE_TEST.md](IPHONE_TEST.md)).
+
+**Diagnose (nur Entwicklung):** In Builds aus Xcode gibt es unter Profil → Aktivität & Gesundheit „Live-Schritte ·
+Diagnose“ (Sensorzustand, Messwerte, mittlerer Abstand, bestätigte und vorläufige Schritte, begrenztes Protokoll mit
+80 Einträgen). Nicht im Home-Design, wird nicht hochgeladen. Dort bzw. mit der Startoption
+`-PaceSimulatedStepsPerMinute 100` lässt sich im Simulator Gehen simulieren (nur `DEBUG`).
 
 ## Wann gelesen wird
 

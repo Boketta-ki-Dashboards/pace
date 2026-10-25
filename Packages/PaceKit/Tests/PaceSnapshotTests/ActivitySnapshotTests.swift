@@ -96,6 +96,7 @@ struct ActivitySnapshotTests {
             (StatisticsRoute(period: .day, metric: .steps), "statistics-day", Self.languages),
             (StatisticsRoute(period: .week, metric: .steps), "statistics-week", Self.languages),
             (StatisticsRoute(period: .month, metric: .distance), "statistics-month-distance", [.german]),
+            (StatisticsRoute(period: .month, metric: .steps), "statistics-month", [.german]),
         ]
         for (route, name, languages) in routes {
             let statistics = StatisticsViewModel(

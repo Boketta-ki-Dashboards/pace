@@ -47,10 +47,12 @@ Alles ohne SwiftUI (ViewModels, Texte, Verlauf, Medienregeln) wird auf Linux geb
 ## Chat (Bild 5)
 
 - Kopf: `PaceSubpageHeader` („‹ Social“ → Wortmarke mit Info- und Einstellungen-Knopf → Titel).
-  - Gruppe: Avatarreihe (höchstens 6 Mitglieder aus dem heutigen Gruppenranking, „+“ zum Einladen), „n Mitglieder“,
-    Streak-Karte („12 Tage Streak“, Häkchen bei gesicherter Flamme, „Flamme gesichert“ bzw. „Noch 2 Ziele heute“).
-    Info → Gruppendetails, Zahnrad → Gruppeneinstellungen, Avatare/„+“ → Mitglieder (dort Einladen), Streak-Karte →
-    Gruppendetails.
+  - Gruppe (seit Auftrag 5): **feste Leiste unter dem Kopf** (`ChatGroupBar`, scrollt nicht mit) – links bis zu
+    vier echte Mitgliederbilder überlappend, „n Mitglieder“ und „+“ (mit Einladerecht), rechts **nur Flamme und Zahl**
+    (laufende Gruppenflamme). Bilder/Anzahl → Mitglieder (mit Profilen), „+“ → Mitglieder mit „Freunde einladen“,
+    Flamme → Gruppenkalender – alles über `SocialNavigator` (eine schon offene Seite wird nicht erneut aufgelegt).
+    Die frühere mitscrollende Avatarreihe und Streak-Karte sind entfallen. Info → Gruppendetails, Zahnrad →
+    Gruppeneinstellungen.
   - Privatchat: Profil-Kopf (Profilbild, @Benutzername, „Profil ansehen“). Info → Profil, Zahnrad → Menü
     „Profil ansehen“, „Person melden“, „Person blockieren“.
 - Verlauf: Tages-Trenner („Heute“, „Gestern“, Wochentag, Datum), Blöcke aufeinanderfolgender Nachrichten derselben
@@ -174,9 +176,13 @@ anderen trotzdem gesendet und danach `ProfileShareError` (gesendet an n Chats, n
   im Feld. Kennzeichen „Bearbeitet“ unter der Blase.
 - **Favoriten:** sofort umgeschaltet, bei Fehler zurückgenommen; kleiner Stern an der Nachricht (nur für mich); Liste
   über den Stern im Chat-Kopf (Antippen springt zur Nachricht, Kontextmenü „Favorit entfernen“).
-- **Pins:** Hinweis oben unter dem Kopf („Angepinnt 1 von 3“ + Vorschau); Antippen springt hin und zeigt danach den
-  nächsten Pin; Kontextmenü „Lösen“ (mit Recht). Verborgene Pins erscheinen als „Nachricht nicht verfügbar“ und lassen
-  sich so lösen. Pins anderer kommen per Echtzeit (`pinsChanged`).
+- **Pins:** Hinweis oben unter dem Kopf („Angepinnt 1 von 3“) mit **Vorschau des Inhalts** (`ChatPinPreview`, Auftrag 5):
+  Textausschnitt (eine Zeile, höchstens 120 Zeichen), Foto- bzw. GIF-Miniatur (aus dem geschützten Chat-Speicher,
+  derselbe Bildspeicher wie die Blase), Sprachnachricht mit Dauer, geteiltes Profil mit Profilbild und @Name; in
+  Gruppen mit Absender („Marie: …“, eigene „Du: …“). Bei 2–4 Pins zeigen Striche links, welcher gerade dran ist.
+  Antippen springt hin, hebt die Nachricht kurz hervor und zeigt danach den nächsten Pin; Kontextmenü „Lösen“ (mit
+  Recht). Verborgene Pins zeigen weder Inhalt noch Absender noch Miniatur – nur „Nachricht nicht verfügbar“ – und
+  lassen sich so lösen. Pins anderer kommen per Echtzeit (`pinsChanged`).
 - **Sprachnachrichten:** Mikrofon bei leerem Feld, sonst Senden (beide Knöpfe liegen übereinander, damit eine
   laufende Geste nicht abreißt). Gedrückt halten nimmt auf (roter Punkt mit Pegel, Zeit, Haptik); nach oben wischen
   sperrt (dann Stopp, Verwerfen, Senden), nach links wischen verwirft (Datei gelöscht, nichts hochgeladen). Nach dem

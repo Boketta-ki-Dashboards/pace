@@ -117,6 +117,15 @@ struct HomeSnapshotTests {
             }
             try Snapshot.render(page(content), name: "home-new-widgets-\(size.rawValue)", languages: size == .medium ? languages : [.german])
         }
+        // Einzeln je Widget in Mittel und Max (Vorschau-Ordner docs/previews/auftrag5).
+        for size in [HomeModuleSize.medium, .max] {
+            for module in SnapshotFixtures.newWidgets(size: size) {
+                try Snapshot.render(
+                    page(HomeModuleView(module: module, viewModel: dashboard, mode: .normal)),
+                    name: "new-\(module.kind.rawValue)-\(size.rawValue)"
+                )
+            }
+        }
     }
 
     /// Ebenen-Editor der regionalen Karten (Auftrag 5, A3): „3 von 4 Ebenen sichtbar“ mit „Alle vier zeigen“.
@@ -184,7 +193,9 @@ extension SnapshotFixtures {
             HomeModule(id: "groups", kind: .groups, size: size),
             HomeModule(id: "distance", kind: .activity, size: size, configuration: HomeWidgetConfiguration(metric: .distance)),
             HomeModule(id: "calendar", kind: .calendar, size: size),
-        ] + newWidgets(size: size)
+        ]
+        // Die neuen Widgets stehen in eigenen Bildern (`newWidgetsInAllSizes`) – ein einziges Bild aller Widgets in Max
+        // würde zu hoch zum Speichern.
         modules.removeAll { !$0.kind.supportedSizes.contains(size) }
         return modules
     }

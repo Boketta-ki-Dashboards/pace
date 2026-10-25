@@ -84,13 +84,18 @@ nicht betroffen (eigene Regeln).
 
 Unterseite von Home: „‹ Anpassen“ → pace → „Widget hinzufügen“ (bzw. „Widget bearbeiten“).
 
-1. **Kategorie** (2 Spalten): Schritte und Aktivität · Wochenübersicht · Persönliche Streak · Freunde · Gruppen
-   („Gruppe auswählen“) · Regionale Rankings („Stadt · Landkreis · Bundesland · Deutschland“) · Ranking-Umfeld ·
-   Kalender. Einzel-Widgets, die schon auf Home sind, tragen „Schon auf Home“.
+1. **Kategorie** (2 Spalten, seit Auftrag 5 in drei Abschnitten, `HomeGallerySection`):
+   - **Aktivität**: Schritte und Aktivität · Wochenübersicht · Tagesvergleich · Aktivitätszeiten · Kalender
+   - **Motivation**: Persönliche Streak · Flammen-Woche · Persönliche Rekorde („Letzte 12 Monate“)
+   - **Social**: Freunde · Gruppen · Gruppenfortschritt („Gruppe auswählen“) · Regionale Rankings · Ranking-Umfeld
+
+   Einzel-Widgets, die schon auf Home sind, tragen „Schon auf Home“.
 2. **Auswahl je Art**: Freunde (Chips mit Haken/Plus, „Weitere…“ → vollständige Liste, Widget-Name mit Löschen,
    Hinweis „Mehrere Freunde-Widgets mit eigener Auswahl möglich – ohne Gruppe.“), Gruppen (Alle Gruppen oder eine
-   Gruppe), Regionale Rankings (Ebenen, mindestens eine), Ranking-Umfeld (Ebene mit Gebietsnamen), Aktivität
-   (Schritte, Distanz, aktive Kalorien); Woche, Streak, Kalender ohne weitere Auswahl.
+   Gruppe), Regionale Rankings („x von 4 Ebenen sichtbar“, „Alle vier zeigen“, mindestens eine Ebene; dieselben
+   Bezeichnungen wie auf den Karten), Ranking-Umfeld (Ebene mit Gebietsnamen), Aktivität (Schritte, Distanz, aktive
+   Kalorien), Persönliche Rekorde (Rekordart), Gruppenfortschritt (eine Gruppe, Pflicht); Woche, Streak, Kalender,
+   Tagesvergleich, Flammen-Woche, Aktivitätszeiten ohne weitere Auswahl.
 3. **Widget-Vorschau**: das echte Widget mit echten Daten in der gewählten Größe; ändert sich sofort mit Kategorie,
    Auswahl und Größe.
 4. **Größe auswählen**: vier Kacheln mit verkleinerter Live-Vorschau; nicht unterstützte Größen sind deaktiviert.
@@ -102,7 +107,7 @@ Unterseite von Home: „‹ Anpassen“ → pace → „Widget hinzufügen“ (b
 | Widget | Klein | Mittel | Groß | Max |
 |---|---|---|---|---|
 | Regionale Karten | Leiste mit Platz und Ebene | vier Karten (Bild 9) | Karten + Abstand zum nächsten Platz | dazu je Ebene „Noch … bis Platz …“ |
-| Schritte heute | – | Bild 9 | + Stockwerke, Trainingsminuten | + gestern, Ø 7 Tage |
+| Schritte heute | Zahl, Prozent, Balken | Bild 9 (Zahl, Ziel, Balken, „Noch …“, Ring, Distanz, Kalorien) | + Stockwerke, Training | + Mini-Diagramm „Letzte 7 Tage“ mit Ziellinie, gestern, Ø 7 Tage |
 | Woche | Summe + Zieltage | 7 Tageskacheln | + Gesamt, Durchschnitt | Diagramm mit Achse und Ziellinie |
 | Persönliche Streak | Flamme + Serie | Serie + Rekord + Status | + Wochenleiste | + 4 Wochen kompakt, letzte 30 Tage |
 | Ranking-Umfeld | eigener Platz + Abstand | 3 Zeilen | 5 Zeilen | Diagramm (bis 7 Plätze) |
@@ -111,6 +116,11 @@ Unterseite von Home: „‹ Anpassen“ → pace → „Widget hinzufügen“ (b
 | Gruppen (alle) | längste Serie | 3 Gruppen | 5 Gruppen | 8 Gruppen |
 | Aktivität | Wert heute | + Mini-Diagramm | + Summe, Durchschnitt | großes Diagramm + bester Tag |
 | Kalender | laufende Woche | zwei Wochen | Monat | Monat mit Schrittzahlen |
+| Tagesvergleich | Unterschied in einem Satz | + Zahlen, Balken heute/gestern | + gestern insgesamt | größere Darstellung |
+| Flammen-Woche | Mo–So | + aktuelle Serie | + Rekord | + nächster Meilenstein |
+| Persönliche Rekorde | gewählter Rekord | + Datum/Zeitraum | + zwei weitere Rekorde | alle Rekorde |
+| Aktivitätszeiten | aktivste Tageszeit | fünf Tageszeiten als Balken | + Werte je Tageszeit | + 24 Stunden |
+| Gruppenfortschritt | Name, x/n, 🔥 + Zahl, Balken | + „x von n …“ + Hinweis | + Tagesziel, beste Serie | wie Groß |
 
 - **Streak**: Ist die Serie 0, zeigt der Verlauf trotzdem erreichte Tage; der Status erklärt den Unterschied
   („Gerade keine laufende Serie – diese Woche hast du dein Ziel an 2 Tagen erreicht.“).
@@ -121,6 +131,34 @@ Unterseite von Home: „‹ Anpassen“ → pace → „Widget hinzufügen“ (b
   mehr, erscheint ein Hinweis statt einer leeren Karte.
 - **Freunde-Widget**: nur die ausgewählten Freunde + „Du“ aus dem echten Freundesranking; Plätze innerhalb der
   Auswahl. Nicht mehr befreundete Personen werden als Hinweis gezählt.
+
+- **Regionale Karten (Auftrag 5)**: Ohne eigene Auswahl immer alle vier Ebenen – auch vor dem Laden, ohne
+  Platzierungen, bei kreisfreier Stadt, Stadtstaat und unvollständigen Gebietsdaten. Weniger als vier Karten gibt es
+  nur, wenn Ebenen bewusst abgewählt wurden; der Anpassen-Modus zeigt dann „3 von 4 Ebenen sichtbar“. Ein zweites
+  gleiches Widget verweist auf „Größe auswählen“, statt zum Abwählen von Ebenen zu verleiten.
+
+### Neue Widgets (Auftrag 5)
+
+Alle aus vorhandenen Daten, ohne neue Tabelle oder Abfrage am Server:
+
+- **Tagesvergleich**: heute (mit Live-Schritten) gegen gestern **bis zur gleichen Uhrzeit** aus den Stundenwerten von
+  gestern (volle Stunden + anteilig die laufende Stunde). Ohne Stundenwerte von gestern: „Noch kein Vergleich
+  verfügbar“. War gestern bis jetzt 0, gibt es den Unterschied, aber keinen Prozentwert. Tippen → Tagesstatistik.
+- **Aktivitätszeiten**: Stundenwerte von heute in Tageszeiten (Nacht 0–5, Morgen 5–11, Mittag 11–14, Nachmittag
+  14–18, Abend 18–24); Max zusätzlich 24 Stunden. Ohne Stundenwerte ein Hinweis – nie eine aus der Tagessumme
+  verteilte Kurve. Tippen → Tagesstatistik.
+- **Flammen-Woche**: laufende Woche wie im Flammen-Widget (jeder Tag mit dem damals geltenden Ziel), optional
+  aktuelle Serie, Rekord, Meilenstein. Tippen → „Deine Flamme“.
+- **Persönliche Rekorde**: bester Tag, beste Woche, bester Monat, längste und aktuelle Flamme, größte Distanz –
+  dieselbe Berechnung wie in der Statistik (`StatisticsReport.stepRecords`), Zeitraum immer benannt („Letzte 12
+  Monate“). Mehrere Rekord-Widgets mit verschiedenen Rekorden möglich. Tippen → Statistik (Monat).
+- **Gruppenfortschritt**: eine gewählte Gruppe mit `GroupDayProgress` (wie die Gruppenkarte in der Gruppeninfo):
+  Name, Mitglieder, „x von n …“, Balken mit Flammen-Schwelle (⌈n/3⌉ vom Server), 🔥 + Zahl, optional Hinweis und
+  Tagesziel/beste Serie. Tippen → Gruppe, Flamme → Gruppenkalender (Zurück → Gruppe). Verlassene oder gelöschte
+  Gruppe: Hinweis statt leerer Karte.
+- **Laden**: Tagesvergleich und Aktivitätszeiten teilen sich eine Abfrage der Stundenwerte; neu geladen wird nur bei
+  neuem Tag oder neuem HealthKit-Stand, die Werte von gestern einmal pro Tag. Flammen-Woche und Rekorde nutzen den
+  ohnehin geladenen Verlauf, Gruppenfortschritt die geladenen Gruppen.
 
 ## Eigene Inhalte je Widget (Auftrag 4)
 
@@ -135,6 +173,10 @@ Standard seiner Größe (Tabelle oben); eine Auswahl, die dem Standard entsprich
 | Freunde | Abstand zum Platz davor (je Zeile), Diagramm (ab „Groß“) |
 | Gruppe (eine gewählte) | heute erreicht, Tagesziel & beste Serie, Mitglieder als Kennzahlen |
 | Ranking-Umfeld | Abstand zum nächsten Platz ein/aus |
+| Schritte heute (Auftrag 5) | zusätzlich Mini-Diagramm „Letzte 7 Tage“ (ab „Groß“, Standard in Max) |
+| Tagesvergleich | Balken heute/gestern, gestern insgesamt |
+| Flammen-Woche | aktuelle Serie, Rekord, nächster Meilenstein |
+| Gruppenfortschritt | Hinweis zur Gruppenflamme, Tagesziel & beste Serie |
 
 - **Passend zur Größe**: Klein zeigt nur das Wichtigste, Mittel höchstens zwei, Groß drei, Max alle Zusatzinhalte –
   immer in fester Reihenfolge; die Auswahl erklärt das.
