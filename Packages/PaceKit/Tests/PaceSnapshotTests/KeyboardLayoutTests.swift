@@ -91,6 +91,18 @@ struct KeyboardLayoutTests {
         print("KeyboardLayoutTests: Eingabe endet bei \(closed.field) (ohne) bzw. \(open.field) (mit 300 pt), Seitenleiste bis \(open.pager).")
         #expect(abs((closed.field - open.field) - 300) < 2, "Die Eingabe rückt nicht genau um die Tastaturhöhe nach oben")
         #expect(open.field <= open.pager - 300 + 1)
+
+        // Antwortvorschau + Tastatur: Die Vorschau sitzt über der Eingabe – beide bleiben über der Tastatur, die
+        // Eingabe rückt um dieselbe Höhe nach oben wie ohne Vorschau.
+        let message = try #require(chat.messages.last)
+        chat.startReply(to: message)
+        defer { chat.cancelReply() }
+        #expect(chat.replyingTo == message)
+        let replyClosed = try await inputBottom(overlap: nil)
+        let replyOpen = try await inputBottom(overlap: 300)
+        print("KeyboardLayoutTests: mit Antwortvorschau \(replyClosed.field) (ohne) bzw. \(replyOpen.field) (mit 300 pt).")
+        #expect(abs((replyClosed.field - replyOpen.field) - 300) < 2, "Mit Antwortvorschau rückt die Eingabe nicht genau um die Tastaturhöhe")
+        #expect(replyOpen.field <= replyOpen.pager - 300 + 1)
     }
 
     private static func pager(in view: UIView) -> UIScrollView? {

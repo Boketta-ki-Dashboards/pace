@@ -86,7 +86,7 @@ public struct HomeFriendsWidget: Equatable, Sendable {
             return PaceLocalization.text(de: "Gleichstand mit \(rank)", en: "Tied with \(rank)", ru: "Вровень с \(rank)")
         }
         let steps = gap.paceFormatted
-        return PaceLocalization.text(de: "\(steps) hinter \(rank)", en: "\(steps) behind \(rank)", ru: "На \(steps) позади \(rank)")
+        return PaceLocalization.text(de: "\(steps) hinter \(rank)", en: "\(steps) behind \(rank)", ru: "Отставание \(steps) от \(rank)")
     }
 
     /// z. B. `1 ausgewählte Person ist nicht mehr in deiner Freundesliste.`

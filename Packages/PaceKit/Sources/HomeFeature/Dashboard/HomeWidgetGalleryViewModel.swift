@@ -268,7 +268,7 @@ public final class HomeWidgetGalleryViewModel {
             return PaceLocalization.text(
                 de: "„Klein“ zeigt nur das Wichtigste – Zusatzinhalte ab „Mittel“.",
                 en: "“Small” shows only the essentials – extras from “Medium”.",
-                ru: "«Маленький» показывает только главное – дополнительно от «Средний»."
+                ru: "«Маленький» показывает только главное – дополнительное содержимое начиная с размера «Средний»."
             )
         }
         if selected.count > limit {

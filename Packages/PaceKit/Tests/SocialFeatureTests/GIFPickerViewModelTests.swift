@@ -135,6 +135,30 @@ struct GIFPickerViewModelTests {
         #expect(picker.dataToSend == nil)
     }
 
+    /// GIF auswählen und senden: Die geladene Datei geht als GIF über den geschützten Chat-Speicher (kein Link).
+    @Test func chosenGIFIsUploadedAndSentAsGIF() async throws {
+        let conversation = ChatFixtures.group()
+        let repository = ChatRepositoryStub { $0.conversations = [conversation] }
+        let media = MediaRepositoryStub()
+        let list = ChatListViewModel(repository: repository, media: media, calendar: Fixtures.activityCalendar, gifSearch: SearchStub())
+        await list.load()
+        let chat = list.chat(for: ChatTarget(conversation))
+        await chat.load()
+
+        let picker = GIFPickerViewModel(search: chat.gifSearch)
+        await picker.load()
+        await picker.select(try #require(picker.results.first))
+        await chat.sendMedia(try #require(picker.dataToSend), contentType: "image/gif")
+
+        #expect(chat.messages.first?.kind == .gif)
+        #expect(media.state.withLock { $0.uploads } == [.chat(conversationID: conversation.id)])
+        let draft = try #require(repository.state.withLock { $0.sentDrafts }.first?.0)
+        #expect(draft.kind == .gif)
+        // Datei im Ordner der Unterhaltung im privaten Bucket, kein fremder Link.
+        #expect(draft.mediaPath?.hasPrefix(conversation.id.uuidString.lowercased() + "/") == true)
+        #expect(draft.mediaPath?.contains("giphy") == false)
+    }
+
     @Test func profilesCanBeSharedFromTheChat() async throws {
         let known = ChatFixtures.direct(peer: ChatFixtures.leon)
         let repository = ChatRepositoryStub { $0.conversations = [known] }
