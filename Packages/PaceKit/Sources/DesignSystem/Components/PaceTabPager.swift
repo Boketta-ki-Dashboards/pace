@@ -19,8 +19,9 @@ private let paceTabPagerSpace = "pace.tab.pager"
 /// - Tastatur: Eine Scrollansicht verbraucht die Tastatur als eigenen Scroll-Abstand und gibt sie nicht an ihre Inhalte
 ///   weiter – bei der waagerechten Seitenleiste blieben Eingabefelder (z. B. die Chat-Eingabe) dadurch unter der
 ///   Tastatur. Die Leiste ignoriert die Tastatur deshalb selbst und gibt die gemessene Überdeckung
-///   (``PaceKeyboardOverlapReader``, ohne feste Werte) jeder Seite als untere Safe Area weiter: Inhalte enden direkt
-///   über der Tastatur.
+///   (``PaceKeyboardOverlapReader``, ohne feste Werte) als unteren Abstand an die sichtbare Seite weiter: Sie endet
+///   direkt an der Tastaturkante. Darunter liegt der Bildschirmhintergrund, damit beim Ein- und Ausblenden kein
+///   Spalt in anderer Farbe zu sehen ist.
 public struct PaceTabPager<Tab: Hashable, Page: View>: View {
     private let tabs: [Tab]
     @Binding private var selection: Tab
@@ -66,8 +67,11 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
             HStack(spacing: 0) {
                 ForEach(tabs, id: \.self) { tab in
                     page(tab)
-                        // Nur die sichtbare Seite bekommt die Tastatur (die anderen müssen nicht neu angeordnet werden).
-                        .safeAreaPadding(.bottom, tab == selection ? keyboardOverlapForTesting ?? keyboardOverlap : 0)
+                        // Nur die sichtbare Seite rückt über die Tastatur (die anderen müssen nicht neu angeordnet
+                        // werden). Echter Abstand statt Safe Area: Die Seite endet an der Tastaturkante, so kommt die
+                        // Verkleinerung sicher bis in eingebettete NavigationStacks an, und der Home-Indikator zählt
+                        // nicht zusätzlich (sonst bliebe eine Lücke über der Tastatur).
+                        .padding(.bottom, tab == selection ? keyboardOverlapForTesting ?? keyboardOverlap : 0)
                         .containerRelativeFrame(.horizontal)
                         .id(tab)
                 }
@@ -86,6 +90,7 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
         .scrollIndicators(.hidden)
         .scrollDisabled(!isPagingEnabled)
         .ignoresSafeArea(.keyboard)
+        .background(PaceColor.background.ignoresSafeArea())
         .background {
             PaceKeyboardOverlapReader { overlap in
                 guard abs(overlap - keyboardOverlap) > 0.5 else { return }
