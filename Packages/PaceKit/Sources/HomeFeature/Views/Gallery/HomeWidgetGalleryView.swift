@@ -50,12 +50,33 @@ struct HomeWidgetGalleryContent: View {
     var onShowAllFriends: () -> Void = {}
     var onSave: () -> Void = {}
 
+    @FocusState private var isNameFocused: Bool
+
     private let columns = [
         GridItem(.flexible(), spacing: PaceSpacing.s, alignment: .top),
         GridItem(.flexible(), spacing: PaceSpacing.s, alignment: .top),
     ]
 
+    /// Kennung des Namensfelds (zum Hinscrollen über die Tastatur).
+    private static let nameFieldID = "gallery.name"
+
     var body: some View {
+        ScrollViewReader { proxy in
+            content
+                // Das Namensfeld liegt weit unten – nach dem Einblenden der Tastatur hinscrollen.
+                .onChange(of: isNameFocused) { _, isFocused in
+                    guard isFocused else { return }
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            proxy.scrollTo(Self.nameFieldID, anchor: .center)
+                        }
+                    }
+                }
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.m) {
             PaceSubpageHeader(backTitle: HomeTexts.customize, title: gallery.title)
 
@@ -280,6 +301,7 @@ struct HomeWidgetGalleryContent: View {
                 .font(.body)
                 .textInputAutocapitalization(.sentences)
                 .submitLabel(.done)
+                .focused($isNameFocused)
             if !gallery.name.isEmpty {
                 Button {
                     gallery.name = ""
@@ -298,6 +320,7 @@ struct HomeWidgetGalleryContent: View {
         .frame(minHeight: 48)
         .background(PaceColor.surface, in: RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous).strokeBorder(PaceColor.border, lineWidth: 1))
+        .id(Self.nameFieldID)
         .onChange(of: gallery.name) { _, newValue in
             if newValue.count > HomeWidgetConfiguration.nameLength {
                 gallery.name = String(newValue.prefix(HomeWidgetConfiguration.nameLength))

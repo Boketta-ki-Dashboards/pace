@@ -118,6 +118,9 @@ public struct StatisticsReport: Equatable, Sendable {
     public private(set) var periodBests: [Best] = []
     /// z. B. „Bestwerte dieser Woche“.
     public private(set) var periodBestsTitle: String?
+    /// Tagesansicht: Erklärung statt Stundenbalken, wenn es für den Tag keine Stundenwerte geben kann (geschätzte
+    /// Kalorien – Stundenwerte kommen nur aus gemessenen Daten).
+    public private(set) var hourlyUnavailableText: String?
     public private(set) var notes: [String]
     public let isMetricAvailable: Bool
     public let canShowPrevious: Bool
@@ -210,31 +213,34 @@ public struct StatisticsReport: Equatable, Sendable {
         let upper = min(last, input.today)
         guard first <= upper else { return [] }
         let values = input.history.summaries(from: first, through: upper, calendar: calendar)
-            .compactMap { day in metric.value(of: day).map { (day: day.date, value: $0) } }
+            .compactMap { day in
+                metric.value(of: day).map { (day: day.date, value: $0, isEstimated: isEstimated(day, metric: metric)) }
+            }
             .filter { $0.value > 0 }
         var result: [Best] = []
-        if let best = values.max(by: { ($0.value, $0.day) < ($1.value, $1.day) }) {
+        // In der Woche steht der beste Tag schon als Kachel darüber – dort nicht doppelt.
+        if input.period == .month, let best = values.max(by: { ($0.value, $0.day) < ($1.value, $1.day) }) {
             result.append(Best(
                 kind: .periodDay,
-                title: input.period == .week
-                    ? PaceLocalization.text(de: "Bester Tag der Woche", en: "Best day of the week", ru: "Лучший день недели")
-                    : PaceLocalization.text(de: "Bester Tag des Monats", en: "Best day of the month", ru: "Лучший день месяца"),
-                value: metric.formatWithUnit(best.value, formatter: formatter),
+                title: PaceLocalization.text(de: "Bester Tag des Monats", en: "Best day of the month", ru: "Лучший день месяца"),
+                value: formatted(best.value, metric: metric, formatter: formatter, isEstimated: best.isEstimated),
                 detail: formatter.dayWithWeekdayShort(best.day)
             ))
         }
         if input.period == .month {
-            var weeks: [LocalDate: Double] = [:]
+            var weeks: [LocalDate: (value: Double, isEstimated: Bool)] = [:]
             for entry in values {
-                weeks[calendar.startOfWeek(containing: entry.day), default: 0] += entry.value
+                let week = calendar.startOfWeek(containing: entry.day)
+                let current = weeks[week] ?? (0, false)
+                weeks[week] = (current.value + entry.value, current.isEstimated || entry.isEstimated)
             }
-            if weeks.count > 1, let best = weeks.max(by: { ($0.value, $0.key) < ($1.value, $1.key) }) {
+            if weeks.count > 1, let best = weeks.max(by: { ($0.value.value, $0.key) < ($1.value.value, $1.key) }) {
                 let start = max(best.key, first)
                 let end = min(calendar.adding(6, to: best.key), last)
                 result.append(Best(
                     kind: .periodWeek,
                     title: PaceLocalization.text(de: "Beste Woche im Monat", en: "Best week of the month", ru: "Лучшая неделя месяца"),
-                    value: metric.formatWithUnit(best.value, formatter: formatter),
+                    value: formatted(best.value.value, metric: metric, formatter: formatter, isEstimated: best.value.isEstimated),
                     detail: formatter.dayRange(start, end)
                 ))
             }
@@ -274,6 +280,8 @@ public struct StatisticsReport: Equatable, Sendable {
         let values = known.compactMap { day in metric.value(of: day).map { (day: day, value: $0) } }
         let total = values.reduce(0) { $0 + $1.value }
         let average = values.isEmpty ? nil : total / Double(values.count)
+        // Geschätzte Kalorien im Zeitraum: alle daraus abgeleiteten Werte stehen mit „≈“.
+        let hasEstimate = values.contains { isEstimated($0.day, metric: metric) }
 
         let bars = days.map { day -> Bar in
             let summary = day <= input.today ? input.history.summary(for: day) : nil
@@ -293,7 +301,7 @@ public struct StatisticsReport: Equatable, Sendable {
             tiles.append(Tile(
                 kind: .average,
                 title: PaceLocalization.text(de: "Ø pro Tag", en: "Avg. per day", ru: "В среднем за день"),
-                value: metric.formatWithUnit(average, formatter: formatter),
+                value: formatted(average, metric: metric, formatter: formatter, isEstimated: hasEstimate),
                 detail: ActivityTexts.days(values.count),
                 isAvailable: true
             ))
@@ -317,7 +325,7 @@ public struct StatisticsReport: Equatable, Sendable {
             tiles.append(Tile(
                 kind: .bestDay,
                 title: Texts.bestDay,
-                value: metric.formatWithUnit(best.value, formatter: formatter),
+                value: formatted(best.value, metric: metric, formatter: formatter, isEstimated: isEstimated(best.day, metric: metric)),
                 detail: best.day.date == input.today ? Texts.today : formatter.dayWithWeekdayShort(best.day.date),
                 isAvailable: true
             ))
@@ -330,8 +338,8 @@ public struct StatisticsReport: Equatable, Sendable {
                 title: input.period == .week
                     ? PaceLocalization.text(de: "Vorwoche", en: "Previous week", ru: "Прошлая неделя")
                     : PaceLocalization.text(de: "Vormonat", en: "Previous month", ru: "Прошлый месяц"),
-                value: metric.formatWithUnit(previous.total, formatter: formatter),
-                detail: Texts.averagePerDay(metric.formatWithUnit(previous.average, formatter: formatter)),
+                value: formatted(previous.total, metric: metric, formatter: formatter, isEstimated: previous.isEstimated),
+                detail: Texts.averagePerDay(formatted(previous.average, metric: metric, formatter: formatter, isEstimated: previous.isEstimated)),
                 isAvailable: true
             ))
         }
@@ -382,7 +390,9 @@ public struct StatisticsReport: Equatable, Sendable {
             unitText: metric.unit(for: total),
             // Schritte wie auf Home ohne Einheit („Ø 7.473 pro Tag“), Distanz und Kalorien mit („Ø 6,5 km pro Tag“).
             secondaryText: isAvailable ? average.map { value in
-                let text = metric == .steps ? metric.format(value, formatter: formatter) : metric.formatWithUnit(value, formatter: formatter)
+                let text = metric == .steps
+                    ? metric.format(value, formatter: formatter)
+                    : formatted(value, metric: metric, formatter: formatter, isEstimated: hasEstimate)
                 return Texts.averagePerDay(text)
             } : nil,
             progress: nil,
@@ -401,7 +411,10 @@ public struct StatisticsReport: Equatable, Sendable {
     }
 
     /// Summe und Tagesdurchschnitt des vorherigen Zeitraums – nur, wenn er vollständig im Verlauf liegt.
-    private static func previousPeriodTotals(_ input: Input, first: LocalDate) -> (total: Double, average: Double)? {
+    private static func previousPeriodTotals(
+        _ input: Input,
+        first: LocalDate
+    ) -> (total: Double, average: Double, isEstimated: Bool)? {
         let calendar = input.calendar
         let previousAnchor = calendar.adding(-1, to: first)
         let (previousFirst, previousLast) = bounds(of: input.period, containing: previousAnchor, calendar: calendar)
@@ -411,7 +424,7 @@ public struct StatisticsReport: Equatable, Sendable {
         let values = summaries.compactMap { input.metric.value(of: $0) }
         guard values.count == days.count else { return nil }
         let total = values.reduce(0, +)
-        return (total, total / Double(days.count))
+        return (total, total / Double(days.count), summaries.contains { isEstimated($0, metric: input.metric) })
     }
 
     private static func rangeTitle(_ input: Input, first: LocalDate, last: LocalDate) -> (String, String?) {
@@ -447,38 +460,46 @@ public struct StatisticsReport: Equatable, Sendable {
         let days = history.summaries(from: lower, through: upper, calendar: calendar)
         var result: [Best] = []
 
-        let dayValues = days.compactMap { day in metric.value(of: day).map { (day.date, $0) } }
-        if let best = dayValues.filter({ $0.1 > 0 }).max(by: { ($0.1, $0.0) < ($1.1, $1.0) }) {
+        let dayValues = days.compactMap { day in
+            metric.value(of: day).map { (date: day.date, value: $0, isEstimated: isEstimated(day, metric: metric)) }
+        }
+        if let best = dayValues.filter({ $0.value > 0 }).max(by: { ($0.value, $0.date) < ($1.value, $1.date) }) {
             result.append(Best(
                 kind: .day,
                 title: Texts.bestDay,
-                value: metric.formatWithUnit(best.1, formatter: formatter),
-                detail: formatter.dayWithWeekdayShort(best.0)
+                value: formatted(best.value, metric: metric, formatter: formatter, isEstimated: best.isEstimated),
+                detail: formatter.dayWithWeekdayShort(best.date)
             ))
         }
 
         // Nur Wochen und Monate, die vollständig im Verlauf beginnen (keine angeschnittenen Zeiträume am Anfang).
-        var weeks: [LocalDate: Double] = [:]
-        var months: [LocalDate: Double] = [:]
-        for (day, value) in dayValues {
-            let week = calendar.startOfWeek(containing: day)
-            if week >= lower { weeks[week, default: 0] += value }
-            let month = calendar.startOfMonth(containing: day)
-            if month >= lower { months[month, default: 0] += value }
+        var weeks: [LocalDate: (value: Double, isEstimated: Bool)] = [:]
+        var months: [LocalDate: (value: Double, isEstimated: Bool)] = [:]
+        for entry in dayValues {
+            let week = calendar.startOfWeek(containing: entry.date)
+            if week >= lower {
+                let current = weeks[week] ?? (0, false)
+                weeks[week] = (current.value + entry.value, current.isEstimated || entry.isEstimated)
+            }
+            let month = calendar.startOfMonth(containing: entry.date)
+            if month >= lower {
+                let current = months[month] ?? (0, false)
+                months[month] = (current.value + entry.value, current.isEstimated || entry.isEstimated)
+            }
         }
-        if let best = weeks.filter({ $0.value > 0 }).max(by: { ($0.value, $0.key) < ($1.value, $1.key) }) {
+        if let best = weeks.filter({ $0.value.value > 0 }).max(by: { ($0.value.value, $0.key) < ($1.value.value, $1.key) }) {
             result.append(Best(
                 kind: .week,
                 title: PaceLocalization.text(de: "Beste Woche", en: "Best week", ru: "Лучшая неделя"),
-                value: metric.formatWithUnit(best.value, formatter: formatter),
+                value: formatted(best.value.value, metric: metric, formatter: formatter, isEstimated: best.value.isEstimated),
                 detail: formatter.dayRange(best.key, calendar.adding(6, to: best.key))
             ))
         }
-        if let best = months.filter({ $0.value > 0 }).max(by: { ($0.value, $0.key) < ($1.value, $1.key) }) {
+        if let best = months.filter({ $0.value.value > 0 }).max(by: { ($0.value.value, $0.key) < ($1.value.value, $1.key) }) {
             result.append(Best(
                 kind: .month,
                 title: PaceLocalization.text(de: "Bester Monat", en: "Best month", ru: "Лучший месяц"),
-                value: metric.formatWithUnit(best.value, formatter: formatter),
+                value: formatted(best.value.value, metric: metric, formatter: formatter, isEstimated: best.value.isEstimated),
                 detail: formatter.monthYear(best.key)
             ))
         }
@@ -498,9 +519,11 @@ public struct StatisticsReport: Equatable, Sendable {
                 detail: nil
             ))
         }
-        // Weiteste Strecke an einem Tag (Schritte-Ansicht; in der Distanz-Ansicht ist das schon der „Beste Tag“).
+        // Weiteste Strecke an einem Tag (Schritte-Ansicht; in der Distanz-Ansicht ist das schon der „Beste Tag“). Tage
+        // mit manuell eingetragenen Schritten zählen nicht – ihre Strecke kann ebenfalls eingetragen sein.
         if metric == .steps,
-           let best = days.compactMap({ day in day.walkingRunningDistanceMeters.map { (day.date, $0) } })
+           let best = days.filter({ !$0.hasNonCompetitionSteps })
+               .compactMap({ day in day.walkingRunningDistanceMeters.map { (day.date, $0) } })
                .filter({ $0.1 > 0 })
                .max(by: { ($0.1, $0.0) < ($1.1, $1.0) }) {
             result.append(Best(
@@ -544,9 +567,12 @@ public struct StatisticsReport: Equatable, Sendable {
             }
         }
 
-        // Ohne lesbare Werte dieser Kennzahl keine Stundenbalken – sie zeigten sonst überall 0.
-        let bars = isAvailable ? hourlyBars(input) : []
-        let comparison = dayComparison(input, value: value)
+        // Ohne lesbare Werte dieser Kennzahl keine Stundenbalken – sie zeigten sonst überall 0. Geschätzte Kalorien haben
+        // keine Stundenwerte (Apple Health hat für den Tag keine Messung): ebenfalls keine Balken, sondern ein Hinweis,
+        // und kein Vergleich „zur gleichen Zeit“ aus Stundenwerten.
+        let isEstimatedDay = summary.map { isEstimated($0, metric: metric) } ?? false
+        let bars = isAvailable && !isEstimatedDay ? hourlyBars(input) : []
+        let comparison = isEstimatedDay && isToday ? nil : dayComparison(input, value: value)
 
         var tiles: [Tile] = []
         func metricTile(_ kind: Tile.Kind, _ title: String, _ text: String?) {
@@ -610,7 +636,7 @@ public struct StatisticsReport: Equatable, Sendable {
             title = formatter.weekdayLong(day)
         }
 
-        return StatisticsReport(
+        var report = StatisticsReport(
             period: .day,
             metric: metric,
             anchor: input.anchor,
@@ -632,6 +658,20 @@ public struct StatisticsReport: Equatable, Sendable {
             canShowPrevious: calendar.adding(-1, to: day) >= input.history.range.lowerBound,
             canShowNext: calendar.adding(1, to: day) <= input.today
         )
+        if isEstimatedDay {
+            report.hourlyUnavailableText = ActivityTexts.hourlyEnergyEstimatedNote
+        }
+        return report
+    }
+
+    /// Ein Tag mit geschätzten (nicht gemessenen) aktiven Kalorien – nur für die Kennzahl Kalorien relevant.
+    private static func isEstimated(_ day: DailyActivitySummary, metric: StatisticsMetric) -> Bool {
+        metric == .activeEnergy && day.activeEnergy.isEstimated
+    }
+
+    /// Wert mit Einheit; geschätzte aktive Kalorien mit „≈“ – überall, nicht nur in der großen Zahl.
+    private static func formatted(_ value: Double, metric: StatisticsMetric, formatter: ActivityFormatter, isEstimated: Bool) -> String {
+        (isEstimated ? ActivityTexts.approximatelyPrefix : "") + metric.formatWithUnit(value, formatter: formatter)
     }
 
     /// 24 Stundenbalken, sobald die Stundenwerte dieses Tages und dieser Kennzahl geladen sind.

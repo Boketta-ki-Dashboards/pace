@@ -246,6 +246,12 @@ struct StatisticsContent: View {
                             .font(PaceFont.callout)
                             .foregroundStyle(PaceColor.textSecondary)
                             .frame(maxWidth: .infinity, minHeight: 120)
+                    } else if let text = report.hourlyUnavailableText {
+                        Text(text)
+                            .font(PaceFont.callout)
+                            .foregroundStyle(PaceColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, minHeight: 120)
                     } else if !report.bars.isEmpty {
                         StatisticsChart(report: report, onSelectDay: onSelectDay)
                             .frame(height: 180)

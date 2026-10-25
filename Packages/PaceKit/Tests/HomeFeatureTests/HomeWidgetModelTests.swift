@@ -434,6 +434,32 @@ struct HomeActivityWidgetTests {
         #expect(energy.todayText == "280 kcal")
     }
 
+    /// Heute gemessen (Apple Watch), an einem früheren Tag nur geschätzt: Summe/Durchschnitt mit „≈“, der heutige Wert
+    /// und seine Beschriftung aber als gemessen (Prüfbefund Auftrag 4).
+    @Test func todayCaptionFollowsTodaysSource() {
+        let days = (0..<7).map { offset in
+            DailyActivitySummary(
+                date: Fixtures.activityCalendar.adding(offset - 6, to: today),
+                healthSteps: 5_000,
+                competitionSteps: 5_000,
+                activeEnergyKilocalories: offset == 0 ? nil : 300,
+                estimatedActiveEnergyKilocalories: offset == 0 ? 200 : nil
+            )
+        }
+        let mixed = ActivityOverview(
+            today: days[6],
+            yesterday: days[5],
+            currentWeek: ActivityPeriodSummary(period: .currentWeek, days: Array(days.suffix(5))),
+            lastSevenDays: ActivityPeriodSummary(period: .lastSevenDays, days: days),
+            updatedAt: Fixtures.date(2026, 10, 16, 12)
+        )
+        let energy = HomeActivityWidget(metric: .activeEnergy, overview: mixed, formatter: formatter)
+        #expect(energy.isEstimated)
+        #expect(!energy.isTodayEstimated)
+        #expect(energy.todayText == "300 kcal")
+        #expect(energy.totalText?.hasPrefix("≈") == true)
+    }
+
     @Test func stepsSummaryOffersYesterdayAndAverageForTheMaxCard() {
         let summary = StepsTodaySummary(overview: overview, goal: 10_000, formatter: formatter)
         #expect(summary.yesterdayText == "6.000")

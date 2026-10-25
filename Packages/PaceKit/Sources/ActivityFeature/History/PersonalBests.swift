@@ -76,7 +76,8 @@ public enum PersonalBests {
         }
         if let overall = entry(
             .dayOverall,
-            PaceLocalization.text(de: "Bester Tag insgesamt", en: "Best day overall", ru: "Лучший день за всё время"),
+            // Der Verlauf reicht 12 Monate zurück – „insgesamt“ wäre zu viel versprochen.
+            PaceLocalization.text(de: "Bester Tag (12 Monate)", en: "Best day (12 months)", ru: "Лучший день (12 месяцев)"),
             best(from: history.range.lowerBound, through: history.range.upperBound)
         ) {
             result.append(overall)

@@ -322,6 +322,81 @@ struct StatisticsReportTests {
             .bests.contains { $0.title == "Längste Serie" })
     }
 
+    // MARK: Geschätzte Kalorien und Bestwerte des Zeitraums (Prüfbefunde Auftrag 4)
+
+    /// Woche: Mo–Mi gemessen (Apple Watch), Do und Fr (heute) nur geschätzt; davor gemessen.
+    private func mixedEnergyHistory() -> ActivityHistory {
+        let days = calendar.days(from: Fixtures.day(2026, 9, 1), through: today).map { date in
+            let isEstimated = date >= day(-1)
+            return DailyActivitySummary(
+                date: date,
+                healthSteps: 8_000,
+                competitionSteps: 8_000,
+                walkingRunningDistanceMeters: 6_000,
+                activeEnergyKilocalories: isEstimated ? nil : 300,
+                estimatedActiveEnergyKilocalories: isEstimated ? (date == today ? 700 : 250) : nil
+            )
+        }
+        return ActivityHistory(days: days, range: Fixtures.day(2026, 9, 1)...today, updatedAt: Fixtures.date(2026, 10, 16, 18))
+    }
+
+    @Test func estimatedCalorieDayHasNoFalseZeroHourlyChart() {
+        let hourly = HourlyValues(day: today, metric: .activeEnergy, values: [:], previousDay: [:])
+        let estimated = report(.day, .activeEnergy, history: mixedEnergyHistory(), hourly: hourly)
+        #expect(estimated.valueText?.hasPrefix("≈") == true)
+        #expect(estimated.bars.isEmpty)
+        #expect(estimated.hourlyUnavailableText == ActivityTexts.hourlyEnergyEstimatedNote)
+        #expect(estimated.comparison == nil)
+
+        let measuredDay = day(-3)
+        let measuredHourly = HourlyValues(day: measuredDay, metric: .activeEnergy, values: [9: 120, 17: 180], previousDay: nil)
+        let measured = report(.day, .activeEnergy, anchor: measuredDay, history: mixedEnergyHistory(), hourly: measuredHourly)
+        #expect(measured.bars.count == 24)
+        #expect(measured.hourlyUnavailableText == nil)
+    }
+
+    @Test func estimatedCaloriesAreMarkedInTilesAndBests() throws {
+        let week = report(.week, .activeEnergy, history: mixedEnergyHistory())
+        #expect(week.valueText?.hasPrefix("≈") == true)
+        let average = try #require(week.tiles.first { $0.kind == .average })
+        #expect(average.value.hasPrefix("≈"))
+        // Bester Tag ist der geschätzte heutige Tag (700 kcal) – mit „≈“.
+        let best = try #require(week.tiles.first { $0.kind == .bestDay })
+        #expect(best.value == "≈ 700 kcal")
+        #expect(week.secondaryText?.contains("≈") == true)
+        #expect(week.bests.first { $0.kind == .day }?.value == "≈ 700 kcal")
+        // Die Vorwoche war vollständig gemessen: ohne „≈“.
+        let previous = try #require(week.tiles.first { $0.kind == .previous })
+        #expect(!previous.value.contains("≈"))
+
+        // Rein gemessene Woche: nirgends „≈“.
+        let measured = report(.week, .activeEnergy, anchor: day(-7), history: mixedEnergyHistory())
+        #expect(!(measured.valueText ?? "").contains("≈"))
+        #expect(measured.tiles.allSatisfy { !$0.value.contains("≈") })
+    }
+
+    @Test func periodBestsAddInformationInsteadOfRepeatingTheBestDayTile() {
+        var steps = currentWeek
+        steps[Fixtures.day(2026, 10, 6)] = 15_000
+        let week = report(.week, history: history(steps: steps))
+        // In der Woche steht der beste Tag bereits als Kachel – keine zweite Karte.
+        #expect(week.periodBests.isEmpty)
+        #expect(week.periodBestsTitle == nil)
+
+        let month = report(.month, history: history(steps: steps))
+        #expect(month.periodBests.map(\.kind) == [.periodDay, .periodWeek])
+        #expect(month.periodBests.first?.value == "15.000 Schritte")
+    }
+
+    @Test func longestDistanceIgnoresDaysWithManuallyEnteredSteps() {
+        var steps = currentWeek
+        steps[day(-2)] = 20_000
+        // Am Tag mit 20.000 Schritten wurden zusätzlich Schritte manuell eingetragen (Health > Wettbewerb).
+        let report = report(.week, history: history(steps: steps, health: [day(-2): 30_000], distancePerStep: 0.7))
+        let distance = report.bests.first { $0.kind == .distanceDay }
+        #expect(distance?.detail == formatter.dayWithWeekdayShort(day(-3)))
+    }
+
     @Test func formatterProducesGermanRangesAndPercentages() {
         #expect(formatter.dayRange(day(-4), day(2)) == "12.–18. Okt.")
         #expect(formatter.monthYear(today) == "Oktober 2026")

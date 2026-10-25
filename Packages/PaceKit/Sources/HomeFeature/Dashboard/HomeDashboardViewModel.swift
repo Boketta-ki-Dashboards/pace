@@ -13,20 +13,16 @@ public struct HomeWidgetGalleryRoute: Hashable, Sendable {
     }
 }
 
-/// Navigation zu „Mitteilungen“.
 /// Ziel einer Navigation im Home-Tab. Ein typisierter Pfad, damit dieselbe Seite nie zweimal aufliegt
 /// (``PaceNavigationRules``) – z. B. bei schnellem Doppeltippen auf ein Widget.
 public enum HomeRoute: Hashable, Sendable {
     case statistics(StatisticsRoute)
     case calendar(CalendarRoute)
     case gallery(HomeWidgetGalleryRoute)
+    /// Mitteilungen (Glocke im Kopf).
     case notifications
     /// Persönliche Flamme mit Flammenkalender.
     case streak
-}
-
-public struct HomeNotificationsRoute: Hashable, Sendable {
-    public init() {}
 }
 
 /// Das Home-Dashboard: Bewegungsdaten, Tagesziel, Serie, regionale Platzierungen und die vom Nutzer gewählten Widgets.

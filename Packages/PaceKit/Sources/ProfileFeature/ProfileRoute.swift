@@ -48,7 +48,7 @@ public enum ProfileRoute: Hashable, Sendable {
         case .statistics: PaceLocalization.text(de: "Statistik", en: "Statistics", ru: "Статистика")
         case .activityHealth: PaceLocalization.text(de: "Aktivität & Gesundheit", en: "Activity & health", ru: "Активность и здоровье")
         case .calorieEstimation: PaceLocalization.text(de: "Kalorienschätzung", en: "Calorie estimate", ru: "Оценка калорий")
-        case .dataHelpLegal: PaceLocalization.text(de: "Daten, Hilfe & Rechtliches", en: "Data, help & legal", ru: "Данные, помощь и право")
+        case .dataHelpLegal: PaceLocalization.text(de: "Daten, Hilfe & Rechtliches", en: "Data, help & legal", ru: "Данные, помощь и правовая информация")
         }
     }
 }

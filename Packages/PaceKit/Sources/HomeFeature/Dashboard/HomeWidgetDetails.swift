@@ -187,6 +187,11 @@ public enum StreakMilestone {
         return (max(current, steps.last ?? 0) / 100 + 1) * 100
     }
 
+    /// „дня“ bzw. „дней“ nach „до“ (Genitiv): до 21 дня, до 7 дней.
+    static func russianDaysGenitive(_ count: Int) -> String {
+        count % 10 == 1 && count % 100 != 11 ? "дня" : "дней"
+    }
+
     /// z. B. „Noch 2 Tage bis zu 7 Tagen in Folge“. Ist das Ziel heute noch offen, zählt heute als erster dieser Tage.
     public static func text(current: Int) -> String {
         let target = next(after: current)
@@ -195,7 +200,7 @@ public enum StreakMilestone {
         return PaceLocalization.text(
             de: "Noch \(days) bis zu \(goal) Tagen in Folge",
             en: "\(days) more to reach \(goal) in a row",
-            ru: "Ещё \(days) до отметки \(goal) подряд"
+            ru: "Ещё \(days) до \(goal) \(russianDaysGenitive(target)) подряд"
         )
     }
 }

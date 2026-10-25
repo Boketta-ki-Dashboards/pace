@@ -132,10 +132,13 @@ gemessenen aktiven Kalorien hat**, zeigt Pace einen Schätzwert (`CalorieEstimat
 - Gemessen hat immer Vorrang; Messung und Schätzung werden nie addiert. Ein Zeitraum mit mindestens einem geschätzten
   Tag gilt als geschätzt.
 - Kennzeichnung überall: „≈ 245 kcal“ mit „Geschätzte aktive Kalorien“ (Home, Aktivitäts-Widget, Tagesdetails),
-  Statistik mit Herkunft „Gemessen“/„Geschätzt“.
+  Statistik mit Herkunft „Gemessen“/„Geschätzt“; auch Kacheln (Ø, bester Tag, Vorzeitraum) und Bestwerte tragen „≈“,
+  sobald ein beteiligter Tag geschätzt ist. Für geschätzte Tage gibt es keine Stundenbalken (Apple Health hat keine
+  Stundenwerte) – stattdessen ein Hinweis, nie eine Linie aus Nullen.
 - Grenzen: Steigungen, Treppen und Laufen werden nicht eigens berücksichtigt (Laufen kostet etwa doppelt so viel).
-- Datenschutz: Größe und Gewicht liegen nur auf dem Gerät (`UserDefaults`, Schlüssel `pace.bodyMetrics.v1`, im
-  Datenexport enthalten, beim Löschen entfernt) und gehen nie an Server, Freunde, Gruppen, Rankings oder Chats.
+- Datenschutz: Größe und Gewicht werden nur auf dem Gerät gespeichert (`UserDefaults`, Schlüssel
+  `pace.bodyMetrics.v1`; wie alle App-Daten Teil der Gerätebackups; im Datenexport enthalten, beim Löschen entfernt)
+  und gehen nie an Server, Freunde, Gruppen, Rankings oder Chats.
   Schritte, Wettbewerbsschritte und Rankings bleiben von der Schätzung unberührt.
 
 ## Live-Schritte (Core Motion)

@@ -18,6 +18,9 @@ public struct GIPHYSearchService: GIFSearching {
 
     public typealias Loader = @Sendable (URLRequest) async throws -> (Data, URLResponse)
 
+    /// Eigene Sitzung ohne Cookies und dauerhaften Cache – getrennt vom Rest der App.
+    static let session = URLSession(configuration: .ephemeral)
+
     private let apiKey: String
     private let load: Loader
     private let language: @Sendable () -> String
@@ -26,12 +29,12 @@ public struct GIPHYSearchService: GIFSearching {
     public init?(
         apiKey: String?,
         language: @escaping @Sendable () -> String = { PaceLocalization.shared.effectiveLanguage.rawValue },
-        load: @escaping Loader = { try await URLSession.shared.data(for: $0) }
+        load: Loader? = nil
     ) {
         guard let key = ConfigurationValue.cleaned(apiKey), key.allSatisfy({ $0.isLetter || $0.isNumber }) else { return nil }
         self.apiKey = key
         self.language = language
-        self.load = load
+        self.load = load ?? { try await Self.session.data(for: $0) }
     }
 
     /// Aus der Info.plist der App; `nil`, wenn kein Schlüssel eingetragen ist.
@@ -43,9 +46,9 @@ public struct GIPHYSearchService: GIFSearching {
 
     public var privacyNote: String {
         PaceLocalization.text(
-            de: "Suchbegriffe gehen an GIPHY. Gesendet wird eine Kopie des GIFs – nur für diesen Chat sichtbar.",
-            en: "Search terms are sent to GIPHY. A copy of the GIF is sent – visible only in this chat.",
-            ru: "Поисковые запросы передаются GIPHY. Отправляется копия GIF – её видят только участники чата."
+            de: "Die GIF-Suche lädt Inhalte von GIPHY; GIPHY erhält dabei deine IP-Adresse und deine Suchbegriffe. Gesendet wird eine Kopie des GIFs – nur für diesen Chat sichtbar.",
+            en: "GIF search loads content from GIPHY; GIPHY receives your IP address and your search terms. A copy of the GIF is sent – visible only in this chat.",
+            ru: "Поиск GIF загружает контент с GIPHY; GIPHY получает твой IP-адрес и поисковые запросы. Отправляется копия GIF – её видят только участники чата."
         )
     }
 
@@ -72,6 +75,9 @@ public struct GIPHYSearchService: GIFSearching {
             throw Self.map(error)
         }
         try Self.check(response)
+        // Nach Weiterleitungen muss die Datei weiterhin von GIPHY kommen.
+        if let finalURL = response.url, !Self.isAllowedMediaURL(finalURL) { throw .unsuitableFile }
+        if response.expectedContentLength > Int64(maximumBytes) { throw .unsuitableFile }
         guard data.count <= maximumBytes, GIFRules.isGIF(data) else { throw .unsuitableFile }
         return data
     }

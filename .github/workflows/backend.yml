@@ -41,6 +41,14 @@ jobs:
             exit 1
           fi
 
+      - name: No GIPHY key in the repository
+        run: |
+          # GIPHY_API_KEY gehört nur in Config/Pace.xcconfig (von Git ignoriert); versionierte Dateien bleiben leer.
+          if git grep -nE '^[[:space:]]*GIPHY_API_KEY[[:space:]]*=[[:space:]]*[^[:space:]/]' -- '*.xcconfig' '*.example'; then
+            echo "::error::GIPHY-Schlüssel in einer versionierten Datei gefunden"
+            exit 1
+          fi
+
   database:
     name: Database & integration
     runs-on: ubuntu-latest

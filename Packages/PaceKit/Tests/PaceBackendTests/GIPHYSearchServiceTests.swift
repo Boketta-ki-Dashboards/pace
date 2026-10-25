@@ -137,4 +137,16 @@ struct GIPHYSearchServiceTests {
         // Fremde Links werden gar nicht erst geladen.
         #expect(log.requests.isEmpty)
     }
+
+    @Test func redirectsAwayFromGIPHYAreRejected() async throws {
+        let result = try #require(try GIPHYSearchService.parse(Self.sample).first)
+        let load: GIPHYSearchService.Loader = { _ in
+            let response = HTTPURLResponse(url: URL(string: "https://evil.example/a.gif")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (Self.gif, response)
+        }
+        let redirected = try #require(GIPHYSearchService(apiKey: "testKey123", load: load))
+        await #expect(throws: GIFSearchError.unsuitableFile) {
+            try await redirected.download(result, maximumBytes: MediaRules.maximumChatBytes)
+        }
+    }
 }

@@ -38,6 +38,9 @@ public final class ActivityHistoryStore {
     @ObservationIgnored private let maximumAge: TimeInterval
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var lastAttempt: Date?
+    /// Letzter geschätzter Verlauf – Home, Statistik, Kalender und Flamme lesen `history` bei jedem Zeichnen; die
+    /// Schätzung für rund 400 Tage wird nur neu gerechnet, wenn sich Verlauf oder Körperdaten ändern.
+    @ObservationIgnored private var estimateCache: (source: ActivityHistory, metrics: BodyMetrics, result: ActivityHistory)?
 
     public init(
         activityData: any ActivityDataProviding,
@@ -61,7 +64,12 @@ public final class ActivityHistoryStore {
         guard let loaded else { return nil }
         let merged = live.currentOverview.map { loaded.merging($0.lastSevenDays.days) } ?? loaded
         guard let metrics = bodyMetrics?.metrics, metrics.canEstimate else { return merged }
-        return merged.estimatingActiveEnergy(with: metrics)
+        if let cache = estimateCache, cache.metrics == metrics, cache.source == merged {
+            return cache.result
+        }
+        let result = merged.estimatingActiveEnergy(with: metrics)
+        estimateCache = (merged, metrics, result)
+        return result
     }
 
     /// Erster Tag, den der Verlauf abdeckt (Monatsanfang vor 12 Monaten).

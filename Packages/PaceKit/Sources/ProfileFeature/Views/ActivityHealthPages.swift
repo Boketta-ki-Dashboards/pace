@@ -125,7 +125,26 @@ struct CalorieEstimationPageContent: View {
         _weightText = State(initialValue: Self.text(settings.metrics.weightKilograms))
     }
 
+    /// Kennung der Karte mit den Eingabefeldern (zum Hinscrollen über die Tastatur).
+    private static let bodyDataID = "calorie.bodyData"
+
     var body: some View {
+        ScrollViewReader { proxy in
+            content
+                // Kleine iPhones: Die Felder liegen sonst unter der Tastatur – nach dem Einblenden hinscrollen.
+                .onChange(of: focusedField) { _, field in
+                    guard field != nil else { return }
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            proxy.scrollTo(Self.bodyDataID, anchor: .bottom)
+                        }
+                    }
+                }
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
             PaceSubpageHeader(backTitle: backTitle, title: ProfileRoute.calorieEstimation.title)
                 .padding(.bottom, PaceSpacing.xs)
@@ -149,14 +168,14 @@ struct CalorieEstimationPageContent: View {
                     PaceCardHeader(ActivityHealthTexts.bodyData)
                     measurementField(
                         title: ActivityHealthTexts.height,
-                        unit: "cm",
+                        unit: ActivityHealthTexts.centimeters,
                         text: $heightText,
                         error: heightError,
                         field: .height
                     )
                     measurementField(
                         title: ActivityHealthTexts.weight,
-                        unit: "kg",
+                        unit: ActivityHealthTexts.kilograms,
                         text: $weightText,
                         error: weightError,
                         field: .weight
@@ -169,6 +188,7 @@ struct CalorieEstimationPageContent: View {
                     }
                 }
             }
+            .id(Self.bodyDataID)
 
             PaceCard {
                 VStack(alignment: .leading, spacing: PaceSpacing.s) {
@@ -182,6 +202,23 @@ struct CalorieEstimationPageContent: View {
         .onChange(of: focusedField) { previous, _ in
             if previous == .height { commitHeight() }
             if previous == .weight { commitWeight() }
+        }
+        // Gültige Werte gelten schon beim Tippen (der Ziffernblock hat keine Eingabetaste); Fehler erst beim Verlassen.
+        .onChange(of: heightText) { _, text in
+            if BodyMetricsSettings.number(from: text).flatMap({ $0 }).map({ BodyMetrics.heightRange.contains($0) }) == true {
+                settings.setHeight(text)
+            }
+        }
+        .onChange(of: weightText) { _, text in
+            if BodyMetricsSettings.number(from: text).flatMap({ $0 }).map({ BodyMetrics.weightRange.contains($0) }) == true {
+                settings.setWeight(text)
+            }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(ActivityHealthTexts.done) { focusedField = nil }
+            }
         }
         .onDisappear {
             commitHeight()
@@ -237,12 +274,12 @@ struct CalorieEstimationPageContent: View {
     }
 
     private func commitHeight() {
-        heightError = settings.setHeight(heightText).map { ActivityHealthTexts.message(for: $0, unit: "cm") }
+        heightError = settings.setHeight(heightText).map { ActivityHealthTexts.message(for: $0, unit: ActivityHealthTexts.centimeters) }
         if heightError == nil { heightText = Self.text(settings.metrics.heightCentimeters) }
     }
 
     private func commitWeight() {
-        weightError = settings.setWeight(weightText).map { ActivityHealthTexts.message(for: $0, unit: "kg") }
+        weightError = settings.setWeight(weightText).map { ActivityHealthTexts.message(for: $0, unit: ActivityHealthTexts.kilograms) }
         if weightError == nil { weightText = Self.text(settings.metrics.weightKilograms) }
     }
 
@@ -403,15 +440,19 @@ enum ActivityHealthTexts {
     }
     static var privacy: String {
         PaceLocalization.text(
-            de: "Größe und Gewicht bleiben auf diesem iPhone. Sie werden nicht an Pace-Server, Freunde, Gruppen, Rankings oder Chats übertragen.",
-            en: "Height and weight stay on this iPhone. They're never sent to Pace servers, friends, groups, rankings or chats.",
-            ru: "Рост и вес остаются на этом iPhone. Они не передаются на серверы Pace, друзьям, в группы, рейтинги или чаты."
+            de: "Größe und Gewicht werden nur auf diesem iPhone gespeichert (wie andere App-Daten auch in deinen Gerätebackups und im Datenexport) und nie an Pace-Server, Freunde, Gruppen, Rankings oder Chats übertragen.",
+            en: "Height and weight are stored only on this iPhone (like other app data, also in your device backups and the data export) and never sent to Pace servers, friends, groups, rankings or chats.",
+            ru: "Рост и вес хранятся только на этом iPhone (как и другие данные приложения – также в резервных копиях устройства и в экспорте данных) и никогда не передаются на серверы Pace, друзьям, в группы, рейтинги или чаты."
         )
     }
 
     static func example(steps: String, energy: String) -> String {
         PaceLocalization.text(de: "Beispiel: \(steps) Schritte \(energy)", en: "Example: \(steps) steps \(energy)", ru: "Пример: \(steps) шагов \(energy)")
     }
+
+    static var centimeters: String { PaceLocalization.text(de: "cm", en: "cm", ru: "см") }
+    static var kilograms: String { PaceLocalization.text(de: "kg", en: "kg", ru: "кг") }
+    static var done: String { PaceLocalization.text(de: "Fertig", en: "Done", ru: "Готово") }
 
     static func message(for error: BodyMetricsSettings.InputError, unit: String) -> String {
         switch error {

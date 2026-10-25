@@ -47,7 +47,7 @@ struct ActivityWidgetContent: View {
                         .foregroundStyle(PaceColor.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
-                    Text(widget.isEstimated
+                    Text(widget.isTodayEstimated
                         ? HomeActivityWidget.todayTitle + " · " + ActivityTexts.estimatedActiveCalories
                         : HomeActivityWidget.todayTitle + " · " + widget.metric.title)
                         .font(PaceFont.caption)

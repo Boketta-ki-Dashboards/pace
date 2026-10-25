@@ -8,8 +8,10 @@ public struct StreakDetailView: View {
     @State private var viewModel: StreakDetailViewModel
     private let backTitle: String
 
-    public init(viewModel: StreakDetailViewModel, backTitle: String) {
-        _viewModel = State(initialValue: viewModel)
+    /// Das ViewModel wird nur beim ersten Erscheinen übernommen (wie bei `@State` üblich) – kein neues bei jedem
+    /// erneuten Auswerten des Ziels.
+    public init(viewModel: @autoclosure () -> StreakDetailViewModel, backTitle: String) {
+        _viewModel = State(initialValue: viewModel())
         self.backTitle = backTitle
     }
 

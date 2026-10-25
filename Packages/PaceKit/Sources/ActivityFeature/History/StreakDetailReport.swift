@@ -198,7 +198,7 @@ public struct StreakDetailReport: Equatable, Sendable {
                 status = previousLength > 0 ? StreakTexts.runEnded(after: previousLength) : StreakTexts.notReached
             case .pending:
                 let remaining = max(goal - (summary?.competitionSteps ?? 0), 0)
-                status = StreakTexts.stillOpen(formatter.steps(remaining))
+                status = StreakTexts.stillOpen(remaining, formatter: formatter)
             case .noData, .future:
                 status = StreakTexts.noData
             }
@@ -299,11 +299,13 @@ public enum StreakTexts {
     public static var notReached: String {
         PaceLocalization.text(de: "Tagesziel nicht erreicht", en: "Daily goal not reached", ru: "Цель не выполнена")
     }
-    public static func stillOpen(_ remaining: String) -> String {
-        PaceLocalization.text(
-            de: "Heute noch \(remaining) Schritte bis zum Ziel",
-            en: "\(remaining) steps to go today",
-            ru: "Сегодня осталось \(remaining) шагов"
+    /// z. B. „Heute noch 1 Schritt bis zum Ziel“ / „Heute noch 1.240 Schritte bis zum Ziel“ (Pluralform je Sprache).
+    public static func stillOpen(_ remaining: Int, formatter: ActivityFormatter) -> String {
+        let steps = ActivityTexts.steps(remaining, formatter: formatter)
+        return PaceLocalization.text(
+            de: "Heute noch \(steps) bis zum Ziel",
+            en: "\(steps) to go today",
+            ru: "Сегодня осталось \(steps)"
         )
     }
     public static var noData: String {

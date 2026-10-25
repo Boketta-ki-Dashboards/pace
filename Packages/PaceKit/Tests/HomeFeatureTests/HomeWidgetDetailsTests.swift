@@ -100,7 +100,8 @@ struct HomeWidgetDetailsTests {
             #expect(StreakMilestone.text(current: 5) == "2 days more to reach 7 in a row")
         }
         PaceLocalization.$languageOverride.withValue(.russian) {
-            #expect(StreakMilestone.text(current: 5) == "Ещё 2 дня до отметки 7 подряд")
+            #expect(StreakMilestone.text(current: 5) == "Ещё 2 дня до 7 дней подряд")
+            #expect(StreakMilestone.text(current: 20) == "Ещё 1 день до 21 дня подряд")
         }
     }
 

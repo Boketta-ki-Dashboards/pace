@@ -3,8 +3,6 @@ import PaceCore
 
 /// Gemeinsame Texte zu Bewegungsdaten – in der Sprache der App.
 public enum ActivityTexts {
-    /// Hinweis, wenn Health- und Wettbewerbsschritte abweichen.
-    /// Erklärung, wenn Apple Health für einen Tag keine aktiven Kalorien hat. Pace schätzt keine Kalorien selbst.
     /// Vorangestellt bei geschätzten Werten, z. B. `≈ 245 kcal`.
     public static let approximatelyPrefix = "≈ "
 
@@ -27,11 +25,21 @@ public enum ActivityTexts {
         )
     }
 
+    /// Erklärung, wenn Apple Health für einen Tag keine aktiven Kalorien hat (und nicht geschätzt wird).
     public static var activeEnergyUnavailableNote: String {
         PaceLocalization.text(
-            de: "Apple Health hat hierfür keine aktiven Kalorien. Ohne Apple Watch zeichnet das iPhone sie nur auf, wenn „Fitness-Tracking“ eingeschaltet ist und in der Health-App Angaben wie Größe und Gewicht hinterlegt sind – teils mit Verzögerung. Pace rechnet keine Kalorien aus Schritten hoch.",
-            en: "Apple Health has no active calories for this. Without an Apple Watch, the iPhone only records them if “Fitness Tracking” is on and details such as height and weight are set in the Health app – sometimes with a delay. Pace doesn't estimate calories from steps.",
-            ru: "В приложении «Здоровье» нет активных калорий за этот период. Без Apple Watch iPhone записывает их, только если включено «Отслеживание фитнеса» и в «Здоровье» указаны рост и вес, – иногда с задержкой. Pace не рассчитывает калории по шагам."
+            de: "Apple Health hat hierfür keine aktiven Kalorien. Ohne Apple Watch zeichnet das iPhone sie nur auf, wenn „Fitness-Tracking“ eingeschaltet ist und in der Health-App Angaben wie Größe und Gewicht hinterlegt sind – teils mit Verzögerung. Ohne Messwerte kann Pace aktive Kalorien schätzen: Profil → Einstellungen → Aktivität & Gesundheit → Kalorienschätzung.",
+            en: "Apple Health has no active calories for this. Without an Apple Watch, the iPhone only records them if “Fitness Tracking” is on and details such as height and weight are set in the Health app – sometimes with a delay. Without measured values, Pace can estimate active calories: Profile → Settings → Activity & health → Calorie estimate.",
+            ru: "В приложении «Здоровье» нет активных калорий за этот период. Без Apple Watch iPhone записывает их, только если включено «Отслеживание фитнеса» и в «Здоровье» указаны рост и вес, – иногда с задержкой. Без измерений Pace может рассчитать активные калории: Профиль → Настройки → Активность и здоровье → Оценка калорий."
+        )
+    }
+
+    /// Stundenwerte gibt es nur für gemessene aktive Kalorien (Tagesansicht eines geschätzten Tages).
+    public static var hourlyEnergyEstimatedNote: String {
+        PaceLocalization.text(
+            de: "Für geschätzte Kalorien gibt es keine Stundenwerte – nur für gemessene aus Apple Health.",
+            en: "There are no hourly values for estimated calories – only for measured ones from Apple Health.",
+            ru: "Для расчётных калорий нет почасовых данных – только для измеренных в «Здоровье»."
         )
     }
 

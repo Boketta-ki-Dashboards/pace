@@ -211,8 +211,10 @@ public struct HomeActivityWidget: Equatable, Sendable {
     public let bestDayText: String?
     /// Höchster Wert der Woche (Skala für Balken); mindestens 1.
     public let maximum: Double
-    /// Aktive Kalorien: mindestens ein Tag ist geschätzt (Hinweis „Geschätzte aktive Kalorien“).
+    /// Aktive Kalorien: mindestens ein Tag der Woche ist geschätzt (Summe und Durchschnitt mit „≈“).
     public let isEstimated: Bool
+    /// Aktive Kalorien: der heutige Wert ist geschätzt (Beschriftung unter dem heutigen Wert).
+    public let isTodayEstimated: Bool
 
     public init(metric: HomeActivityMetric, overview: ActivityOverview, formatter: ActivityFormatter) {
         self.metric = metric
@@ -239,6 +241,7 @@ public struct HomeActivityWidget: Equatable, Sendable {
         }
         let values = days.compactMap(\.value)
         let isTodayEstimated = metric == .activeEnergy && overview.today.activeEnergy.isEstimated
+        self.isTodayEstimated = isTodayEstimated
         todayText = Self.value(of: metric, in: overview.today).map { format($0, isTodayEstimated) }
         totalText = values.isEmpty ? nil : format(values.reduce(0, +), isEstimated)
         averageText = values.isEmpty ? nil : format(values.reduce(0, +) / Double(values.count), isEstimated)

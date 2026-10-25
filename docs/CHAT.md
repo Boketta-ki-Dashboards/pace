@@ -102,13 +102,16 @@ neue Migration).
   höchstens 150 Treffer. Suche erst 350 ms nach der letzten Eingabe.
 - Raster mit kleinen Standbildern (`fixed_width_still`), animiert wird nur das gewählte GIF (Vorschau über
   `PaceImageLoader.decoded(_:size:)` mit Byte-Budget, außerhalb des Main Threads).
-- Senden: Die Datei („downsized“ < 2 MB, sonst „fixed_width“) wird heruntergeladen – nur HTTPS von `giphy.com` und
-  Subdomains, geprüft auf GIF-Signatur und 10-MB-Grenze – und wie ein GIF aus der Mediathek über
+- Senden: Die Datei („downsized“ < 2 MB, sonst „fixed_width“) wird über eine eigene, flüchtige Sitzung (ohne Cookies,
+  ohne dauerhaften Cache) heruntergeladen – nur HTTPS von `giphy.com` und Subdomains, auch nach Weiterleitungen, geprüft
+  auf GIF-Signatur und 10-MB-Grenze – und wie ein GIF aus der Mediathek über
   `ChatViewModel.sendMedia(_:contentType: "image/gif")` in den privaten Bucket `chat-media` hochgeladen. Es wird nie
   ein fremder Link gespeichert; das GIF bleibt verfügbar und ist nur für die Teilnehmer lesbar. Storage-Policies
   bleiben unverändert, keine Migration.
-- Pflichtangabe „Powered by GIPHY“ und Datenschutzhinweis (Suchbegriffe gehen an GIPHY) in der Auswahl; zusätzlich
-  in Hilfe → Datenschutz.
+- Pflichtangabe „Powered by GIPHY“ und Datenschutzhinweis in der Auswahl und in Hilfe → Datenschutz: Schon beim Öffnen
+  lädt die Auswahl beliebte GIFs und Standbilder von GIPHY; GIPHY erhält dabei IP-Adresse und Suchbegriffe.
+- Die CI (Secret-Scan) schlägt fehl, wenn `GIPHY_API_KEY` in einer versionierten `.xcconfig`/`.example` einen Wert hat.
+  Für eine veröffentlichte App wäre ein Produktionsschlüssel von GIPHY nötig (der Beta-Schlüssel ist begrenzt).
 - Fehler: `notConfigured` (kein/abgelehnter Schlüssel), `offline`, `rateLimited`, `unsuitableFile`, `failed` – je
   mit eigenem Hinweis und (außer „nicht eingerichtet“) „Erneut versuchen“.
 

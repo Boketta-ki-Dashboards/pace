@@ -139,7 +139,7 @@ struct PersonalBestsTests {
     private func history() -> ActivityHistory {
         let first = Fixtures.day(2026, 9, 1)
         let steps: [LocalDate: Int] = [
-            Fixtures.day(2026, 9, 18): 21_000,  // bester Tag insgesamt
+            Fixtures.day(2026, 9, 18): 21_000,  // bester Tag im Verlauf (12 Monate)
             Fixtures.day(2026, 10, 3): 15_000,  // bester Tag im Oktober (Woche 28.9.–4.10.)
             Fixtures.day(2026, 10, 13): 12_480, // bester Tag dieser Woche (12.–18.10.)
             Fixtures.day(2026, 10, 14): 9_000,
