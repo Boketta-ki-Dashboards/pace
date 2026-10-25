@@ -63,8 +63,9 @@ struct TabPagerDirectionTests {
         let fingerDirection: CGFloat = target > start ? -1 : 1
 
         // Halber Weg: Die Zielseite liegt auf der Seite, auf die der Finger zeigt.
+        let middle = (Double(start) + Double(target)) / 2
         host.drag(fromTab: start, finger: fingerDirection * width / 2)
-        try await host.settle(milliseconds: 150)
+        try await host.wait { host.recorder.position.map { abs($0 - middle) < 0.05 } == true }
         let left = host.page(atX: width / 4)
         let right = host.page(atX: width * 3 / 4)
         if target > start {
@@ -76,19 +77,19 @@ struct TabPagerDirectionTests {
         }
         // Die Tab-Leiste bekommt dieselbe Position: Die Fläche liegt zwischen beiden Tabs.
         let halfway = try #require(host.recorder.position)
-        #expect(abs(halfway - (Double(start) + Double(target)) / 2) < 0.05)
+        #expect(abs(halfway - middle) < 0.05)
         #expect(host.recorder.selection == start)
 
         // Zurückziehen: Ausgangsseite bleibt aktiv.
         host.drag(fromTab: start, finger: 0)
-        try await host.settle(milliseconds: 200)
+        try await host.wait { host.recorder.position.map { abs($0 - Double(start)) < 0.002 } == true }
         #expect(host.recorder.selection == start)
         #expect(host.page(atX: width / 4) == start)
         #expect(host.page(atX: width * 3 / 4) == start)
 
         // Vollständig: Zielseite ganz sichtbar und gewählt.
         host.drag(fromTab: start, finger: fingerDirection * width)
-        try await host.settle(milliseconds: 250)
+        try await host.wait { host.recorder.selection == target }
         #expect(host.page(atX: 40) == target)
         #expect(host.page(atX: width - 40) == target)
         #expect(host.recorder.selection == target)
@@ -182,6 +183,17 @@ private final class PagerHost {
     func settle(milliseconds: Int) async throws {
         try await Task.sleep(for: .milliseconds(milliseconds))
         controller.view.layoutIfNeeded()
+    }
+
+    /// Wartet, bis die Bedingung erfüllt ist (höchstens `timeout`). SwiftUI meldet Scroll-Positionen asynchron – auf
+    /// ausgelasteten CI-Rechnern teils erst nach mehreren hundert Millisekunden; eine feste Wartezeit wäre zufällig.
+    func wait(timeout: Duration = .seconds(3), until condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + timeout
+        controller.view.layoutIfNeeded()
+        while !condition(), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+            controller.view.layoutIfNeeded()
+        }
     }
 
     func close() {
