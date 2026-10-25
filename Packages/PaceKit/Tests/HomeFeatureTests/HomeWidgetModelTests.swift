@@ -485,6 +485,33 @@ struct HomeActivityWidgetTests {
         #expect(StepsTodaySummary(today: overview.today, goal: 10_000, formatter: formatter).sevenDays.isEmpty)
     }
 
+    /// Stabilitäts-Review Auftrag 5: „Tagesziel erreicht!“ nur mit bestätigten Schritten (wie die Serie); die Zeile unter
+    /// dem Mini-Diagramm nie als „0 von 0“ und mit Einzahl.
+    @Test func goalCountsOnlyWithConfirmedSteps() {
+        PaceLocalization.$languageOverride.withValue(.german) {
+            // HealthKit 7.000, live 10.200, Ziel 10.000: erreicht laut Sensor, aber noch nicht bestätigt.
+            let pending = StepsTodaySummary(overview: overview, goal: 10_000, formatter: formatter, liveCompetitionSteps: 10_200)
+            #expect(pending.steps == 10_200)
+            #expect(!pending.isGoalReached)
+            #expect(pending.isGoalPendingConfirmation)
+            #expect(pending.remainingText == "Ziel erreicht – Bestätigung aus Apple Health folgt")
+            // Heute zählt in „Ziel an … Tagen“ erst bestätigt mit.
+            #expect(pending.sevenDayGoalText == "Ziel an 0 von 6 Tagen erreicht")
+            let confirmed = StepsTodaySummary(overview: overview, goal: 7_000, formatter: formatter, liveCompetitionSteps: 7_400)
+            #expect(confirmed.isGoalReached)
+            #expect(!confirmed.isGoalPendingConfirmation)
+            #expect(confirmed.remainingText == "Tagesziel erreicht!")
+
+            #expect(HomeTexts.goalReachedOnDays(1, of: 1) == "Ziel an 1 von 1 Tag erreicht")
+        }
+        PaceLocalization.$languageOverride.withValue(.english) {
+            #expect(HomeTexts.goalReachedOnDays(0, of: 1) == "Goal reached on 0 of 1 day")
+        }
+        PaceLocalization.$languageOverride.withValue(.russian) {
+            #expect(HomeTexts.goalDaysThisWeek(3) == "Дней с выполненной целью на этой неделе: 3")
+        }
+    }
+
     @Test func stepsSummaryOffersYesterdayAndAverageForTheMaxCard() {
         let summary = StepsTodaySummary(overview: overview, goal: 10_000, formatter: formatter)
         #expect(summary.yesterdayText == "6.000")

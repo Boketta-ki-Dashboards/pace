@@ -44,12 +44,12 @@ struct GroupDayProgressTests {
         }
         PaceLocalization.$languageOverride.withValue(.russian) {
             #expect(progress.reachedText == "1 из 21 участника выполнил дневную цель")
-            #expect(progress.hint == "Ещё 6 участников до сегодняшнего огня группы")
+            #expect(progress.hint == "Ещё 6 участников – и огонь группы на сегодня сохранён")
             let three = GroupDayProgress(reached: 3, members: 12, required: 4, streak: 1, isSecured: false)
             #expect(three.reachedText == "3 из 12 участников выполнили дневную цель")
-            #expect(three.hint == "Ещё 1 участник до сегодняшнего огня группы")
+            #expect(three.hint == "Ещё 1 участник – и огонь группы на сегодня сохранён")
             let few = GroupDayProgress(reached: 0, members: 9, required: 3, streak: 0, isSecured: false)
-            #expect(few.hint == "Ещё 3 участника до сегодняшнего огня группы")
+            #expect(few.hint == "Ещё 3 участника – и огонь группы на сегодня сохранён")
         }
     }
 
@@ -62,6 +62,8 @@ struct GroupDayProgressTests {
         #expect(empty.hint == nil)
         #expect(empty.progress == 0)
         #expect(empty.thresholdFraction == nil)
+        // Kein Serverwert für die nötigen Ziele: kein erfundenes „Noch 1 Mitglied“.
+        #expect(GroupDayProgress(reached: 0, members: 5, required: 0, streak: 0, isSecured: false).hint == nil)
         // Einzelperson: Schwelle = alle, keine eigene Markierung.
         #expect(GroupDayProgress(reached: 0, members: 1, required: 1, streak: 0, isSecured: false).thresholdFraction == nil)
     }

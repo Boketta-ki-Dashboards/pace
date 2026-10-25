@@ -68,6 +68,8 @@ public final class HomeDashboardViewModel {
 
     /// Stundenwerte von heute (und gestern) für Tagesvergleich und Aktivitätszeiten – eine Abfrage für beide Widgets.
     public private(set) var hourly: HourlyValues?
+    /// Die Stundenwerte von heute konnten nicht geladen werden (Hinweis statt Leerzustand).
+    public private(set) var hourlyFailed = false
     /// Für welchen Tag und HealthKit-Stand ``hourly`` geladen wurde (neu nur, wenn sich der Stand ändert).
     @ObservationIgnored private var hourlyLoadedKey: HourlyTrigger?
     /// Stundenwerte von gestern ändern sich (bis auf Nachträge) nicht mehr: einmal pro Tag.
@@ -173,6 +175,36 @@ public final class HomeDashboardViewModel {
         }
     }
 
+    /// Hinweis für Tagesvergleich und Aktivitätszeiten, wenn es keine Stundenwerte gibt; `nil` während des Ladens.
+    public var hourlyUnavailableText: String? {
+        switch activity.state {
+        case .noReadAccess:
+            return PaceLocalization.text(
+                de: "Ohne Zugriff auf deine Schritte gibt es keine Stundenwerte.",
+                en: "Without access to your steps there are no hourly values.",
+                ru: "Без доступа к шагам нет почасовых данных."
+            )
+        case .failed:
+            return Self.hourlyFailedText
+        case .loading, .loaded:
+            return hourlyFailed && !hasHourlyForToday ? Self.hourlyFailedText : nil
+        }
+    }
+
+    static var hourlyFailedText: String {
+        PaceLocalization.text(
+            de: "Stundenwerte gerade nicht verfügbar. Zum Aktualisieren nach unten ziehen.",
+            en: "Hourly values are unavailable right now. Pull down to refresh.",
+            ru: "Почасовые данные сейчас недоступны. Потяни вниз, чтобы обновить."
+        )
+    }
+
+    /// Ob die Stundenwerte des heutigen Tages geladen sind (sonst zeigen die Widgets „Laden“ bzw. einen Hinweis).
+    private var hasHourlyForToday: Bool {
+        guard let day = activity.overview?.today.date else { return false }
+        return hourly?.day == day
+    }
+
     public var modules: [HomeModule] {
         settings.modules
     }
@@ -200,15 +232,15 @@ public final class HomeDashboardViewModel {
 
     // MARK: Neue Widgets (Auftrag 5)
 
-    /// Tagesvergleich: heute (mit Live-Schritten) vs. gestern bis zur gleichen Uhrzeit.
+    /// Tagesvergleich: heute (mit Live-Schritten) vs. gestern bis zur gleichen Uhrzeit; `nil`, solange die
+    /// Stundenwerte für heute nicht geladen sind (Laden bzw. ``hourlyUnavailableText``, nie „kein Vergleich“).
     public var dayComparisonWidget: HomeDayComparisonWidget? {
-        guard let overview = activity.overview else { return nil }
+        guard let overview = activity.overview, hasHourlyForToday, let hourly else { return nil }
         let currentDate = now()
         let components = calendar.calendar.dateComponents([.hour, .minute], from: currentDate)
-        let previous = hourly?.day == overview.today.date ? hourly?.previousDay : nil
         return HomeDayComparisonWidget(
             todaySteps: stepsToday?.steps ?? overview.today.competitionSteps,
-            yesterdayHourly: previous,
+            yesterdayHourly: hourly.previousDay,
             yesterdayTotal: overview.yesterday.competitionSteps,
             currentHour: components.hour ?? 0,
             fractionOfCurrentHour: Double(components.minute ?? 0) / 60,
@@ -217,12 +249,11 @@ public final class HomeDashboardViewModel {
         )
     }
 
-    /// Aktivitätszeiten aus den Stundenwerten von heute; `nil` vor dem Laden.
+    /// Aktivitätszeiten aus den Stundenwerten von heute; `nil`, solange sie für heute nicht geladen sind.
     public var activityTimesWidget: HomeActivityTimesWidget? {
-        guard let overview = activity.overview else { return nil }
+        guard hasHourlyForToday, let hourly else { return nil }
         let currentHour = calendar.calendar.component(.hour, from: now())
-        let values = hourly?.day == overview.today.date ? hourly?.values : nil
-        return HomeActivityTimesWidget(hourly: values, currentHour: currentHour, formatter: formatter)
+        return HomeActivityTimesWidget(hourly: hourly.values, currentHour: currentHour, formatter: formatter)
     }
 
     /// Persönliche Rekorde (12 Monate) mit dem gewählten Rekord; `nil`, solange der Verlauf nicht geladen ist.
@@ -398,10 +429,13 @@ public final class HomeDashboardViewModel {
             guard hourlyReloadKey == key else { return }
             hourly = HourlyValues(day: day, metric: .steps, values: values, previousDay: previous)
             hourlyLoadedKey = key
+            hourlyFailed = false
         } catch {
-            // Ohne Stundenwerte zeigen beide Widgets ihren Leerzustand – nie erfundene Werte.
-            guard hourlyReloadKey == key else { return }
-            hourly = nil
+            // Abgebrochen (Seite verlassen, neuer Auslöser): kein Fehler. Sonst bleiben schon geladene Werte von heute
+            // stehen; fehlen sie, zeigen beide Widgets einen Hinweis – nie erfundene Werte und nie „keine Werte“.
+            guard !(error is CancellationError), !Task.isCancelled, hourlyReloadKey == key else { return }
+            if hourly?.day != day { hourly = nil }
+            hourlyFailed = true
         }
     }
 
@@ -437,6 +471,12 @@ public final class HomeDashboardViewModel {
         if social.isAvailable {
             await social.load()
             await social.chats.load()
+        }
+        if showsHourly {
+            // Auch gestern neu: Nachträge (z. B. eine später synchronisierte Watch) erscheinen im Tagesvergleich.
+            hourlyLoadedKey = nil
+            yesterdayHourly = nil
+            await loadHourlyIfNeeded()
         }
         guard showsStandings else { return }
         standings.neighborhoodRadii = settings.neighborhoodRadii

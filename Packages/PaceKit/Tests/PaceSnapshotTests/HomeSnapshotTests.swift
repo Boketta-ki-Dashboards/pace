@@ -128,6 +128,16 @@ struct HomeSnapshotTests {
         }
     }
 
+    /// Rekordauswahl der „Persönlichen Rekorde“ (Produkt-Review Auftrag 5): einspaltig, lange russische Titel ungekürzt.
+    @Test func recordsGallery() async throws {
+        let (dashboard, _) = try await SnapshotFixtures.makeDashboard()
+        await dashboard.loadStreakIfNeeded()
+        let gallery = dashboard.gallery(for: HomeWidgetGalleryRoute())
+        gallery.select(.records)
+        gallery.record = .longestDistance
+        try Snapshot.render(page(HomeWidgetGalleryContent(gallery: gallery, dashboard: dashboard)), name: "widget-gallery-records", languages: languages)
+    }
+
     /// Ebenen-Editor der regionalen Karten (Auftrag 5, A3): „3 von 4 Ebenen sichtbar“ mit „Alle vier zeigen“.
     @Test func regionLevelEditor() async throws {
         let (dashboard, _) = try await SnapshotFixtures.makeDashboard()

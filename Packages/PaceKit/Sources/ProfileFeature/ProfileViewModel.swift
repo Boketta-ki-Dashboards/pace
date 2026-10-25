@@ -122,9 +122,9 @@ public final class ProfileViewModel {
     public let dataPrivacy: DataPrivacyViewModel
     /// z. B. `0.1.0 (1)`; leer, wenn unbekannt.
     public let appVersion: String
-    /// Wechselt in den Social-Tab (Anfragen, Einladungen); vom App-Rahmen gesetzt.
     /// Protokoll des Live-Abgleichs für die Diagnose in Entwicklungs-Builds.
     @ObservationIgnored public var liveStepDiagnostics: LiveStepDiagnostics?
+    /// Wechselt in den Social-Tab (Anfragen, Einladungen); vom App-Rahmen gesetzt.
     @ObservationIgnored public var openSocial: (@MainActor () -> Void)?
     /// Öffnet „Meine Gruppen“ im Social-Tab (Gruppeneinstellungen liegen in der jeweiligen Gruppe).
     @ObservationIgnored public var openSocialGroups: (@MainActor () -> Void)?

@@ -16,6 +16,9 @@ struct DayComparisonWidgetContent: View {
     let details: [HomeWidgetDetail]
     let unavailableText: String?
 
+    @ScaledMetric(relativeTo: .largeTitle) private var metricSize: CGFloat = 32
+    @ScaledMetric(relativeTo: .largeTitle) private var largeMetricSize: CGFloat = 40
+
     var body: some View {
         if let widget {
             if widget.isAvailable {
@@ -55,7 +58,7 @@ struct DayComparisonWidgetContent: View {
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
                 HStack(alignment: .firstTextBaseline, spacing: PaceSpacing.xs) {
                     Text(widget.differenceText ?? "–")
-                        .font(PaceFont.metric(size: size == .max ? 40 : 32))
+                        .font(PaceFont.metric(size: size == .max ? largeMetricSize : metricSize))
                         .monospacedDigit()
                         .foregroundStyle(color(widget))
                         .lineLimit(1)
@@ -93,7 +96,7 @@ struct DayComparisonWidgetContent: View {
                 }
                 if details.contains(.yesterdayTotal), let total = widget.yesterdayTotalText {
                     HomeStatTile(
-                        title: PaceLocalization.text(de: "Gestern insgesamt", en: "Yesterday in total", ru: "Вчера всего"),
+                        title: PaceLocalization.text(de: "Gestern insgesamt", en: "Yesterday in total", ru: "Всего за вчера"),
                         value: total,
                         systemImage: "clock.arrow.circlepath"
                     )
@@ -219,6 +222,8 @@ struct RecordsWidgetContent: View {
     let state: ActivityHistoryStore.State
     let size: HomeModuleSize
 
+    @ScaledMetric(relativeTo: .title) private var metricSize: CGFloat = 30
+
     var body: some View {
         if let widget {
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
@@ -235,9 +240,12 @@ struct RecordsWidgetContent: View {
                         }
                     }
                 }
-                Text(HomeRecordsWidget.periodText)
-                    .font(PaceFont.micro)
-                    .foregroundStyle(PaceColor.textSecondary)
+                let shownKinds: [HomeRecordKind] = (widget.primary.map { [$0.kind] } ?? []) + others.map(\.kind)
+                if let note = HomeRecordsWidget.periodNote(for: shownKinds) {
+                    Text(note)
+                        .font(PaceFont.micro)
+                        .foregroundStyle(PaceColor.textSecondary)
+                }
             }
         } else {
             switch state {
@@ -281,7 +289,7 @@ struct RecordsWidgetContent: View {
                     .font(PaceFont.caption.weight(.semibold))
                     .foregroundStyle(PaceColor.textSecondary)
                 Text(entry.value)
-                    .font(compact ? Font.system(.title3, weight: .bold) : PaceFont.metric(size: 30))
+                    .font(compact ? Font.system(.title3, weight: .bold) : PaceFont.metric(size: metricSize))
                     .monospacedDigit()
                     .foregroundStyle(PaceColor.textPrimary)
                     .lineLimit(1)
@@ -493,7 +501,8 @@ struct GroupProgressWidgetContent: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.pacePressable)
-                .accessibilityLabel(group.name)
+                // Klein zeigt den Fortschritt nur als „2/5“: VoiceOver liest den ganzen Satz.
+                .accessibilityLabel(size == .small ? "\(group.name), \(progress.reachedText)" : group.name)
 
                 Button {
                     onOpenCalendar(group.id)

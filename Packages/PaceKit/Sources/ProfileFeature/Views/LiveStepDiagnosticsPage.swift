@@ -167,6 +167,8 @@ enum LiveStepDiagnosticsTexts {
         case .sensor: PaceLocalization.text(de: "Sensor", en: "Sensor", ru: "Датчик")
         case .healthKit: "HealthKit"
         case .sensorRestarted: PaceLocalization.text(de: "Sensor neu gestartet", en: "Sensor restarted", ru: "Датчик перезапущен")
+        case .unconfirmedExpired:
+            PaceLocalization.text(de: "Unbestätigte Schritte verfallen", en: "Unconfirmed steps expired", ru: "Неподтверждённые шаги сброшены")
         case .dayChanged: PaceLocalization.text(de: "Neuer Tag", en: "New day", ru: "Новый день")
         case .stopped: PaceLocalization.text(de: "Messung beendet", en: "Measurement stopped", ru: "Измерение остановлено")
         case .unavailable: PaceLocalization.text(de: "Nicht verfügbar", en: "Unavailable", ru: "Недоступно")

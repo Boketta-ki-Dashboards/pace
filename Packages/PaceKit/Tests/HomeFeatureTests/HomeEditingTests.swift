@@ -719,6 +719,36 @@ struct InsightWidgetLoadingTests {
         #expect(hourlyRequests(harness) == [Fixtures.day(2026, 10, 16), Fixtures.day(2026, 10, 15), Fixtures.day(2026, 10, 16)])
     }
 
+    /// Produkt-Review Auftrag 5: Vor dem Laden „Laden“ statt „keine Werte“, nach einem Fehler ein Hinweis; erneut
+    /// versucht wird mit Pull-to-Refresh.
+    @Test func hourlyWidgetsShowLoadingAndFailureInsteadOfEmptyStates() async throws {
+        let harness = await DashboardHarness()
+        let dashboard = harness.dashboard
+        _ = dashboard.settings.add(.dayComparison)
+        _ = dashboard.settings.add(.activityTimes)
+        await dashboard.activity.loadIfNeeded()
+        // Tageswerte da, Stundenwerte noch nicht: kein Widget-Inhalt (Laden), kein Hinweis.
+        #expect(dashboard.dayComparisonWidget == nil)
+        #expect(dashboard.activityTimesWidget == nil)
+        #expect(dashboard.hourlyUnavailableText == nil)
+
+        harness.health.update { $0.dailyTotalsError = .queryFailed(reason: "offline") }
+        await dashboard.loadHourlyIfNeeded()
+        #expect(dashboard.hourlyFailed)
+        #expect(dashboard.dayComparisonWidget == nil)
+        #expect(dashboard.activityTimesWidget == nil)
+        PaceLocalization.$languageOverride.withValue(.german) {
+            #expect(dashboard.hourlyUnavailableText == "Stundenwerte gerade nicht verfügbar. Zum Aktualisieren nach unten ziehen.")
+        }
+
+        harness.health.update { $0.dailyTotalsError = nil }
+        await dashboard.refresh()
+        #expect(!dashboard.hourlyFailed)
+        #expect(dashboard.hourlyUnavailableText == nil)
+        #expect(dashboard.dayComparisonWidget?.isAvailable == true)
+        #expect(dashboard.activityTimesWidget?.totalSteps == 8_432)
+    }
+
     @Test func groupProgressAndRecordsUseLoadedData() async throws {
         let harness = await DashboardHarness()
         let dashboard = harness.dashboard

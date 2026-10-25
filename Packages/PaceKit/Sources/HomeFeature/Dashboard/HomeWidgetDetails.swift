@@ -100,7 +100,7 @@ public enum HomeWidgetDetail: String, Codable, CaseIterable, Sendable, Identifia
         case .comparisonBars:
             PaceLocalization.text(de: "Balken heute & gestern", en: "Bars today & yesterday", ru: "Столбцы: сегодня и вчера")
         case .yesterdayTotal:
-            PaceLocalization.text(de: "Gestern insgesamt", en: "Yesterday in total", ru: "Вчера всего")
+            PaceLocalization.text(de: "Gestern insgesamt", en: "Yesterday in total", ru: "Всего за вчера")
         case .streakCount:
             PaceLocalization.text(de: "Aktuelle Serie", en: "Current streak", ru: "Текущая серия")
         case .groupHint:

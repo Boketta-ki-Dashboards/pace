@@ -175,7 +175,7 @@ public final class HomeViewModel {
                 }
                 guard readingDay == day else { continue }
                 let previous = liveEstimator.latestSensor
-                liveEstimator.sensor(reading.steps, on: day)
+                liveEstimator.sensor(reading.steps, on: day, at: reading.date)
                 if let previous, reading.steps < previous {
                     liveDiagnostics.record(.sensorRestarted, value: reading.steps, at: reading.date, status: status, estimator: liveEstimator)
                 }
@@ -202,10 +202,18 @@ public final class HomeViewModel {
                 var estimator = liveEstimator
                 estimator.healthKit(overview.today.competitionSteps, on: overview.today.date)
                 if estimator != liveEstimator {
-                    liveEstimator = estimator
                     liveDiagnostics.record(
                         .healthKit, value: overview.today.competitionSteps, at: now(), status: liveSteps.status, estimator: estimator
                     )
+                }
+                // Unbestätigte Schritte, die HealthKit 20 Minuten nach dem letzten Sensor-Fortschritt nicht kennt, verfallen.
+                if estimator.settle(at: now()) {
+                    liveDiagnostics.record(
+                        .unconfirmedExpired, value: overview.today.competitionSteps, at: now(), status: liveSteps.status, estimator: estimator
+                    )
+                }
+                if estimator != liveEstimator {
+                    liveEstimator = estimator
                 }
                 // Unveränderte Werte (häufig bei der Abfrage im Vordergrund) lösen kein Neuzeichnen aus.
                 if case .loaded(let current) = state, Self.hasSameValues(current, overview) {

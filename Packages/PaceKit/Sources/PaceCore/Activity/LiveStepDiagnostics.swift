@@ -17,6 +17,8 @@ public final class LiveStepDiagnostics {
             case healthKit
             /// Sensor meldete einen kleineren Zählerstand (Neustart).
             case sensorRestarted
+            /// Unbestätigte Schritte verfallen, Anzeige = HealthKit (Wert: Wettbewerbsschritte).
+            case unconfirmedExpired
             /// Neuer Tag: Messung beginnt neu.
             case dayChanged
             /// Messung beendet (Hintergrund, Zugriff entzogen, Abbruch).
@@ -77,7 +79,7 @@ public final class LiveStepDiagnostics {
             lastReading = value.map { LiveStepReading(steps: $0, date: date) }
         case .healthKit:
             lastHealthKitChange = date
-        case .sensorRestarted, .dayChanged:
+        case .sensorRestarted, .dayChanged, .unconfirmedExpired:
             break
         }
         events.insert(Event(id: nextID, date: date, kind: kind, value: value, shown: estimator.steps), at: 0)

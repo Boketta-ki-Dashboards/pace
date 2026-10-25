@@ -147,6 +147,23 @@ struct LiveStepSimulationTests {
         result.expectShown(at: 900, exactly: scenario.startTotal + 1_000 + 500)
     }
 
+    // MARK: 15 iPhone zählt mehr, als HealthKit bestätigt
+
+    /// Health bevorzugt die Watch und verwirft einen Teil der iPhone-Schritte: HealthKit bestätigt nur 90 % des Gangs.
+    /// Während des Gehens zählt die Anzeige jeden Sensorschritt, 20 Minuten nach dem letzten Schritt gilt HealthKit.
+    @Test func scenario15UnconfirmedStepsExpireAfterTheWalk() {
+        var scenario = LiveStepScenario(walk: .constant(stepsPerMinute: 100, duration: 300), otherSourceSteps: 500)
+        scenario.healthKitShare = 0.9
+        let end = 300 + LiveStepEstimator.confirmationWindow + 60
+        let result = scenario.run(until: end)
+        result.expectShown(at: 300, near: scenario.startTotal + 500)
+        // Kurz vor Ablauf noch der vorläufige Stand …
+        result.expectShown(at: 300 + LiveStepEstimator.confirmationWindow - 30, near: scenario.startTotal + 500)
+        // … danach genau HealthKit: 450 der 500 Schritte bestätigt.
+        result.expectShown(at: end, exactly: scenario.startTotal + 450)
+        #expect(result.confirmed(at: end) == scenario.startTotal + 450)
+    }
+
     // MARK: Simulierter Sensor
 
     @Test func walkingProfileCountsSteps() {
@@ -184,6 +201,26 @@ struct LiveStepSimulationTests {
         #expect(zip(readings, readings.dropFirst()).allSatisfy { $0 < $1 })
     }
 
+    /// Neuer Tag während der Simulation: Messung ab Mitternacht zählt nur Schritte ab dann (Stabilitäts-Review).
+    @Test func simulatedSensorCountsFromALaterStart() async {
+        // Simulation lief seit 1 s (Zeitraffer 600× = 10 Minuten, 1.000 Schritte), Messung ab der Hälfte.
+        let origin = Date().addingTimeInterval(-1)
+        let simulated = SimulatedLiveSteps(
+            profile: .constant(stepsPerMinute: 100, duration: 3_600),
+            origin: origin,
+            stepsBeforeOrigin: 1_000,
+            interval: 2.5,
+            timeScale: 600
+        )
+        var first: Int?
+        for await reading in simulated.readings(since: origin.addingTimeInterval(0.5)) {
+            first = reading.steps
+            break
+        }
+        // ≈ 500 Schritte seit dem Messbeginn – weder die 1.000 vor der Simulation noch die erste Hälfte.
+        #expect(first.map { (450...900).contains($0) } == true)
+    }
+
     @Test func endlessSimulatorOnlyForPlausibleRates() {
         #expect(SimulatedLiveSteps.endless(stepsPerMinute: 0) == nil)
         #expect(SimulatedLiveSteps.endless(stepsPerMinute: 1_000) == nil)
@@ -209,6 +246,10 @@ struct LiveStepScenario {
     var background: ClosedRange<TimeInterval>?
     /// Zusätzliche HealthKit-Schritte ab einem Zeitpunkt (andere Geräte, neue Quelle).
     var extraHealthKitSteps: [(second: TimeInterval, steps: Int)] = []
+    /// Anteil der Gang-Schritte, den HealthKit bestätigt (unter 1: Health bevorzugt eine andere Quelle).
+    var healthKitShare = 1.0
+    /// Zeitpunkt 0 der Simulation (für Sensor-Zeitstempel und den Verfall unbestätigter Schritte).
+    let origin = Date(timeIntervalSince1970: 1_800_000_000)
 
     private let day = Fixtures.day(2026, 10, 23)
 
@@ -231,7 +272,7 @@ struct LiveStepScenario {
         let known = second - healthKitLag
         let covered = known <= 0 ? 0 : (known / healthKitBatch).rounded(.down) * healthKitBatch
         let extra = extraHealthKitSteps.filter { $0.second <= second }.reduce(0) { $0 + $1.steps }
-        return startTotal + walk.steps(after: covered) + extra
+        return startTotal + Int((Double(walk.steps(after: covered)) * healthKitShare).rounded()) + extra
     }
 
     func sensor(at second: TimeInterval) -> Int {
@@ -274,14 +315,21 @@ struct LiveStepScenario {
                 if !wasInBackground { estimator.sensorStopped() }
             } else {
                 if sensorAvailable, second.truncatingRemainder(dividingBy: sensorInterval) == 0 {
-                    estimator.sensor(sensor(at: second), on: day)
+                    estimator.sensor(sensor(at: second), on: day, at: origin.addingTimeInterval(second))
                 }
+                // Wie die App: Bei jeder Abfrage HealthKit übernehmen und unbestätigte Schritte ggf. verfallen lassen.
                 if second.truncatingRemainder(dividingBy: pollInterval) == 0 || wasInBackground {
                     estimator.healthKit(healthKit(at: second), on: day)
+                    estimator.settle(at: origin.addingTimeInterval(second))
                 }
             }
             wasInBackground = inBackground
-            #expect(estimator.steps >= previous, "Rückgang nach \(second) s")
+            // Zurück nur beim Verfall unbestätigter Schritte – dann genau auf HealthKit und nach dem Zeitfenster.
+            if estimator.steps < previous {
+                #expect(estimator.steps == estimator.confirmedSteps, "Rückgang nach \(second) s")
+                let quiet = estimator.lastSensorProgress.map { origin.addingTimeInterval(second).timeIntervalSince($0) } ?? .infinity
+                #expect(quiet >= LiveStepEstimator.confirmationWindow, "Rückgang nach \(second) s vor Ablauf")
+            }
             previous = estimator.steps
             result.record(second, estimator)
         }

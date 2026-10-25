@@ -18,6 +18,10 @@ struct InsightWidgetTests {
             todaySteps: 2_600, yesterdayHourly: yesterday, yesterdayTotal: 4_300,
             currentHour: 12, fractionOfCurrentHour: 0.5, timeText: "bis 12:30", formatter: formatter
         )
+        let behindByOne = HomeDayComparisonWidget(
+            todaySteps: 1_949, yesterdayHourly: yesterday, yesterdayTotal: 4_300,
+            currentHour: 12, fractionOfCurrentHour: 0.5, timeText: "bis 12:30", formatter: formatter
+        )
         // 500 + 900 + 1.100 × 0,5 = 1.950 – nicht der ganze Tag (4.300).
         #expect(widget.yesterdaySteps == 1_950)
         #expect(widget.direction == .ahead)
@@ -26,10 +30,11 @@ struct InsightWidgetTests {
         #expect(widget.yesterdayTotalText == "4.300")
         #expect(widget.todayLevel == 1)
         PaceLocalization.$languageOverride.withValue(.german) {
-            #expect(widget.headline == "650 mehr als gestern um diese Zeit")
+            #expect(widget.headline == "650 Schritte mehr als gestern um diese Zeit")
         }
         PaceLocalization.$languageOverride.withValue(.russian) {
-            #expect(widget.headline == "На 650 больше, чем вчера в это время")
+            #expect(widget.headline == "На 650 шагов больше, чем вчера в это время")
+            #expect(behindByOne.headline == "На 1 шаг меньше, чем вчера в это время")
         }
     }
 
@@ -74,8 +79,20 @@ struct InsightWidgetTests {
         #expect(widget.hours.count == 24)
         #expect(widget.hours[17].level == 1)
         PaceLocalization.$languageOverride.withValue(.german) {
-            #expect(widget.peakText == "Am aktivsten: Nachmittag")
+            #expect(widget.peakText == "Am aktivsten nachmittags")
+            #expect(widget.buckets[1].title == "Morgens")
             #expect(widget.buckets[1].hours == "5–11 Uhr")
+        }
+        PaceLocalization.$languageOverride.withValue(.english) {
+            #expect(widget.peakText == "Most active in the afternoon")
+            // Tageszeiten-Texte entstehen beim Erzeugen in der aktuellen Sprache.
+            #expect(HomeActivityTimesWidget(hourly: hourly, currentHour: 18, formatter: formatter).buckets[1].hours == "5–11")
+        }
+        // RU: Adverb je Tageszeit, nicht „Больше всего: День“.
+        PaceLocalization.$languageOverride.withValue(.russian) {
+            #expect(widget.peakText == "Активнее всего днём")
+            #expect(HomeActivityTimesWidget.peakText("midday") == "Активнее всего в обед")
+            #expect(HomeActivityTimesWidget.peakText("night") == "Активнее всего ночью")
         }
     }
 
@@ -112,6 +129,18 @@ struct InsightWidgetTests {
         #expect(widget.others.allSatisfy { $0.kind != .bestDay })
         PaceLocalization.$languageOverride.withValue(.german) {
             #expect(HomeRecordsWidget.periodText == "Letzte 12 Monate")
+            // Gleiche Begriffe wie in der Statistik.
+            #expect(HomeRecordKind.longestStreak.title == "Längste Serie")
+            #expect(HomeRecordKind.currentStreak.title == "Aktuelle Serie")
+            #expect(HomeRecordKind.longestDistance.title == "Weiteste Strecke")
+            // Zeitraum nur für Rekorde aus den letzten 12 Monaten – nicht für Serien.
+            #expect(HomeRecordsWidget.periodNote(for: [.bestDay]) == "Letzte 12 Monate")
+            #expect(HomeRecordsWidget.periodNote(for: [.currentStreak]) == nil)
+            #expect(HomeRecordsWidget.periodNote(for: [.longestStreak, .bestWeek]) == "Tag, Woche, Monat und Strecke: letzte 12 Monate")
+        }
+        PaceLocalization.$languageOverride.withValue(.russian) {
+            #expect(HomeRecordKind.longestStreak.title == "Самая длинная серия")
+            #expect(HomeRecordKind.longestDistance.title == "Самая длинная дистанция")
         }
         // Gewählter Rekord ohne Wert (z. B. noch keine Serie): kein erfundener Wert.
         let none = HomeRecordsWidget(bests: [], selected: .longestStreak)
@@ -187,7 +216,7 @@ struct InsightWidgetTests {
         #expect(HomeModuleKind.groupProgress.gallerySection == .social)
         #expect(HomeModuleKind.stepsToday.gallerySection == .activity)
         PaceLocalization.$languageOverride.withValue(.russian) {
-            #expect(HomeGallerySection.allCases.map(\.title) == ["Активность", "Мотивация", "Общение"])
+            #expect(HomeGallerySection.allCases.map(\.title) == ["Активность", "Мотивация", "Друзья"])
         }
     }
 

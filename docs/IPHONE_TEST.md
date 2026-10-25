@@ -109,9 +109,15 @@ geprüft (100 Schritte pro Minute über 5 Minuten, 14 Szenarien) – nicht mit d
 
 - Der Wert steigt **während des Gehens** gleichmäßig (alle paar Sekunden), nicht nur um ein paar Dutzend Schritte
   in mehreren Minuten. Abweichungen von ±10 % zur eigenen Zählung sind normal (Schrittlänge, Tempo).
-- Beim Stehenbleiben bleibt der Wert stehen; er fällt **nie** zurück.
+- Beim Stehenbleiben bleibt der Wert stehen.
 - Später trägt Apple Health die Schritte selbst nach. Der Wert auf Home springt dann nicht zusätzlich nach oben
   (keine Doppelzählung). Mit Apple Watch kann Health etwas höher liegen – dann gilt der höhere Wert.
+- Bestätigt Apple Health **weniger**, als das iPhone gezählt hat (z. B. weil Health die Watch bevorzugt), fällt der
+  Wert etwa **20 Minuten nach dem letzten Schritt** auf den Health-Wert zurück. Das ist Absicht: Die Anzeige soll nicht
+  bis Mitternacht über Apple Health stehen. Bitte notieren, ob und wann das passiert (Diagnose-Seite: „Unbestätigte
+  Schritte verfallen“).
+- Erreichen nur die Live-Schritte dein Tagesziel, steht „Ziel erreicht – Bestätigung aus Apple Health folgt“.
+  „Tagesziel erreicht!“ erscheint erst, wenn Apple Health die Schritte bestätigt hat (wie bei der Serie).
 - Rankings, Freunde-Vergleich und Serie ändern sich erst, wenn Apple Health die Schritte bestätigt hat – die
   Live-Anzeige ist nur vorläufig.
 
@@ -120,6 +126,8 @@ zurück zu Pace. Die Schritte aus der Pause sollten sofort dazukommen.
 
 **Im Simulator:** Der Simulator hat keinen Schrittzähler. Auf der Diagnose-Seite lässt sich „100 Schritte/min
 simulieren“ einschalten (gilt ab dem nächsten App-Start) – nur zum Ansehen der Anzeige, kein Ersatz für die Gehprobe.
+Der Schalter bleibt gespeichert: Vor der Gehprobe auf dem iPhone prüfen, dass die Diagnose-Seite nicht „Simuliert“
+zeigt.
 
 ## 6. Testfälle
 
@@ -141,11 +149,11 @@ Hake ab, was klappt. Bei einem Fehler bitte Screenshot und die Nummer des Testfa
 | 10 | Statistik → Tag/Woche/Monat schnell hintereinander wischen. | Die Balken wechseln ruhig: keine schmalen oder verschobenen Balken, nichts überlagert sich, die Höhe der Karte springt nicht, Achsen passen. |
 | 11 | Auf Statistik, Kalender, Flamme, Gruppenkalender, Gruppeninfo, Chat, Freundesprofil, Einstellungen vom **linken Rand** nach rechts wischen. | Die Seite geht zurück. In Statistik/Kalender wechselt dabei nicht zusätzlich der Zeitraum. |
 | 12 | Zwischen den vier Tabs wischen und auf die Kopfzeilen achten. | „pace“-Schriftzug und Titel stehen in allen Tabs auf derselben Höhe, nichts springt. |
-| 13 | Home → Anpassen → „+ Widget hinzufügen“. | Kategorien in drei Abschnitten: **Aktivität**, **Motivation**, **Social**. Neu: Tagesvergleich, Aktivitätszeiten, Flammen-Woche, Persönliche Rekorde, Gruppenfortschritt. |
-| 14 | „Tagesvergleich“ hinzufügen (Mittel). | „+… mehr/weniger als gestern um diese Zeit“, Balken heute/gestern. Am Morgen ohne Werte von gestern: „Noch kein Vergleich verfügbar“. Antippen → Tagesstatistik. |
-| 15 | „Aktivitätszeiten“ hinzufügen, Größe Max. | Balken für Nacht, Morgen, Mittag, Nachmittag, Abend und darunter 24 Stunden; „Am aktivsten: …“. Ohne Stundenwerte ein Hinweis, keine ausgedachte Verteilung. |
-| 16 | „Flammen-Woche“ hinzufügen, antippen. | Mo–So mit erreichten Tagen (damaliges Ziel), optional Serie, Rekord, Meilenstein; Antippen öffnet deine Flammen-Seite. |
-| 17 | „Persönliche Rekorde“ hinzufügen, Rekord z. B. „Beste Woche“ wählen, Größe Groß. | Der gewählte Rekord groß, darunter zwei weitere, Hinweis „Letzte 12 Monate“. Ohne Wert (z. B. noch keine Serie) ein ehrlicher Hinweis. |
+| 13 | Home → Anpassen → „+ Widget hinzufügen“. | Kategorien in drei Abschnitten: **Aktivität**, **Motivation**, **Social**. Neu: Tagesvergleich, Aktivitätszeiten, Serie diese Woche, Persönliche Rekorde, Gruppenfortschritt. |
+| 14 | „Tagesvergleich“ hinzufügen (Mittel). | „… Schritte mehr/weniger als gestern um diese Zeit“, Balken heute/gestern. Kurz nach dem Hinzufügen ein Ladekreis (nicht „kein Vergleich“). Ohne Werte von gestern: „Noch kein Vergleich verfügbar“. Antippen → Tagesstatistik. |
+| 15 | „Aktivitätszeiten“ hinzufügen, Größe Max. | Balken für Nachts, Morgens, Mittags, Nachmittags, Abends und darunter 24 Stunden; z. B. „Am aktivsten nachmittags“. Ohne Stundenwerte ein Hinweis, keine ausgedachte Verteilung. |
+| 16 | „Serie diese Woche“ hinzufügen, antippen. | Mo–So mit erreichten Tagen (damaliges Ziel), optional Serie, Rekord, Meilenstein; Antippen öffnet deine Flammen-Seite. |
+| 17 | „Persönliche Rekorde“ hinzufügen, Rekord z. B. „Beste Woche“ wählen, Größe Groß. | Rekordauswahl einspaltig, auch auf Russisch nichts abgeschnitten. Der gewählte Rekord groß, darunter zwei weitere; Begriffe wie in der Statistik („Längste Serie“, „Weiteste Strecke“). Zeitraum „Letzte 12 Monate“ nur bei Tag/Woche/Monat/Strecke. Ohne Wert (z. B. noch keine Serie) ein ehrlicher Hinweis. |
 | 18 | „Gruppenfortschritt“ hinzufügen, eine Gruppe wählen; danach in Social die Gruppe verlassen (oder auf einem Testkonto). | Name, Mitglieder, Fortschritt, 🔥 + Zahl; Antippen → Gruppe, Flamme → Gruppenkalender. Nach dem Verlassen: Hinweis, dass du nicht mehr in der Gruppe bist. |
 | 19 | App beenden und neu starten. | Alle neuen Widgets mit Größe und Optionen sind unverändert da. |
 | 20 | Sprache auf English bzw. Русский stellen und Fälle 4–18 grob durchsehen. | Alles übersetzt („12 участников“, „1 участник“ usw.), nichts abgeschnitten. |

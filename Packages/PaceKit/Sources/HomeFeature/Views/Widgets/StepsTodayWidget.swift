@@ -186,7 +186,8 @@ struct StepsTodayWidgetContent: View {
 
             if details.contains(.weekChart), !summary.sevenDays.isEmpty {
                 NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .week, metric: .steps))) {
-                    StepsSevenDayChart(summary: summary)
+                    // Den Durchschnitt zeigt dann schon die Vergleichskachel darunter – nicht doppelt.
+                    StepsSevenDayChart(summary: summary, showsAverage: !details.contains(.comparison))
                 }
                 .buttonStyle(.pacePressable)
                 .accessibilityHint(PaceLocalization.text(
@@ -317,6 +318,7 @@ private struct StepsMetricCell: View {
 /// darunter wie oft das Ziel erreicht wurde. Keine Werte, die es nicht gibt: Tage ohne Schritte haben einen leeren Balken.
 struct StepsSevenDayChart: View {
     let summary: StepsTodaySummary
+    var showsAverage = true
 
     @ScaledMetric(relativeTo: .body) private var chartHeight: CGFloat = 64
 
@@ -328,7 +330,7 @@ struct StepsSevenDayChart: View {
                         .font(PaceFont.headline)
                         .foregroundStyle(PaceColor.textPrimary)
                     Spacer(minLength: PaceSpacing.xs)
-                    if let average = summary.sevenDayAverageText {
+                    if showsAverage, let average = summary.sevenDayAverageText {
                         Text("Ø \(average)")
                             .font(PaceFont.caption.weight(.semibold))
                             .monospacedDigit()

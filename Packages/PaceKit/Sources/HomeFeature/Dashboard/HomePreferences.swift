@@ -44,8 +44,8 @@ public enum HomeModuleKind: String, Codable, CaseIterable, Sendable, Identifiabl
         case .groups: PaceLocalization.text(de: "Deine Gruppen", en: "Your groups", ru: "Твои группы")
         case .activity: PaceLocalization.text(de: "Aktivität", en: "Activity", ru: "Активность")
         case .calendar: PaceLocalization.text(de: "Kalender", en: "Calendar", ru: "Календарь")
-        case .dayComparison: PaceLocalization.text(de: "Tagesvergleich", en: "Day comparison", ru: "Сравнение дня")
-        case .streakWeek: PaceLocalization.text(de: "Flammen-Woche", en: "Flame week", ru: "Неделя огня")
+        case .dayComparison: PaceLocalization.text(de: "Tagesvergleich", en: "Day comparison", ru: "Сегодня и вчера")
+        case .streakWeek: PaceLocalization.text(de: "Serie diese Woche", en: "Streak this week", ru: "Серия за неделю")
         case .records: PaceLocalization.text(de: "Persönliche Rekorde", en: "Personal records", ru: "Личные рекорды")
         case .activityTimes: PaceLocalization.text(de: "Aktivitätszeiten", en: "Activity times", ru: "Время активности")
         case .groupProgress: PaceLocalization.text(de: "Gruppenfortschritt", en: "Group progress", ru: "Прогресс группы")
@@ -105,9 +105,9 @@ public enum HomeModuleKind: String, Codable, CaseIterable, Sendable, Identifiabl
             )
         case .streakWeek:
             PaceLocalization.text(
-                de: "Diese Woche: Tagesziel je Tag erreicht?",
-                en: "This week: daily goal reached each day?",
-                ru: "Эта неделя: цель выполнена по дням?"
+                de: "Tagesziel an jedem Tag dieser Woche erreicht?",
+                en: "Daily goal reached on each day this week?",
+                ru: "Выполнена ли цель в каждый день этой недели"
             )
         case .records:
             PaceLocalization.text(
@@ -119,7 +119,7 @@ public enum HomeModuleKind: String, Codable, CaseIterable, Sendable, Identifiabl
             PaceLocalization.text(
                 de: "Wann du heute am aktivsten warst",
                 en: "When you were most active today",
-                ru: "Когда ты был активнее всего сегодня"
+                ru: "Когда сегодня было больше всего шагов"
             )
         case .groupProgress:
             PaceLocalization.text(
@@ -171,7 +171,7 @@ public enum HomeModuleKind: String, Codable, CaseIterable, Sendable, Identifiabl
         case .activity, .stepsToday:
             PaceLocalization.text(de: "Schritte und Aktivität", en: "Steps and activity", ru: "Шаги и активность")
         case .week: PaceLocalization.text(de: "Wochenübersicht", en: "Weekly overview", ru: "Обзор недели")
-        case .streak: PaceLocalization.text(de: "Persönliche Streak", en: "Personal streak", ru: "Личная серия")
+        case .streak: PaceLocalization.text(de: "Persönliche Serie", en: "Personal streak", ru: "Личная серия")
         case .friends: PaceLocalization.text(de: "Freunde", en: "Friends", ru: "Друзья")
         case .groups: PaceLocalization.text(de: "Gruppen", en: "Groups", ru: "Группы")
         case .regionRanks: PaceLocalization.text(de: "Regionale Rankings", en: "Regional rankings", ru: "Региональные рейтинги")
@@ -239,7 +239,7 @@ public enum HomeGallerySection: String, CaseIterable, Sendable, Identifiable {
         switch self {
         case .activity: PaceLocalization.text(de: "Aktivität", en: "Activity", ru: "Активность")
         case .motivation: PaceLocalization.text(de: "Motivation", en: "Motivation", ru: "Мотивация")
-        case .social: PaceLocalization.text(de: "Social", en: "Social", ru: "Общение")
+        case .social: PaceLocalization.text(de: "Social", en: "Social", ru: "Друзья")
         }
     }
 

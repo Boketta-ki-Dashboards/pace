@@ -290,16 +290,20 @@ struct HomeWidgetGalleryContent: View {
         case .records:
             configurationCard {
                 configurationTitle(PaceLocalization.text(de: "Rekord auswählen", en: "Choose a record", ru: "Выбери рекорд"))
-                LazyVGrid(columns: columns, alignment: .leading, spacing: PaceSpacing.xs) {
+                // Einspaltig wie die Gruppenauswahl: Lange Titel („Самая длинная дистанция“) werden nicht abgeschnitten.
+                VStack(spacing: PaceSpacing.xs) {
                     ForEach(HomeRecordKind.allCases) { record in
-                        HomeGalleryChip(title: record.title, systemImage: record.systemImage, isSelected: gallery.record == record) {
+                        HomeGalleryChoiceRow(title: record.title, systemImage: record.systemImage, isSelected: gallery.record == record) {
                             gallery.record = record
                         }
                     }
                 }
-                Text(HomeRecordsWidget.periodText)
-                    .font(PaceFont.caption)
-                    .foregroundStyle(PaceColor.textSecondary)
+                if let note = HomeRecordsWidget.periodNote(for: HomeRecordKind.allCases) {
+                    Text(note)
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         case .stepsToday, .week, .streak, .calendar, .dayComparison, .streakWeek, .activityTimes:
             configurationCard {

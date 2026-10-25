@@ -93,6 +93,8 @@ public struct GroupDayProgress: Equatable, Sendable {
                 ru: "Огонь группы на сегодня сохранён"
             )
         }
+        // Ohne Serverwert für die nötigen Ziele kein Hinweis – nie eine erfundene Zahl.
+        guard required > 0 else { return nil }
         let count = max(missing, 1)
         let number = count.paceFormatted
         return PaceLocalization.plural(
@@ -100,9 +102,9 @@ public struct GroupDayProgress: Equatable, Sendable {
             de: ("Noch \(number) Mitglied bis zur heutigen Gruppenflamme", "Noch \(number) Mitglieder bis zur heutigen Gruppenflamme"),
             en: ("\(number) more member for today's group flame", "\(number) more members for today's group flame"),
             ru: (
-                "Ещё \(number) участник до сегодняшнего огня группы",
-                "Ещё \(number) участника до сегодняшнего огня группы",
-                "Ещё \(number) участников до сегодняшнего огня группы"
+                "Ещё \(number) участник – и огонь группы на сегодня сохранён",
+                "Ещё \(number) участника – и огонь группы на сегодня сохранён",
+                "Ещё \(number) участников – и огонь группы на сегодня сохранён"
             )
         )
     }

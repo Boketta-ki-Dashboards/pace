@@ -384,7 +384,8 @@ public final class HomeWidgetGalleryViewModel {
                 ru: "«\(duplicate.title)» уже показывает это в твоём обзоре."
             )
         }
-        if kind == .groupProgress, groupID == nil {
+        // Eine verlassene oder gelöschte Gruppe (veraltete ID beim Bearbeiten) gilt wie keine Auswahl.
+        if kind == .groupProgress, groupID == nil || (social.state == .loaded && !social.groups.contains { $0.id == groupID }) {
             return PaceLocalization.text(
                 de: "Wähle eine Gruppe aus – ohne Gruppe gibt es keinen Fortschritt.",
                 en: "Choose a group – without a group there is no progress.",

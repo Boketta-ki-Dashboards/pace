@@ -103,10 +103,14 @@ public struct SimulatedLiveSteps: LiveStepCounting {
 
     public func readings(since start: Date) -> AsyncStream<LiveStepReading> {
         let (stream, continuation) = AsyncStream<LiveStepReading>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        // Wie der echte Sensor: Schritte seit `start`. Beginnt die Messung nach dem Simulationsstart (z. B. neuer Tag),
+        // zählen nur die Schritte ab `start` – keine erfundenen Schritte vom Vortag.
+        let baseline = start > origin ? reading(at: start).steps : 0
         let task = Task { [self] in
             var last: Int?
             while !Task.isCancelled {
-                let reading = reading(at: now())
+                let current = reading(at: now())
+                let reading = LiveStepReading(steps: max(0, current.steps - baseline), date: current.date)
                 // Wie der echte Sensor: nur neue Werte melden.
                 if reading.steps != last {
                     continuation.yield(reading)

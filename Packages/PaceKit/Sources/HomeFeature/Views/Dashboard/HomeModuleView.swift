@@ -278,7 +278,7 @@ struct HomeModuleView: View {
                         widget: viewModel.dayComparisonWidget,
                         size: module.size,
                         details: module.shownDetails,
-                        unavailableText: viewModel.weekUnavailableText
+                        unavailableText: viewModel.hourlyUnavailableText
                     )
                     .contentShape(Rectangle())
                 }
@@ -309,7 +309,7 @@ struct HomeModuleView: View {
                     ActivityTimesWidgetContent(
                         widget: viewModel.activityTimesWidget,
                         size: module.size,
-                        unavailableText: viewModel.weekUnavailableText
+                        unavailableText: viewModel.hourlyUnavailableText
                     )
                     .contentShape(Rectangle())
                 }

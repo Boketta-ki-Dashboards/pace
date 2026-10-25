@@ -20,6 +20,9 @@ public struct StepsTodaySummary: Equatable, Sendable {
     /// z. B. `Noch 1.568 bis zu deinem Ziel` oder `Tagesziel erreicht!`
     public let remainingText: String
     public let isGoalReached: Bool
+    /// Live-Schritte erreichen das Ziel, HealthKit bestätigt es aber noch nicht (kein „Tagesziel erreicht!“, solange
+    /// die Serie nicht gesichert ist).
+    public let isGoalPendingConfirmation: Bool
     /// `nil`, wenn die Kennzahl nicht lesbar ist – dann wird sie nicht angezeigt (keine falsche 0).
     public let distanceText: String?
     /// Aktive Kalorien (`324 kcal`, geschätzt `≈ 245 kcal`) oder „Nicht verfügbar“, wenn Apple Health für heute keine
@@ -88,7 +91,8 @@ public struct StepsTodaySummary: Equatable, Sendable {
             lastSevenDays: overview.lastSevenDays,
             goal: goal,
             formatter: formatter,
-            goalOn: goalOn
+            goalOn: goalOn,
+            confirmedSteps: overview.today.competitionSteps
         )
     }
 
@@ -114,7 +118,8 @@ public struct StepsTodaySummary: Equatable, Sendable {
         lastSevenDays: ActivityPeriodSummary?,
         goal rawGoal: Int,
         formatter: ActivityFormatter,
-        goalOn: ((LocalDate) -> Int)? = nil
+        goalOn: ((LocalDate) -> Int)? = nil,
+        confirmedSteps: Int? = nil
     ) {
         let goal = max(rawGoal, 1)
         self.goal = goal
@@ -128,10 +133,14 @@ public struct StepsTodaySummary: Equatable, Sendable {
         )
         progress = Double(today.competitionSteps) / Double(goal)
         percentText = formatter.compactPercent(progress)
-        isGoalReached = today.competitionSteps >= goal
+        // „Erreicht“ nur mit bestätigten Schritten (wie die Serie); Live-Schritte allein zeigen „Bestätigung folgt“.
+        let confirmed = min(confirmedSteps ?? today.competitionSteps, today.competitionSteps)
+        isGoalReached = confirmed >= goal
+        isGoalPendingConfirmation = !isGoalReached && today.competitionSteps >= goal
         let remaining = formatter.steps(max(goal - today.competitionSteps, 0))
         remainingText = isGoalReached
             ? PaceLocalization.text(de: "Tagesziel erreicht!", en: "Daily goal reached!", ru: "Дневная цель выполнена!")
+            : isGoalPendingConfirmation ? HomeTexts.goalReachedPending
             : PaceLocalization.text(
                 de: "Noch \(remaining) bis zu deinem Ziel",
                 en: "\(remaining) to go to your goal",
@@ -165,8 +174,10 @@ public struct StepsTodaySummary: Equatable, Sendable {
         }
         sevenDays = bars
         sevenDayScale = max(bars.map(\.steps).max() ?? 0, bars.map(\.goal).max() ?? goal, 1)
-        let counted = bars.filter { !$0.isToday || $0.reachedGoal }
-        sevenDayGoalText = bars.isEmpty ? nil : HomeTexts.goalReachedOnDays(counted.filter(\.reachedGoal).count, of: counted.count)
+        // Heute zählt erst mit bestätigtem Ziel; ohne gezählten Tag keine Zeile („0 von 0“).
+        let todayCounts = isGoalReached
+        let counted = bars.filter { !$0.isToday || todayCounts }
+        sevenDayGoalText = counted.isEmpty ? nil : HomeTexts.goalReachedOnDays(counted.filter(\.reachedGoal).count, of: counted.count)
     }
 }
 

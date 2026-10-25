@@ -89,22 +89,25 @@ public struct HomeDayComparisonWidget: Equatable, Sendable {
         return Double(value) / Double(top)
     }
 
-    /// Satz für Klein/Mittel, z. B. „1.242 mehr als gestern um diese Zeit“.
+    /// Satz für Klein/Mittel, z. B. „1.242 Schritte mehr als gestern um diese Zeit“.
     public var headline: String {
         guard let yesterdaySteps else { return Self.unavailableText }
-        let difference = abs(todaySteps - yesterdaySteps).paceFormatted
+        let count = abs(todaySteps - yesterdaySteps)
+        let difference = count.paceFormatted
+        // RU nach „на“: Akkusativ – „на 1 шаг / 2 шага / 5 шагов“.
+        let unit = PaceLocalization.plural(count, de: ("Schritt", "Schritte"), en: ("step", "steps"), ru: ("шаг", "шага", "шагов"))
         switch direction {
         case .ahead:
             return PaceLocalization.text(
-                de: "\(difference) mehr als gestern um diese Zeit",
-                en: "\(difference) more than yesterday at this time",
-                ru: "На \(difference) больше, чем вчера в это время"
+                de: "\(difference) \(unit) mehr als gestern um diese Zeit",
+                en: "\(difference) \(unit) more than yesterday at this time",
+                ru: "На \(difference) \(unit) больше, чем вчера в это время"
             )
         case .behind:
             return PaceLocalization.text(
-                de: "\(difference) weniger als gestern um diese Zeit",
-                en: "\(difference) fewer than yesterday at this time",
-                ru: "На \(difference) меньше, чем вчера в это время"
+                de: "\(difference) \(unit) weniger als gestern um diese Zeit",
+                en: "\(difference) \(unit) fewer than yesterday at this time",
+                ru: "На \(difference) \(unit) меньше, чем вчера в это время"
             )
         case .even:
             return PaceLocalization.text(
@@ -193,25 +196,36 @@ public struct HomeActivityTimesWidget: Equatable, Sendable {
         )
     }
 
-    /// z. B. „Am aktivsten: Nachmittag“.
+    /// z. B. „Am aktivsten nachmittags“.
     public var peakText: String? {
-        peak.map { PaceLocalization.text(de: "Am aktivsten: \($0.title)", en: "Most active: \($0.title)", ru: "Больше всего: \($0.title)") }
+        peak.map { Self.peakText($0.id) }
     }
 
     static func title(_ id: String) -> String {
         switch id {
-        case "night": PaceLocalization.text(de: "Nacht", en: "Night", ru: "Ночь")
-        case "morning": PaceLocalization.text(de: "Morgen", en: "Morning", ru: "Утро")
-        case "midday": PaceLocalization.text(de: "Mittag", en: "Midday", ru: "Полдень")
-        case "afternoon": PaceLocalization.text(de: "Nachmittag", en: "Afternoon", ru: "День")
-        default: PaceLocalization.text(de: "Abend", en: "Evening", ru: "Вечер")
+        case "night": PaceLocalization.text(de: "Nachts", en: "Night", ru: "Ночь")
+        case "morning": PaceLocalization.text(de: "Morgens", en: "Morning", ru: "Утро")
+        case "midday": PaceLocalization.text(de: "Mittags", en: "Midday", ru: "Обед")
+        case "afternoon": PaceLocalization.text(de: "Nachmittags", en: "Afternoon", ru: "День")
+        default: PaceLocalization.text(de: "Abends", en: "Evening", ru: "Вечер")
+        }
+    }
+
+    /// Satz zur aktivsten Tageszeit, je Sprache mit der passenden Form (RU: Adverb, nicht Nominativ).
+    static func peakText(_ id: String) -> String {
+        switch id {
+        case "night": PaceLocalization.text(de: "Am aktivsten nachts", en: "Most active at night", ru: "Активнее всего ночью")
+        case "morning": PaceLocalization.text(de: "Am aktivsten morgens", en: "Most active in the morning", ru: "Активнее всего утром")
+        case "midday": PaceLocalization.text(de: "Am aktivsten mittags", en: "Most active at midday", ru: "Активнее всего в обед")
+        case "afternoon": PaceLocalization.text(de: "Am aktivsten nachmittags", en: "Most active in the afternoon", ru: "Активнее всего днём")
+        default: PaceLocalization.text(de: "Am aktivsten abends", en: "Most active in the evening", ru: "Активнее всего вечером")
         }
     }
 
     static func hoursText(_ range: Range<Int>) -> String {
         PaceLocalization.text(
             de: "\(range.lowerBound)–\(range.upperBound) Uhr",
-            en: "\(range.lowerBound)–\(range.upperBound) h",
+            en: "\(range.lowerBound)–\(range.upperBound)",
             ru: "\(range.lowerBound)–\(range.upperBound) ч"
         )
     }
@@ -230,9 +244,9 @@ public enum HomeRecordKind: String, Codable, CaseIterable, Sendable, Identifiabl
         case .bestDay: PaceLocalization.text(de: "Bester Tag", en: "Best day", ru: "Лучший день")
         case .bestWeek: PaceLocalization.text(de: "Beste Woche", en: "Best week", ru: "Лучшая неделя")
         case .bestMonth: PaceLocalization.text(de: "Bester Monat", en: "Best month", ru: "Лучший месяц")
-        case .longestStreak: PaceLocalization.text(de: "Längste Flamme", en: "Longest flame", ru: "Самый долгий огонь")
-        case .currentStreak: PaceLocalization.text(de: "Aktuelle Flamme", en: "Current flame", ru: "Текущий огонь")
-        case .longestDistance: PaceLocalization.text(de: "Größte Distanz", en: "Longest distance", ru: "Самая большая дистанция")
+        case .longestStreak: PaceLocalization.text(de: "Längste Serie", en: "Longest streak", ru: "Самая длинная серия")
+        case .currentStreak: PaceLocalization.text(de: "Aktuelle Serie", en: "Current streak", ru: "Текущая серия")
+        case .longestDistance: PaceLocalization.text(de: "Weiteste Strecke", en: "Longest distance", ru: "Самая длинная дистанция")
         }
     }
 
@@ -244,6 +258,15 @@ public enum HomeRecordKind: String, Codable, CaseIterable, Sendable, Identifiabl
         case .longestStreak: "flame.fill"
         case .currentStreak: "flame"
         case .longestDistance: "shoeprints.fill"
+        }
+    }
+
+    /// Ob der Rekord aus dem geladenen Verlauf der letzten 12 Monate stammt. Serien nicht: Die aktuelle Serie ist kein
+    /// Zeitraum-Rekord, die längste kann älter sein.
+    public var isFromLastTwelveMonths: Bool {
+        switch self {
+        case .bestDay, .bestWeek, .bestMonth, .longestDistance: true
+        case .longestStreak, .currentStreak: false
         }
     }
 
@@ -292,6 +315,19 @@ public struct HomeRecordsWidget: Equatable, Sendable {
     /// Zeitraum, aus dem die Rekorde stammen.
     public static var periodText: String {
         PaceLocalization.text(de: "Letzte 12 Monate", en: "Last 12 months", ru: "Последние 12 месяцев")
+    }
+
+    /// Zeitraum-Hinweis für die gezeigten Rekorde: nur für Rekorde aus den letzten 12 Monaten; bei gemischter Auswahl
+    /// mit Serien steht dabei, wofür er gilt. `nil`, wenn nur Serien zu sehen sind.
+    public static func periodNote(for kinds: [HomeRecordKind]) -> String? {
+        let windowed = kinds.filter(\.isFromLastTwelveMonths)
+        guard !windowed.isEmpty else { return nil }
+        if windowed.count == kinds.count { return periodText }
+        return PaceLocalization.text(
+            de: "Tag, Woche, Monat und Strecke: letzte 12 Monate",
+            en: "Day, week, month and distance: last 12 months",
+            ru: "День, неделя, месяц и дистанция: последние 12 месяцев"
+        )
     }
 
     public static var emptyText: String {
@@ -346,7 +382,7 @@ public enum HomeGroupProgressWidget: Equatable, Sendable {
         PaceLocalization.text(
             de: "Du bist nicht mehr in dieser Gruppe oder sie wurde gelöscht. Wähle eine andere Gruppe oder entferne das Widget.",
             en: "You're no longer in this group or it was deleted. Choose another group or remove the widget.",
-            ru: "Ты больше не в этой группе, или она удалена. Выбери другую группу или удали виджет."
+            ru: "Ты больше не состоишь в этой группе или она удалена. Выбери другую группу или удали виджет."
         )
     }
 }

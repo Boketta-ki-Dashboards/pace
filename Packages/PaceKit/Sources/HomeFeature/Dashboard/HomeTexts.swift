@@ -16,10 +16,11 @@ public enum HomeTexts {
 
     /// z. B. `Ziel an 4 von 6 Tagen erreicht`.
     public static func goalReachedOnDays(_ reached: Int, of total: Int) -> String {
-        PaceLocalization.text(
-            de: "Ziel an \(reached) von \(total) Tagen erreicht",
-            en: "Goal reached on \(reached) of \(total) days",
-            ru: "Цель выполнена в \(reached) из \(total) " + PaceLocalization.plural(total, de: ("", ""), en: ("", ""), ru: ("дня", "дней", "дней"))
+        let days = PaceLocalization.plural(total, de: ("Tag", "Tagen"), en: ("day", "days"), ru: ("дня", "дней", "дней"))
+        return PaceLocalization.text(
+            de: "Ziel an \(reached) von \(total) \(days) erreicht",
+            en: "Goal reached on \(reached) of \(total) \(days)",
+            ru: "Цель выполнена в \(reached) из \(total) \(days)"
         )
     }
 
@@ -44,11 +45,20 @@ public enum HomeTexts {
 
     /// z. B. `Diese Woche: Ziel an 3 Tagen erreicht`.
     public static func goalDaysThisWeek(_ count: Int) -> String {
-        let days = PaceLocalization.plural(count, de: ("Tag", "Tagen"), en: ("day", "days"), ru: ("день", "дня", "дней"))
+        let days = PaceLocalization.plural(count, de: ("Tag", "Tagen"), en: ("day", "days"), ru: ("", "", ""))
         return PaceLocalization.text(
             de: "Diese Woche: Ziel an \(count.paceFormatted) \(days) erreicht",
             en: "This week: goal reached on \(count.paceFormatted) \(days)",
-            ru: "На этой неделе: цель выполнена \(count.paceFormatted) \(days)"
+            ru: "Дней с выполненной целью на этой неделе: \(count.paceFormatted)"
+        )
+    }
+
+    /// Live-Schritte über dem Ziel, HealthKit bestätigt es noch nicht (die Serie zählt erst danach).
+    public static var goalReachedPending: String {
+        PaceLocalization.text(
+            de: "Ziel erreicht – Bestätigung aus Apple Health folgt",
+            en: "Goal reached – confirmation from Apple Health pending",
+            ru: "Цель выполнена – ждём подтверждения из Apple Health"
         )
     }
 

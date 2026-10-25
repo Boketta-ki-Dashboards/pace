@@ -160,23 +160,35 @@ Solange Pace im Vordergrund ist, zählt die Anzeige „Deine Schritte heute“ �
   Differenz mit dem nächsten HealthKit-Stand auf (keine erfundenen Schritte).
 - **App verlassen/zurück:** Der Sensor stoppt im Hintergrund (Akku). Beim Neustart zählt er weiter ab Tagesbeginn; die
   Schritte aus der Pause kommen dazu, solange HealthKit sich in der Zwischenzeit nicht geändert hat.
-- Die Anzeige sinkt nie innerhalb eines Tages. Nach Mitternacht beginnt die Messung mit dem ersten Wert des neuen
-  Tages neu; Werte, die noch ab dem Vortag zählen, werden verworfen.
+- **Unbestätigte Schritte verfallen nach 20 Minuten** (`LiveStepEstimator.confirmationWindow`, `settle(at:)`, bei
+  jeder Abfrage): Hat der Sensor seit 20 Minuten keine neuen Schritte gemeldet und HealthKit die vorläufigen Schritte
+  bis dahin nicht bestätigt, gilt der HealthKit-Stand – auch wenn die Anzeige dabei sinkt. Grund: Health bevorzugt bei
+  Überschneidung z. B. die Apple Watch und verwirft dann Schritte des iPhones; ohne diese Regel stünde die Anzeige bis
+  Mitternacht über HealthKit. Danach gilt auch die Sensor-Tagessumme nicht mehr als Untergrenze (bis zum nächsten
+  Tag). Sonst sinkt die Anzeige innerhalb eines Tages nicht. Die 20 Minuten sind eine Annahme (iOS schreibt die
+  iPhone-Schritte meist nach wenigen Minuten nach Health) und mit der Gehprobe auf dem iPhone zu prüfen.
+- **„Tagesziel erreicht!“ erst mit bestätigten Schritten** – wie die Serie. Erreichen nur die Live-Schritte das Ziel,
+  steht „Ziel erreicht – Bestätigung aus Apple Health folgt“; „Ziel an … Tagen“ zählt heute erst bestätigt mit.
+- Nach Mitternacht beginnt die Messung mit dem ersten Wert des neuen Tages neu; Werte, die noch ab dem Vortag zählen,
+  werden verworfen.
 - Die Live-Werte sind **nur Anzeige**: Rankings, Synchronisierung, Serie und Erinnerungen nutzen ausschließlich die
   HealthKit-Wettbewerbsschritte. Manuell eingetragene Schritte zählen weiterhin nicht; der Sensor misst nur echte
   Bewegung.
 - Ohne Erlaubnis oder ohne Sensor (z. B. Simulator) zeigt Pace die HealthKit-Werte.
 
-**Tests:** `LiveStepEstimatorTests` und `LiveStepSimulationTests` spielen 14 Szenarien mit **simulierten** Sensorwerten
+**Tests:** `LiveStepEstimatorTests` und `LiveStepSimulationTests` spielen 15 Szenarien mit **simulierten** Sensorwerten
 durch (100 Schritte/min: 30 s ≈ 50, 60 s ≈ 100, 120 s ≈ 200, 300 s ≈ 500; schneller, Pause, Fortsetzung, HealthKit
 verspätet/holt ein/höher, App verlassen, Sensor-Neustart, Mitternacht, kein Sensor, keine Erlaubnis, Apple Watch,
-neue Quelle) sowie zufällige Abfolgen (nie Rückgang, nie über HealthKit + Sensor-Fortschritt). Ein Test mit dem
+neue Quelle, HealthKit bestätigt weniger als das iPhone zählt) sowie zufällige Abfolgen (nie Rückgang, nie über
+HealthKit + Sensor-Fortschritt; Rückgang nur beim Verfall, dann genau auf HealthKit). Ein Test mit dem
 echten Sensor ist nur auf dem iPhone möglich (5-Minuten-Gehprobe in [IPHONE_TEST.md](IPHONE_TEST.md)).
 
 **Diagnose (nur Entwicklung):** In Builds aus Xcode gibt es unter Profil → Aktivität & Gesundheit „Live-Schritte ·
 Diagnose“ (Sensorzustand, Messwerte, mittlerer Abstand, bestätigte und vorläufige Schritte, begrenztes Protokoll mit
 80 Einträgen). Nicht im Home-Design, wird nicht hochgeladen. Dort bzw. mit der Startoption
-`-PaceSimulatedStepsPerMinute 100` lässt sich im Simulator Gehen simulieren (nur `DEBUG`).
+`-PaceSimulatedStepsPerMinute 100` lässt sich im Simulator Gehen simulieren (nur `DEBUG`). Der Schalter auf der
+Diagnose-Seite bleibt gespeichert, bis man ihn ausschaltet; die Seite zeigt dann „Simuliert“ – vor der Gehprobe auf
+dem iPhone ausschalten. Ab einem neuen Tag zählt die Simulation nur Schritte ab Mitternacht.
 
 ## Wann gelesen wird
 

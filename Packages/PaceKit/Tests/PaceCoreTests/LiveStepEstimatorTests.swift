@@ -168,6 +168,60 @@ struct LiveStepEstimatorTests {
         #expect(estimator.confirmedSteps == nil)
     }
 
+    // MARK: Unbestätigte Schritte verfallen (Stabilitäts-Review Auftrag 5)
+
+    /// Health bevorzugt die Apple Watch: Das iPhone zählt 6.000, HealthKit bestätigt nur 5.710. Ohne Verfall stünde die
+    /// Anzeige bis Mitternacht bei 6.000 – „Ziel erreicht“, obwohl die Serie (aus HealthKit) es nicht ist.
+    @Test func unconfirmedStepsExpireWhenHealthKitNeverConfirmsThem() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        var estimator = LiveStepEstimator()
+        estimator.healthKit(5_700, on: today)
+        estimator.sensor(6_000, on: today, at: start)
+        #expect(estimator.steps == 6_000)
+        #expect(estimator.lastSensorProgress == start)
+        estimator.healthKit(5_710, on: today)
+        // Innerhalb des Zeitfensters bleibt der vorläufige Stand.
+        let settled1 = estimator.settle(at: start.addingTimeInterval(LiveStepEstimator.confirmationWindow - 1))
+        #expect(!settled1)
+        #expect(estimator.steps == 6_000)
+        // Danach gilt HealthKit – auch die Sensor-Tagessumme hält die Anzeige nicht mehr darüber.
+        let settled2 = estimator.settle(at: start.addingTimeInterval(LiveStepEstimator.confirmationWindow))
+        #expect(settled2)
+        #expect(estimator.steps == 5_710)
+        #expect(estimator.unconfirmedSteps == 0)
+        // Ein zweites Mal ändert sich nichts.
+        let settled3 = estimator.settle(at: start.addingTimeInterval(2 * LiveStepEstimator.confirmationWindow))
+        #expect(!settled3)
+        // Neue Schritte zählen wieder ab dem aktuellen Sensorwert – ohne die verworfenen 290.
+        estimator.sensor(6_050, on: today, at: start.addingTimeInterval(LiveStepEstimator.confirmationWindow + 30))
+        #expect(estimator.steps == 5_760)
+    }
+
+    @Test func walkingKeepsUnconfirmedStepsAndBareConfirmationNeedsNothing() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        var estimator = LiveStepEstimator()
+        estimator.healthKit(1_000, on: today)
+        estimator.sensor(500, on: today, at: start)
+        // Laufend neue Schritte: Das Fenster beginnt jeweils neu.
+        for minute in 1...40 {
+            estimator.sensor(500 + minute * 100, on: today, at: start.addingTimeInterval(Double(minute) * 60))
+            let settled4 = estimator.settle(at: start.addingTimeInterval(Double(minute) * 60 + 30))
+            #expect(!settled4)
+        }
+        #expect(estimator.steps == 5_000)
+        // HealthKit bestätigt alles: nichts verfällt, nichts fällt zurück.
+        estimator.healthKit(5_000, on: today)
+        let settled5 = estimator.settle(at: start.addingTimeInterval(3 * 3_600))
+        #expect(!settled5)
+        #expect(estimator.steps == 5_000)
+        // Ohne HealthKit-Stand gibt es nichts zu bestätigen.
+        var noHealthKit = LiveStepEstimator()
+        noHealthKit.sensor(2_000, on: today, at: start)
+        let settled6 = noHealthKit.settle(at: start.addingTimeInterval(3 * 3_600))
+        #expect(!settled6)
+        #expect(noHealthKit.steps == 2_000)
+    }
+
     /// Zufällige Abfolgen: Die Anzeige fällt nie zurück, liegt nie unter HealthKit und nie über dem, was HealthKit
     /// und Sensor zusammen erklären können.
     @Test(arguments: 1...40)

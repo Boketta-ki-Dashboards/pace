@@ -73,7 +73,10 @@ public struct NoLiveStepCounting: LiveStepCounting {
 ///   max(angezeigt, HealthKit)`, `Sensor-Basis = aktueller Sensorwert`. HealthKit trägt Schritte oft Minuten später
 ///   nach; der Sensor-Fortschritt geht dabei nicht verloren, und Schritte, die HealthKit inzwischen kennt, zählen
 ///   nicht doppelt. Zählt eine andere Quelle (z. B. die Apple Watch) mehr, gilt der höhere HealthKit-Wert.
-/// - Die Anzeige fällt innerhalb eines Tages nie zurück.
+/// - Die Anzeige fällt innerhalb eines Tages nicht zurück – mit einer Ausnahme: Unbestätigte Schritte verfallen, wenn
+///   der Sensor seit ``confirmationWindow`` keine neuen Schritte gemeldet hat und HealthKit sie bis dahin nicht
+///   bestätigt (``settle(at:)``). Dann gilt der HealthKit-Stand, z. B. wenn Health die Apple Watch bevorzugt und
+///   Schritte des iPhones verwirft. So steht die Anzeige nie dauerhaft über HealthKit.
 /// - Messung gestoppt und neu gestartet (Hintergrund): Zählt der Sensor weiter ab Tagesbeginn, kommen die Schritte aus
 ///   der Pause dazu, solange HealthKit sich in der Zwischenzeit nicht geändert hat.
 /// - Neuer Tag: alles beginnt neu. Werte eines früheren Tages werden ignoriert.
@@ -92,13 +95,22 @@ public struct LiveStepEstimator: Equatable, Sendable {
     /// kommen die Schritte aus der Pause dazu – außer HealthKit hat sich inzwischen geändert (dann könnte es sie schon
     /// enthalten).
     private var sensorAtStop: Int?
+    /// Zeitpunkt des letzten Sensorwerts, der die Anzeige erhöht hat.
+    public private(set) var lastSensorProgress: Date?
+    /// Ob die Sensor-Tagessumme als Untergrenze gilt; nach verfallenen unbestätigten Schritten nicht mehr (bis zum
+    /// nächsten Tag), sonst hielte sie die Anzeige weiter über HealthKit.
+    private var usesSensorTotal = true
+
+    /// So lange bleiben unbestätigte Schritte nach dem letzten Sensor-Fortschritt stehen. iOS schreibt die Schritte
+    /// des iPhones meist innerhalb weniger Minuten nach Health; was danach noch fehlt, bestätigt HealthKit nicht.
+    public static let confirmationWindow: TimeInterval = 20 * 60
 
     public init() {}
 
     /// Angezeigte Schritte für heute.
     public var steps: Int {
         guard day != nil else { return 0 }
-        return max(base + sensorDelta, latestSensor ?? 0, confirmedSteps ?? 0)
+        return max(base + sensorDelta, usesSensorTotal ? latestSensor ?? 0 : 0, confirmedSteps ?? 0)
     }
 
     /// Schritte, die der Sensor seit der letzten Basis gezählt hat.
@@ -122,8 +134,13 @@ public struct LiveStepEstimator: Equatable, Sendable {
     }
 
     /// Neuer Sensorwert (Schritte seit Tagesbeginn laut Sensor).
-    public mutating func sensor(_ steps: Int, on day: LocalDate) {
+    /// - Parameter date: Zeitpunkt des Messwerts; nötig, damit unbestätigte Schritte verfallen können.
+    public mutating func sensor(_ steps: Int, on day: LocalDate, at date: Date? = nil) {
         guard begin(day) else { return }
+        let shownBefore = self.steps
+        defer {
+            if let date, self.steps > shownBefore { lastSensorProgress = date }
+        }
         if let latestSensor, steps < latestSensor {
             // Sensor neu gestartet (kleinerer Zählerstand): neue Basis, nichts doppelt zählen, nichts verlieren.
             rebase()
@@ -145,6 +162,21 @@ public struct LiveStepEstimator: Equatable, Sendable {
         sensorAtStop = latestSensor ?? sensorAtStop
         sensorBaseline = nil
         latestSensor = nil
+    }
+
+    /// Lässt unbestätigte Schritte verfallen, wenn der Sensor seit ``confirmationWindow`` keine neuen Schritte gemeldet
+    /// hat und HealthKit sie bis dahin nicht bestätigt hat: Die Anzeige fällt auf den HealthKit-Stand zurück. Neue
+    /// Sensorschritte zählen danach wieder ab dem aktuellen Sensorwert.
+    /// - Returns: `true`, wenn unbestätigte Schritte verfallen sind.
+    @discardableResult
+    public mutating func settle(at date: Date) -> Bool {
+        guard let confirmedSteps, unconfirmedSteps > 0 else { return false }
+        if let lastSensorProgress, date.timeIntervalSince(lastSensorProgress) < Self.confirmationWindow { return false }
+        base = confirmedSteps
+        sensorBaseline = latestSensor
+        sensorAtStop = nil
+        usesSensorTotal = false
+        return true
     }
 
     private mutating func rebase() {
