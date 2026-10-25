@@ -239,7 +239,7 @@ public enum HomeActivityMetric: String, Codable, CaseIterable, Sendable, Identif
 public struct HomeWidgetConfiguration: Hashable, Sendable {
     /// Freunde-Widget: ausgewählte Freunde (öffentliche IDs) in Auswahlreihenfolge; `nil` = alle Freunde.
     public var friendIDs: [UUID]?
-    /// Eigener Name des Freunde-Widgets (z. B. „Meine Laufrunde“); `nil` = Standardtitel.
+    /// Eigener Name des Widgets (z. B. „Meine Laufrunde“); `nil` = Standardtitel.
     public var customName: String?
     /// Gruppen-Widget: die gezeigte Gruppe; `nil` = alle eigenen Gruppen.
     public var groupID: UUID?
@@ -247,6 +247,8 @@ public struct HomeWidgetConfiguration: Hashable, Sendable {
     public var regionLevels: [RegionLevel]?
     /// Aktivitäts-Widget: gezeigte Kennzahl.
     public var metric: HomeActivityMetric?
+    /// Eigene Auswahl der Zusatzinhalte (siehe ``HomeWidgetDetail``); `nil` = Standard der Größe, leer = keine.
+    public var details: [HomeWidgetDetail]?
 
     /// Maximale Länge des eigenen Namens.
     public static let nameLength = 30
@@ -256,37 +258,47 @@ public struct HomeWidgetConfiguration: Hashable, Sendable {
         customName: String? = nil,
         groupID: UUID? = nil,
         regionLevels: [RegionLevel]? = nil,
-        metric: HomeActivityMetric? = nil
+        metric: HomeActivityMetric? = nil,
+        details: [HomeWidgetDetail]? = nil
     ) {
         self.friendIDs = friendIDs
         self.customName = customName
         self.groupID = groupID
         self.regionLevels = regionLevels
         self.metric = metric
+        self.details = details
     }
 
     public var isEmpty: Bool {
         self == HomeWidgetConfiguration()
     }
 
-    /// Nur die Felder, die zur Art passen – bereinigt (keine doppelten Freunde, getrimmter Name, sortierte Ebenen).
+    /// Nur die Felder, die zur Art passen – bereinigt (keine doppelten Freunde, getrimmter Name, sortierte Ebenen,
+    /// nur Zusatzinhalte der Art in fester Reihenfolge). Einen eigenen Namen kann jedes Widget haben.
     public func sanitized(for kind: HomeModuleKind) -> HomeWidgetConfiguration {
+        var result: HomeWidgetConfiguration
         switch kind {
         case .friends:
             var seen: Set<UUID> = []
             let ids = (friendIDs ?? []).filter { seen.insert($0).inserted }
-            return HomeWidgetConfiguration(friendIDs: ids.isEmpty ? nil : ids, customName: Self.cleanedName(customName))
+            result = HomeWidgetConfiguration(friendIDs: ids.isEmpty ? nil : ids)
         case .groups:
-            return HomeWidgetConfiguration(groupID: groupID)
+            result = HomeWidgetConfiguration(groupID: groupID)
         case .regionRanks:
             let levels = RegionLevel.allCases.filter { (regionLevels ?? []).contains($0) }
             let shown = levels.isEmpty || levels == RegionLevel.allCases ? nil : levels
-            return HomeWidgetConfiguration(regionLevels: shown)
+            result = HomeWidgetConfiguration(regionLevels: shown)
         case .activity:
-            return HomeWidgetConfiguration(metric: metric ?? .steps)
+            result = HomeWidgetConfiguration(metric: metric ?? .steps)
         case .stepsToday, .week, .streak, .neighborhood, .calendar:
-            return HomeWidgetConfiguration()
+            result = HomeWidgetConfiguration()
         }
+        result.customName = Self.cleanedName(customName)
+        result.details = details.map { chosen in kind.allDetails.filter(chosen.contains) }
+        if kind.allDetails.isEmpty {
+            result.details = nil
+        }
+        return result
     }
 
     /// Getrimmter Name mit einfachen Leerzeichen, höchstens ``nameLength`` Zeichen; leer → `nil`.
@@ -305,6 +317,7 @@ extension HomeWidgetConfiguration: Codable {
         case groupID
         case regionLevels = "levels"
         case metric
+        case details
     }
 
     /// Tolerant: unbekannte oder beschädigte Werte werden übersprungen statt das ganze Widget zu verwerfen.
@@ -319,6 +332,8 @@ extension HomeWidgetConfiguration: Codable {
         regionLevels = levels.map { $0.compactMap(RegionLevel.init(rawValue:)) }
         let metric = (try? container.decodeIfPresent(String.self, forKey: .metric)) ?? nil
         self.metric = metric.flatMap(HomeActivityMetric.init(rawValue:))
+        let details = (try? container.decodeIfPresent([String].self, forKey: .details)) ?? nil
+        self.details = details.map { $0.compactMap(HomeWidgetDetail.init(rawValue:)) }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -328,6 +343,7 @@ extension HomeWidgetConfiguration: Codable {
         try container.encodeIfPresent(groupID?.uuidString, forKey: .groupID)
         try container.encodeIfPresent(regionLevels?.map(\.rawValue), forKey: .regionLevels)
         try container.encodeIfPresent(metric?.rawValue, forKey: .metric)
+        try container.encodeIfPresent(details?.map(\.rawValue), forKey: .details)
     }
 }
 

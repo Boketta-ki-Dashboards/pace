@@ -8,11 +8,15 @@ import SwiftUI
 /// - Klein: dein Platz und der Abstand.
 /// - Mittel: drei Zeilen. Groß: fünf Zeilen.
 /// - Max: Diagramm mit bis zu sieben Plätzen.
+///
+/// Der Abstand zum nächsten Platz lässt sich ausblenden (``HomeWidgetDetail/rankGap``); klein steht dann die eigene
+/// Schrittzahl neben dem Platz.
 struct NeighborhoodWidgetContent: View {
     let standings: RegionalStandingsViewModel
     let level: RegionLevel
     let size: HomeModuleSize
     let rows: Int
+    var showsGap = true
     let onOpenRankings: (Region?) -> Void
 
     var body: some View {
@@ -61,7 +65,9 @@ struct NeighborhoodWidgetContent: View {
                             .foregroundStyle(PaceColor.accent)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
-                        Text(neighborhood.footerText.isEmpty ? PaceLocalization.steps(neighborhood.currentUser.competitionSteps) : neighborhood.footerText)
+                        Text(!showsGap || neighborhood.footerText.isEmpty
+                            ? PaceLocalization.steps(neighborhood.currentUser.competitionSteps)
+                            : neighborhood.footerText)
                             .font(PaceFont.callout)
                             .foregroundStyle(PaceColor.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -129,7 +135,7 @@ struct NeighborhoodWidgetContent: View {
 
     @ViewBuilder
     private func footer(_ neighborhood: RegionalStandings.Neighborhood) -> some View {
-        if !neighborhood.footerText.isEmpty {
+        if showsGap, !neighborhood.footerText.isEmpty {
             Text(neighborhood.footerText)
                 .font(PaceFont.callout)
                 .foregroundStyle(PaceColor.textSecondary)

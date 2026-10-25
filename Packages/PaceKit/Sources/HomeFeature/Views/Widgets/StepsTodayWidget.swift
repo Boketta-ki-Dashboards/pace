@@ -6,13 +6,17 @@ import SwiftUI
 /// „Deine Schritte heute“ – der visuelle Mittelpunkt von Home: große Schrittzahl, Tagesziel mit Balken und Ring,
 /// Distanz und aktive Kalorien. Die Aktion „Tagesziel ändern“ ändert nur das Ziel, nie gemessene Schritte.
 ///
-/// - Mittel: wie im Home-Design.
+/// Zusatzinhalte nach Auswahl im Bearbeitungsmodus (``HomeWidgetDetail``), ohne eigene Auswahl wie bisher:
+/// - Mittel: Distanz und Kalorien (wie im Home-Design).
 /// - Groß: zusätzlich Stockwerke und Trainingsminuten.
 /// - Max: zusätzlich gestern und der Durchschnitt der letzten 7 Tage.
+/// Wählbar außerdem der persönliche Tagesbestwert.
 struct StepsTodayWidgetContent: View {
     let state: HomeViewModel.State
     let summary: StepsTodaySummary?
     let size: HomeModuleSize
+    var details: [HomeWidgetDetail] = HomeModuleKind.stepsToday.defaultDetails(for: .medium)
+    var dayBest: HomeDayBest?
     let onRetry: () -> Void
 
     @ScaledMetric(relativeTo: .largeTitle) private var metricSize: CGFloat = 62
@@ -108,9 +112,11 @@ struct StepsTodayWidgetContent: View {
                     .foregroundStyle(PaceColor.textSecondary)
             }
 
-            metricsTile(summary)
+            if details.contains(.distanceEnergy) {
+                metricsTile(summary)
+            }
 
-            if size >= .large {
+            if details.contains(.floorsExercise) {
                 PaceTile {
                     HStack(spacing: 0) {
                         StepsMetricCell(
@@ -129,7 +135,7 @@ struct StepsTodayWidgetContent: View {
                 }
             }
 
-            if size == .max {
+            if details.contains(.comparison) {
                 HStack(spacing: PaceSpacing.xs) {
                     HomeStatTile(
                         title: PaceLocalization.text(de: "Gestern", en: "Yesterday", ru: "Вчера"),
@@ -142,6 +148,14 @@ struct StepsTodayWidgetContent: View {
                         systemImage: "chart.bar"
                     )
                 }
+            }
+
+            if details.contains(.dayBest) {
+                HomeStatTile(
+                    title: dayBest?.title ?? PaceLocalization.text(de: "Tagesbestwert", en: "Best day", ru: "Рекорд дня"),
+                    value: dayBest?.valueText ?? "–",
+                    systemImage: "trophy"
+                )
             }
         }
     }

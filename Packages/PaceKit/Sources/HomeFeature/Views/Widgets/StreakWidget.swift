@@ -6,9 +6,9 @@ import SwiftUI
 /// „Persönliche Streak“: Tage in Folge mit erreichtem Tagesziel – ohne riesige Kreisfelder.
 ///
 /// - Klein: Flamme und aktuelle Serie.
-/// - Mittel: Serie und Rekord, dazu der Status von heute.
-/// - Groß: dazu die laufende Woche als übersichtliche Leiste.
-/// - Max: dazu die letzten vier Wochen kompakt und erreichte Tage der letzten 30 Tage.
+/// - Ab Mittel: Serie und Status von heute, dazu die gewählten Zusatzinhalte (``HomeWidgetDetail``) – ohne eigene
+///   Auswahl wie bisher: Mittel mit Rekord, Groß dazu die laufende Woche als Leiste, Max dazu die letzten vier Wochen
+///   kompakt und erreichte Tage der letzten 30 Tage. Wählbar außerdem der nächste Meilenstein.
 ///
 /// Ist die Serie unterbrochen, zeigen Woche und Verlauf trotzdem erreichte Tage – der Status-Text erklärt den
 /// Unterschied.
@@ -16,6 +16,7 @@ struct StreakWidgetContent: View {
     let widget: HomeStreakWidget?
     let state: ActivityHistoryStore.State
     let size: HomeModuleSize
+    var details: [HomeWidgetDetail] = HomeModuleKind.streak.defaultDetails(for: .medium)
 
     var body: some View {
         if let widget {
@@ -48,40 +49,39 @@ struct StreakWidgetContent: View {
                 }
                 Spacer(minLength: 0)
             }
-        case .medium:
+        case .medium, .large, .max:
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
                 summaryRow(widget)
-                statusLine(widget)
-            }
-        case .large:
-            VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                summaryRow(widget)
-                StreakWeekStrip(days: widget.week)
-                statusLine(widget)
-            }
-        case .max:
-            VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                summaryRow(widget)
-                StreakWeekStrip(days: widget.week)
-                StreakHistoryGrid(days: widget.fourWeeks)
-                HStack(spacing: PaceSpacing.xs) {
-                    HomeStatTile(
-                        title: PaceLocalization.text(de: "Letzte 30 Tage", en: "Last 30 days", ru: "Последние 30 дней"),
-                        value: widget.reachedLast30Days.paceFormatted,
-                        systemImage: "checkmark.circle"
-                    )
-                    HomeStatTile(
-                        title: PaceLocalization.text(de: "Diese Woche", en: "This week", ru: "Эта неделя"),
-                        value: widget.reachedThisWeek.paceFormatted,
-                        systemImage: "calendar"
-                    )
+                if details.contains(.week) {
+                    StreakWeekStrip(days: widget.week)
+                }
+                if details.contains(.recentDays) {
+                    StreakHistoryGrid(days: widget.fourWeeks)
+                    HStack(spacing: PaceSpacing.xs) {
+                        HomeStatTile(
+                            title: PaceLocalization.text(de: "Letzte 30 Tage", en: "Last 30 days", ru: "Последние 30 дней"),
+                            value: widget.reachedLast30Days.paceFormatted,
+                            systemImage: "checkmark.circle"
+                        )
+                        HomeStatTile(
+                            title: PaceLocalization.text(de: "Diese Woche", en: "This week", ru: "Эта неделя"),
+                            value: widget.reachedThisWeek.paceFormatted,
+                            systemImage: "calendar"
+                        )
+                    }
+                }
+                if details.contains(.milestone) {
+                    Label(StreakMilestone.text(current: widget.current), systemImage: "flag.checkered")
+                        .font(PaceFont.caption.weight(.semibold))
+                        .foregroundStyle(PaceColor.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 statusLine(widget)
             }
         }
     }
 
-    /// Flamme, aktuelle Serie und Rekord nebeneinander.
+    /// Flamme, aktuelle Serie und (falls gewählt) Rekord nebeneinander.
     private func summaryRow(_ widget: HomeStreakWidget) -> some View {
         HStack(spacing: PaceSpacing.s) {
             PaceStreakFlame(isActive: widget.current > 0, isTodayReached: widget.isTodayReached, size: 48)
@@ -103,18 +103,24 @@ struct StreakWidgetContent: View {
                 .minimumScaleFactor(0.8)
             }
             Spacer(minLength: PaceSpacing.xs)
-            VStack(alignment: .trailing, spacing: 0) {
-                Label(PaceLocalization.text(de: "Rekord", en: "Record", ru: "Рекорд"), systemImage: "trophy")
-                    .font(PaceFont.caption)
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .lineLimit(1)
-                Text(widget.recordText ?? "–")
-                    .font(.system(.headline, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(PaceColor.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+            if details.contains(.record) {
+                recordColumn(widget)
             }
+        }
+    }
+
+    private func recordColumn(_ widget: HomeStreakWidget) -> some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            Label(PaceLocalization.text(de: "Rekord", en: "Record", ru: "Рекорд"), systemImage: "trophy")
+                .font(PaceFont.caption)
+                .foregroundStyle(PaceColor.textSecondary)
+                .lineLimit(1)
+            Text(widget.recordText ?? "–")
+                .font(.system(.headline, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(PaceColor.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
     }
 

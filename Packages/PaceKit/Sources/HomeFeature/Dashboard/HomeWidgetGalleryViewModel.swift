@@ -20,7 +20,7 @@ public final class HomeWidgetGalleryViewModel {
     public var size: HomeModuleSize
     /// Ausgewählte Freunde in Auswahlreihenfolge (leer = alle Freunde).
     public private(set) var friendIDs: [UUID]
-    /// Eigener Name (nur Freunde-Widgets); leer = Standardtitel.
+    /// Eigener Name des Widgets; leer = Standardtitel.
     public var name: String
     /// Gewählte Gruppe; `nil` = alle eigenen Gruppen.
     public var groupID: UUID?
@@ -29,6 +29,8 @@ public final class HomeWidgetGalleryViewModel {
     /// Ebene des Ranking-Umfelds.
     public var neighborhoodLevel: RegionLevel
     public var metric: HomeActivityMetric
+    /// Eigene Auswahl der Zusatzinhalte; `nil` = Standard der gewählten Größe.
+    public private(set) var details: [HomeWidgetDetail]?
 
     /// Freunde und Gruppen für die Auswahl (geteilt mit dem Social-Tab).
     public let social: SocialViewModel
@@ -57,6 +59,7 @@ public final class HomeWidgetGalleryViewModel {
             regionLevels = existing.regionLevels
             neighborhoodLevel = existing.regionLevel ?? .municipality
             metric = existing.metric
+            details = existing.configuration.details
         } else {
             draftID = UUID().uuidString
             let addable = settings.addableKinds
@@ -68,6 +71,7 @@ public final class HomeWidgetGalleryViewModel {
             regionLevels = RegionLevel.allCases
             neighborhoodLevel = .municipality
             metric = .steps
+            details = nil
         }
         neighborhoodLevel = RegionalStandingsViewModel.effectiveLevel(for: neighborhoodLevel, available: standings.scopes.map(\.level))
     }
@@ -112,6 +116,7 @@ public final class HomeWidgetGalleryViewModel {
     public func select(_ category: HomeModuleKind) {
         guard isSelectable(category), !isEditing else { return }
         kind = category
+        details = nil
         if !category.supportedSizes.contains(size) {
             size = category.defaultSize
         }
@@ -182,9 +187,9 @@ public final class HomeWidgetGalleryViewModel {
         )
     }
 
-    /// Platzhalter des Namensfelds.
+    /// Platzhalter des Namensfelds: der Standardtitel des Widgets.
     public var namePlaceholder: String {
-        HomeModuleKind.friends.title
+        HomeModule(kind: kind, configuration: HomeWidgetConfiguration(metric: metric)).title
     }
 
     // MARK: Gruppen
@@ -226,6 +231,64 @@ public final class HomeWidgetGalleryViewModel {
         }
     }
 
+    // MARK: Zusatzinhalte und Name
+
+    /// Zusatzinhalte, die sich für dieses Widget wählen lassen. Beim Gruppen-Widget nur mit einer gewählten Gruppe
+    /// (die Liste aller Gruppen zeigt je Gruppe eine Zeile).
+    public var detailChoices: [HomeWidgetDetail] {
+        kind == .groups && groupID == nil ? [] : kind.allDetails
+    }
+
+    /// Ob ein Zusatzinhalt in der gewählten Größe Platz hat (z. B. das Freunde-Diagramm erst ab „Groß“).
+    public func isAvailable(_ detail: HomeWidgetDetail) -> Bool {
+        kind.availableDetails(for: draft.size).contains(detail)
+    }
+
+    public func isSelected(detail: HomeWidgetDetail) -> Bool {
+        (details ?? kind.defaultDetails(for: draft.size)).contains(detail)
+    }
+
+    /// Schaltet einen Zusatzinhalt um. Die erste Änderung übernimmt den Standard der Größe als Ausgangspunkt.
+    public func toggleDetail(_ detail: HomeWidgetDetail) {
+        guard detailChoices.contains(detail) else { return }
+        var chosen = details ?? kind.defaultDetails(for: draft.size)
+        if let index = chosen.firstIndex(of: detail) {
+            chosen.remove(at: index)
+        } else {
+            chosen.append(detail)
+        }
+        details = kind.allDetails.filter(chosen.contains)
+    }
+
+    /// Hinweis, wie viele Zusatzinhalte die Größe zeigt, oder dass ein Inhalt eine größere Größe braucht.
+    public var detailsHint: String? {
+        let limit = kind.detailLimit(for: draft.size)
+        let selected = detailChoices.filter { isSelected(detail: $0) && isAvailable($0) }
+        if draft.size == .small, kind != .neighborhood {
+            return PaceLocalization.text(
+                de: "„Klein“ zeigt nur das Wichtigste – Zusatzinhalte ab „Mittel“.",
+                en: "“Small” shows only the essentials – extras from “Medium”.",
+                ru: "«Маленький» показывает только главное – дополнительно от «Средний»."
+            )
+        }
+        if selected.count > limit {
+            let size = draft.size.title
+            return PaceLocalization.text(
+                de: "„\(size)“ zeigt bis zu \(limit) Zusatzinhalte – die ersten in der Liste.",
+                en: "“\(size)” shows up to \(limit) extras – the first ones in the list.",
+                ru: "«\(size)» показывает до \(limit) доп. элементов – первые в списке."
+            )
+        }
+        if detailChoices.contains(where: { !isAvailable($0) }) {
+            return PaceLocalization.text(
+                de: "Das Diagramm erscheint ab der Größe „Groß“.",
+                en: "The chart appears from size “Large”.",
+                ru: "Диаграмма появляется с размера «Большой»."
+            )
+        }
+        return nil
+    }
+
     // MARK: Ergebnis
 
     /// Das Widget, wie es mit der aktuellen Auswahl auf Home erscheint (auch die Vorschau).
@@ -240,9 +303,18 @@ public final class HomeWidgetGalleryViewModel {
                 customName: name,
                 groupID: groupID,
                 regionLevels: regionLevels,
-                metric: metric
+                metric: metric,
+                details: storedDetails
             )
         )
+    }
+
+    /// Entspricht die Auswahl dem Standard der Größe, wird nichts gespeichert – das Widget folgt dann weiter seiner
+    /// Größe.
+    private var storedDetails: [HomeWidgetDetail]? {
+        let shownSize = supportedSizes.contains(size) ? size : kind.defaultSize
+        guard let details, details != kind.defaultDetails(for: shownSize) else { return nil }
+        return details
     }
 
     /// Das Widget in einer anderen Größe – für die Mini-Vorschauen unter „Größe auswählen“.

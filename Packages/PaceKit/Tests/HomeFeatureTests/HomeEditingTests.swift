@@ -486,4 +486,67 @@ struct HomeWidgetGalleryTests {
         #expect(dashboard.modules.last?.metric == .activeEnergy)
         #expect(dashboard.activityWidget(for: try #require(dashboard.modules.last))?.metric == .activeEnergy)
     }
+
+    @Test func widgetContentsAreChosenPerWidgetAndFitTheSize() async throws {
+        let harness = await DashboardHarness(social: socialStub())
+        let dashboard = harness.dashboard
+        let streak = try #require(dashboard.modules.first { $0.kind == .streak })
+        let gallery = dashboard.gallery(for: HomeWidgetGalleryRoute(editingID: streak.id))
+        // Ausgangspunkt ist der Standard der Größe „Mittel“: der Rekord.
+        #expect(gallery.detailChoices == [.record, .week, .milestone, .recentDays])
+        #expect(gallery.isSelected(detail: .record))
+        #expect(!gallery.isSelected(detail: .milestone))
+        gallery.toggleDetail(.milestone)
+        #expect(gallery.draft.shownDetails == [.record, .milestone])
+        gallery.toggleDetail(.week)
+        // „Mittel“ zeigt höchstens zwei – in fester Reihenfolge, der Hinweis sagt es.
+        #expect(gallery.draft.shownDetails == [.record, .week])
+        #expect(gallery.detailsHint != nil)
+        gallery.size = .max
+        #expect(gallery.draft.shownDetails == [.record, .week, .milestone])
+        gallery.name = "Meine Flamme"
+        #expect(gallery.save())
+        let saved = try #require(dashboard.settings.module(id: streak.id))
+        #expect(saved.configuration.details == [.record, .week, .milestone])
+        #expect(dashboard.title(for: saved) == "Meine Flamme")
+
+        // Entspricht die Auswahl dem Standard der Größe, wird nichts gespeichert: Das Widget folgt weiter der Größe.
+        let again = dashboard.gallery(for: HomeWidgetGalleryRoute(editingID: streak.id))
+        again.toggleDetail(.milestone)
+        again.toggleDetail(.recentDays)
+        #expect(again.save())
+        #expect(dashboard.settings.module(id: streak.id)?.configuration.details == nil)
+    }
+
+    @Test func groupContentsNeedAChosenGroupAndSmallShowsOnlyTheEssentials() async {
+        let harness = await DashboardHarness(social: socialStub())
+        let gallery = harness.dashboard.gallery(for: HomeWidgetGalleryRoute())
+        await gallery.loadIfNeeded()
+        gallery.select(.groups)
+        #expect(gallery.detailChoices.isEmpty)
+        gallery.groupID = Self.klasse
+        #expect(gallery.detailChoices == [.groupProgress, .groupGoal, .groupMembers])
+        gallery.size = .small
+        #expect(gallery.draft.shownDetails.isEmpty)
+        #expect(gallery.detailsHint != nil)
+
+        gallery.select(.friends)
+        gallery.size = .medium
+        #expect(!gallery.isAvailable(.friendChart))
+        #expect(gallery.isAvailable(.friendGap))
+        #expect(gallery.detailsHint != nil)
+        // Neue Kategorie: Standard-Inhalte, keine aus der vorherigen Auswahl.
+        #expect(gallery.draft.configuration.details == nil)
+    }
+
+    @Test func dayBestComesFromRealStepsOnly() async throws {
+        let harness = await DashboardHarness()
+        await harness.dashboard.streak.loadIfNeeded()
+        let best = try #require(harness.dashboard.dayBest)
+        #expect(best.steps == 8_432)
+        #expect(best.isToday)
+        PaceLocalization.$languageOverride.withValue(.german) {
+            #expect(best.title == "Tagesbestwert · Heute")
+        }
+    }
 }

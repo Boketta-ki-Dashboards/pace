@@ -75,6 +75,20 @@ public struct HomeFriendsWidget: Equatable, Sendable {
         }
     }
 
+    /// Abstand zum Platz direkt davor in der Auswahl, z. B. `1.240 hinter #2` oder `Gleichstand mit #2`; `nil` für
+    /// Platz 1. Gilt auch, wenn die eigene Zeile die letzte sichtbare ersetzt (Bezug ist der echte Platz davor).
+    public func gapText(for row: Row) -> String? {
+        guard let index = allRows.firstIndex(where: { $0.id == row.id }), index > 0 else { return nil }
+        let ahead = allRows[index - 1]
+        let gap = ahead.entry.competitionSteps - row.entry.competitionSteps
+        let rank = "#\(ahead.rank.paceFormatted)"
+        if gap <= 0 {
+            return PaceLocalization.text(de: "Gleichstand mit \(rank)", en: "Tied with \(rank)", ru: "Вровень с \(rank)")
+        }
+        let steps = gap.paceFormatted
+        return PaceLocalization.text(de: "\(steps) hinter \(rank)", en: "\(steps) behind \(rank)", ru: "На \(steps) позади \(rank)")
+    }
+
     /// z. B. `1 ausgewählte Person ist nicht mehr in deiner Freundesliste.`
     public var missingText: String? {
         guard missingCount > 0 else { return nil }

@@ -171,14 +171,21 @@ struct HomeModuleView: View {
                     state: viewModel.activity.state,
                     summary: viewModel.stepsToday,
                     size: module.size,
+                    details: module.shownDetails,
+                    dayBest: module.shows(.dayBest) ? viewModel.dayBest : nil,
                     onRetry: { Task { await viewModel.activity.retry() } }
                 )
             case .week:
                 WeekWidgetContent(week: viewModel.week, size: module.size, unavailableText: viewModel.weekUnavailableText)
             case .streak:
                 NavigationLink(value: HomeRoute.streak) {
-                    StreakWidgetContent(widget: viewModel.streakWidget, state: viewModel.streak.history.state, size: module.size)
-                        .contentShape(Rectangle())
+                    StreakWidgetContent(
+                        widget: viewModel.streakWidget,
+                        state: viewModel.streak.history.state,
+                        size: module.size,
+                        details: module.shownDetails
+                    )
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.pacePressable)
                 .accessibilityHint(PaceLocalization.text(
@@ -190,6 +197,7 @@ struct HomeModuleView: View {
                     level: module.regionLevel ?? .municipality,
                     size: module.size,
                     rows: module.neighborhoodRows,
+                    showsGap: module.shows(.rankGap),
                     onOpenRankings: { region in viewModel.openRankings(region) }
                 )
             case .friends:
@@ -197,6 +205,7 @@ struct HomeModuleView: View {
                     widget: viewModel.friendsWidget(for: module),
                     state: viewModel.social.state,
                     size: module.size,
+                    details: module.shownDetails,
                     onOpenSocial: { viewModel.openSocial() }
                 )
             case .groups:
@@ -204,6 +213,7 @@ struct HomeModuleView: View {
                     selection: viewModel.groupSelection(for: module),
                     state: viewModel.social.state,
                     size: module.size,
+                    details: module.shownDetails,
                     onOpenGroup: { id in viewModel.openGroup(id) },
                     onOpenSocial: { viewModel.openSocial() }
                 )

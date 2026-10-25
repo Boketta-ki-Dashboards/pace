@@ -5,12 +5,14 @@ import SwiftUI
 
 /// Gruppen-Widget: eine gewählte Gruppe oder alle eigenen Gruppen mit Gruppen-Streak. Tippen öffnet die echte Gruppe.
 ///
-/// Eine Gruppe: Klein = Name und Serie, Mittel = dazu der heutige Fortschritt, Groß = dazu Tagesziel, beste Serie und
-/// Mitglieder, Max = alles als Kennzahlen. Alle Gruppen: Klein = längste Serie, Mittel drei, Groß fünf, Max acht.
+/// Eine Gruppe: Klein = Name und Serie, ab Mittel die gewählten Zusatzinhalte (``HomeWidgetDetail``) – ohne eigene
+/// Auswahl wie bisher: Mittel = dazu der heutige Fortschritt, Groß = dazu Tagesziel und beste Serie, Max = dazu
+/// Mitglieder als Kennzahlen. Alle Gruppen: Klein = längste Serie, Mittel drei, Groß fünf, Max acht.
 struct GroupsWidgetContent: View {
     let selection: HomeGroupSelection
     let state: SocialViewModel.State
     let size: HomeModuleSize
+    var details: [HomeWidgetDetail] = HomeModuleKind.groups.defaultDetails(for: .medium)
     let onOpenGroup: (UUID) -> Void
     let onOpenSocial: () -> Void
 
@@ -62,7 +64,7 @@ struct GroupsWidgetContent: View {
                     Spacer(minLength: PaceSpacing.xs)
                     GroupStreakBadge(days: group.currentStreak)
                 }
-                if size >= .medium {
+                if size >= .medium, details.contains(.groupProgress) {
                     VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
                         PaceProgressBar(progress: progress(group), height: 10)
                         Text(HomeGroupTexts.todayProgress(group))
@@ -70,13 +72,13 @@ struct GroupsWidgetContent: View {
                             .foregroundStyle(group.todayComplete ? PaceColor.accent : PaceColor.textSecondary)
                     }
                 }
-                if size >= .large {
+                if size >= .medium, details.contains(.groupGoal) {
                     HStack(spacing: PaceSpacing.xs) {
                         HomeStatTile(title: HomeGroupTexts.dailyGoal, value: PaceLocalization.steps(group.dailyGoal))
                         HomeStatTile(title: HomeGroupTexts.bestStreak, value: PaceLocalization.days(group.bestStreak))
                     }
                 }
-                if size == .max {
+                if size >= .medium, details.contains(.groupMembers) {
                     HStack(spacing: PaceSpacing.xs) {
                         HomeStatTile(title: HomeGroupTexts.membersTitle, value: group.memberCount.paceFormatted)
                         HomeStatTile(
@@ -84,7 +86,7 @@ struct GroupsWidgetContent: View {
                             value: "\(group.todayReachedCount.paceFormatted) / \(group.todayRequiredCount.paceFormatted)"
                         )
                     }
-                    if !group.description.isEmpty {
+                    if size == .max, !group.description.isEmpty {
                         Text(group.description)
                             .font(PaceFont.caption)
                             .foregroundStyle(PaceColor.textSecondary)

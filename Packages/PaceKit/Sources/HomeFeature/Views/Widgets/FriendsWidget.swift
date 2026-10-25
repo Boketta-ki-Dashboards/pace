@@ -8,10 +8,13 @@ import SwiftUI
 /// - Klein: Platz 1 der Auswahl.
 /// - Mittel: drei Zeilen. Groß: fünf Zeilen (du bist immer dabei).
 /// - Max: Diagramm der Auswahl und fünf Zeilen.
+///
+/// Wählbar (``HomeWidgetDetail``): Abstand zum Platz davor je Zeile, Diagramm ab „Groß“ (Standard: nur bei Max).
 struct FriendsWidgetContent: View {
     let widget: HomeFriendsWidget
     let state: SocialViewModel.State
     let size: HomeModuleSize
+    var details: [HomeWidgetDetail] = []
     let onOpenSocial: () -> Void
 
     var body: some View {
@@ -75,7 +78,7 @@ struct FriendsWidgetContent: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(rowLabel(first))
         } else {
-            if size == .max {
+            if details.contains(.friendChart) {
                 HomeBarChart(bars: chartBars, height: 80)
                     .padding(.bottom, PaceSpacing.xxs)
             }
@@ -89,7 +92,8 @@ struct FriendsWidgetContent: View {
                         image: row.entry.avatar,
                         isCurrentUser: row.entry.isCurrentUser,
                         showsStepIcon: true,
-                        showsChevron: false
+                        showsChevron: false,
+                        detail: details.contains(.friendGap) ? widget.gapText(for: row) : nil
                     )
                 }
                 .buttonStyle(.pacePressable)

@@ -77,6 +77,7 @@ struct HomeWidgetGalleryContent: View {
             }
 
             configuration
+            displayOptions
 
             section(PaceLocalization.text(de: "Widget-Vorschau", en: "Widget preview", ru: "Предпросмотр")) {
                 HomeModuleView(module: gallery.draft, viewModel: dashboard, mode: .preview)
@@ -146,38 +147,7 @@ struct HomeWidgetGalleryContent: View {
                         .foregroundStyle(PaceColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(PaceLocalization.text(de: "Widget-Name", en: "Widget name", ru: "Название виджета"))
-                    .font(.system(.subheadline, weight: .semibold))
-                    .foregroundStyle(PaceColor.textPrimary)
-                    .padding(.top, PaceSpacing.xxs)
-                HStack(spacing: PaceSpacing.xs) {
-                    TextField(gallery.namePlaceholder, text: $gallery.name)
-                        .font(.body)
-                        .textInputAutocapitalization(.sentences)
-                        .submitLabel(.done)
-                    if !gallery.name.isEmpty {
-                        Button {
-                            gallery.name = ""
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.body.weight(.medium))
-                                .foregroundStyle(PaceColor.textSecondary)
-                                .frame(width: 32, height: 32)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(PaceLocalization.text(de: "Namen löschen", en: "Clear name", ru: "Очистить название"))
-                    }
-                }
-                .padding(.horizontal, PaceSpacing.s)
-                .frame(minHeight: 48)
-                .background(PaceColor.surface, in: RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous).strokeBorder(PaceColor.border, lineWidth: 1))
-                .onChange(of: gallery.name) { _, newValue in
-                    if newValue.count > HomeWidgetConfiguration.nameLength {
-                        gallery.name = String(newValue.prefix(HomeWidgetConfiguration.nameLength))
-                    }
-                }
+                nameField
                 Text(gallery.friendsHint)
                     .font(PaceFont.caption)
                     .foregroundStyle(PaceColor.textSecondary)
@@ -256,6 +226,81 @@ struct HomeWidgetGalleryContent: View {
                     .font(PaceFont.callout)
                     .foregroundStyle(PaceColor.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: Inhalte und Name (alle Arten)
+
+    /// Zusatzinhalte der Art (z. B. Vergleich mit gestern, nächster Meilenstein) und ein eigener Name.
+    @ViewBuilder
+    private var displayOptions: some View {
+        if !gallery.detailChoices.isEmpty || gallery.kind != .friends {
+            configurationCard {
+                if !gallery.detailChoices.isEmpty {
+                    configurationTitle(PaceLocalization.text(de: "Inhalte", en: "Contents", ru: "Содержимое"))
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: PaceSpacing.xs) {
+                        ForEach(gallery.detailChoices) { detail in
+                            let isAvailable = gallery.isAvailable(detail)
+                            HomeGalleryChip(
+                                title: detail.title,
+                                systemImage: detail.systemImage,
+                                isSelected: isAvailable && gallery.isSelected(detail: detail)
+                            ) {
+                                gallery.toggleDetail(detail)
+                            }
+                            .disabled(!isAvailable)
+                            .opacity(isAvailable ? 1 : 0.5)
+                        }
+                    }
+                    if let hint = gallery.detailsHint {
+                        Text(hint)
+                            .font(PaceFont.caption)
+                            .foregroundStyle(PaceColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                // Freunde-Widgets haben das Namensfeld schon bei der Auswahl.
+                if gallery.kind != .friends {
+                    nameField
+                }
+            }
+        }
+    }
+
+    /// Eigener Name des Widgets (leer = Standardtitel), höchstens ``HomeWidgetConfiguration/nameLength`` Zeichen.
+    @ViewBuilder
+    private var nameField: some View {
+        Text(PaceLocalization.text(de: "Widget-Name", en: "Widget name", ru: "Название виджета"))
+            .font(.system(.subheadline, weight: .semibold))
+            .foregroundStyle(PaceColor.textPrimary)
+            .padding(.top, PaceSpacing.xxs)
+        HStack(spacing: PaceSpacing.xs) {
+            TextField(gallery.namePlaceholder, text: $gallery.name)
+                .font(.body)
+                .textInputAutocapitalization(.sentences)
+                .submitLabel(.done)
+            if !gallery.name.isEmpty {
+                Button {
+                    gallery.name = ""
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(PaceLocalization.text(de: "Namen löschen", en: "Clear name", ru: "Очистить название"))
+            }
+        }
+        .padding(.horizontal, PaceSpacing.s)
+        .frame(minHeight: 48)
+        .background(PaceColor.surface, in: RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous).strokeBorder(PaceColor.border, lineWidth: 1))
+        .onChange(of: gallery.name) { _, newValue in
+            if newValue.count > HomeWidgetConfiguration.nameLength {
+                gallery.name = String(newValue.prefix(HomeWidgetConfiguration.nameLength))
             }
         }
     }

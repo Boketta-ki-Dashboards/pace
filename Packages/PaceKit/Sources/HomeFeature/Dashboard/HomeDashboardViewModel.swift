@@ -179,6 +179,21 @@ public final class HomeDashboardViewModel {
         return HomeStreakWidget(streak: current, record: streak.record, recentDays: streak.recentDays(35), formatter: formatter)
     }
 
+    /// Persönlicher Tagesbestwert für die Schrittkarte: bester Tag im geladenen Verlauf (Wettbewerbsschritte, wie Ziel
+    /// und Serie) – heute mit den Live-Schritten, falls sie ihn übertreffen. `nil` ohne Verlauf oder ohne Schritte.
+    public var dayBest: HomeDayBest? {
+        guard let history = streak.history.history else { return nil }
+        let today = calendar.day(containing: now())
+        let best = history.summaries(from: history.range.lowerBound, through: min(history.range.upperBound, today), calendar: calendar)
+            .filter { $0.competitionSteps > 0 }
+            .max { ($0.competitionSteps, $0.date) < ($1.competitionSteps, $1.date) }
+        let todaySteps = stepsToday?.steps ?? 0
+        if todaySteps > 0, todaySteps >= best?.competitionSteps ?? 0 {
+            return HomeDayBest(steps: todaySteps, date: today, isToday: true, formatter: formatter)
+        }
+        return best.map { HomeDayBest(steps: $0.competitionSteps, date: $0.date, isToday: $0.date == today, formatter: formatter) }
+    }
+
     /// Kalender-Widget in einer Größe. Bewertet jeden Tag mit dem damals geltenden Ziel.
     public func calendarWidget(size: HomeModuleSize) -> HomeCalendarWidget {
         let overview = activity.overview
@@ -402,6 +417,7 @@ public final class HomeDashboardViewModel {
 
     /// Titel eines Widgets, wie er auf Home steht (beim Umfeld mit dem Gebiet, z. B. „Pfungstadt · Dein Umfeld“).
     public func title(for module: HomeModule) -> String {
+        if let name = module.configuration.customName { return name }
         switch module.kind {
         case .neighborhood:
             let level = standings.effectiveLevel(for: module.regionLevel ?? .municipality)
