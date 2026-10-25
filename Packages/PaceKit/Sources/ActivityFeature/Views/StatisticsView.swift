@@ -141,8 +141,17 @@ struct StatisticsContent: View {
 
         PeriodNavigator(report: report, onPrevious: onPrevious, onNext: onNext)
 
-        summaryCard(report)
-        chartCard(report)
+        // Wischen im Wert und im Diagramm: Finger nach rechts = vorheriger, nach links = nächster Zeitraum.
+        VStack(alignment: .leading, spacing: PaceSpacing.s) {
+            summaryCard(report)
+            chartCard(report)
+        }
+        .pacePeriodSwipe(
+            canShowPrevious: report.canShowPrevious,
+            canShowNext: report.canShowNext,
+            onPrevious: onPrevious,
+            onNext: onNext
+        )
 
         if report.period == .day, let onOpenDayDetails {
             dayDetailsLink(day: report.anchor, action: onOpenDayDetails)

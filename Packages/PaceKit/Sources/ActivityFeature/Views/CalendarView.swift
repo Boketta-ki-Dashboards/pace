@@ -185,7 +185,7 @@ struct CalendarContent: View {
     }
 }
 
-/// Wochentage und Tagesfelder. Wischen nach links/rechts blättert den Monat.
+/// Wochentage und Tagesfelder. Wischen blättert den Monat (Finger nach rechts = vorheriger, nach links = nächster).
 private struct CalendarGrid: View {
     let month: CalendarMonth
     let onSelect: (CalendarDay) -> Void
@@ -229,17 +229,11 @@ private struct CalendarGrid: View {
             }
         }
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 24)
-                .onEnded { value in
-                    let horizontal = value.translation.width
-                    guard abs(horizontal) > 60, abs(horizontal) > abs(value.translation.height) * 2 else { return }
-                    if horizontal < 0 {
-                        onNext()
-                    } else {
-                        onPrevious()
-                    }
-                }
+        .pacePeriodSwipe(
+            canShowPrevious: month.canShowPrevious,
+            canShowNext: month.canShowNext,
+            onPrevious: onPrevious,
+            onNext: onNext
         )
     }
 }

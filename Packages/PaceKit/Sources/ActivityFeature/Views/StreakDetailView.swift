@@ -191,16 +191,11 @@ struct StreakDetailContent: View {
                     }
                 }
                 // Monat wechseln wie im Kalender: Finger nach rechts = vorheriger, nach links = nächster Monat.
-                .gesture(
-                    DragGesture(minimumDistance: 24)
-                        .onEnded { value in
-                            guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
-                            if value.translation.width > 40 {
-                                onPreviousMonth()
-                            } else if value.translation.width < -40 {
-                                onNextMonth()
-                            }
-                        }
+                .pacePeriodSwipe(
+                    canShowPrevious: report.canShowPreviousMonth,
+                    canShowNext: report.canShowNextMonth,
+                    onPrevious: onPreviousMonth,
+                    onNext: onNextMonth
                 )
                 legend
             }
