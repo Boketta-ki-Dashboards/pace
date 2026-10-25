@@ -156,6 +156,10 @@ struct StatisticsContent: View {
             }
         }
 
+        if let title = report.periodBestsTitle, !report.periodBests.isEmpty {
+            periodBestsCard(title: title, bests: report.periodBests)
+        }
+
         if !report.bests.isEmpty {
             bestsCard(report)
         }
@@ -293,6 +297,44 @@ struct StatisticsContent: View {
         .buttonStyle(.pacePressable)
     }
 
+    /// Bestwerte im angezeigten Zeitraum (bester Tag, im Monat auch beste Woche).
+    private func periodBestsCard(title: String, bests: [StatisticsReport.Best]) -> some View {
+        PaceCard {
+            VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                PaceCardHeader(title)
+                ForEach(bests) { best in
+                    PaceTile {
+                        HStack(spacing: PaceSpacing.s) {
+                            Image(systemName: "star.fill")
+                                .foregroundStyle(PaceColor.accent)
+                                .frame(width: 24)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(best.title)
+                                    .font(PaceFont.callout)
+                                    .foregroundStyle(PaceColor.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if let detail = best.detail {
+                                    Text(detail)
+                                        .font(PaceFont.caption)
+                                        .foregroundStyle(PaceColor.textSecondary)
+                                }
+                            }
+                            Spacer(minLength: PaceSpacing.xs)
+                            Text(best.value)
+                                .font(PaceFont.headline)
+                                .monospacedDigit()
+                                .foregroundStyle(PaceColor.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+    }
+
     private func bestsCard(_ report: StatisticsReport) -> some View {
         PaceCard {
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
@@ -303,8 +345,8 @@ struct StatisticsContent: View {
                 ForEach(report.bests) { best in
                     PaceTile {
                         HStack(spacing: PaceSpacing.s) {
-                            Image(systemName: best.kind == .streak ? "flame.fill" : "trophy.fill")
-                                .foregroundStyle(best.kind == .streak ? PaceColor.streak : PaceColor.accent)
+                            Image(systemName: best.kind == .streak || best.kind == .currentStreak ? "flame.fill" : best.kind == .distanceDay ? "shoeprints.fill" : "trophy.fill")
+                                .foregroundStyle(best.kind == .streak || best.kind == .currentStreak ? PaceColor.streak : PaceColor.accent)
                                 .frame(width: 24)
                                 .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 0) {

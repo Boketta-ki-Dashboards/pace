@@ -73,6 +73,10 @@ public struct StatisticsReport: Equatable, Sendable {
     public struct Best: Equatable, Sendable, Identifiable {
         public enum Kind: String, Sendable {
             case day, week, month, streak
+            /// Bester Tag bzw. beste Woche im angezeigten Zeitraum.
+            case periodDay, periodWeek
+            /// Längste Strecke an einem Tag, aktuelle Serie.
+            case distanceDay, currentStreak
         }
 
         public let kind: Kind
@@ -110,6 +114,10 @@ public struct StatisticsReport: Equatable, Sendable {
     public let goalLine: Double?
     public let tiles: [Tile]
     public let bests: [Best]
+    /// Bestwerte im angezeigten Zeitraum (Woche bzw. Monat) – andere als die 12-Monats-Bestwerte.
+    public private(set) var periodBests: [Best] = []
+    /// z. B. „Bestwerte dieser Woche“.
+    public private(set) var periodBestsTitle: String?
     public private(set) var notes: [String]
     public let isMetricAvailable: Bool
     public let canShowPrevious: Bool
@@ -124,6 +132,8 @@ public struct StatisticsReport: Equatable, Sendable {
         public var history: ActivityHistory
         public var goals: StepGoalHistory
         public var record: StepStreakRecord?
+        /// Aktuelle persönliche Serie in Tagen (für „Aktuelle Serie“ bei den Bestwerten).
+        public var currentStreak: Int?
         public var hourly: HourlyValues?
         public var today: LocalDate
         /// Laufende Stunde (0–23) und bereits vergangener Anteil davon – für Tagesdiagramm und Vergleich.
@@ -139,6 +149,7 @@ public struct StatisticsReport: Equatable, Sendable {
             history: ActivityHistory,
             goals: StepGoalHistory,
             record: StepStreakRecord? = nil,
+            currentStreak: Int? = nil,
             hourly: HourlyValues? = nil,
             today: LocalDate,
             currentHour: Int,
@@ -152,6 +163,7 @@ public struct StatisticsReport: Equatable, Sendable {
             self.history = history
             self.goals = goals
             self.record = record
+            self.currentStreak = currentStreak
             self.hourly = hourly
             self.today = today
             self.currentHour = currentHour
@@ -162,11 +174,72 @@ public struct StatisticsReport: Equatable, Sendable {
     }
 
     public static func make(_ input: Input) -> StatisticsReport {
-        let report = switch input.period {
+        var report = switch input.period {
         case .day: makeDay(input)
         case .week, .month: makeRange(input)
         }
+        if report.isMetricAvailable, input.period != .day {
+            report.periodBests = periodBests(input)
+            report.periodBestsTitle = report.periodBests.isEmpty ? nil : periodBestsTitle(input)
+        }
         return labelingActiveEnergy(report, input: input)
+    }
+
+    /// „Bestwerte dieser Woche“, „Bestwerte im Oktober 2026“ …
+    private static func periodBestsTitle(_ input: Input) -> String {
+        let (first, last) = bounds(of: input.period, containing: input.anchor, calendar: input.calendar)
+        let isCurrent = (first...last).contains(input.today)
+        switch input.period {
+        case .week:
+            return isCurrent
+                ? PaceLocalization.text(de: "Bestwerte dieser Woche", en: "Bests this week", ru: "Лучшее на этой неделе")
+                : PaceLocalization.text(de: "Bestwerte der Woche", en: "Bests of the week", ru: "Лучшее за неделю")
+        default:
+            return isCurrent
+                ? PaceLocalization.text(de: "Bestwerte dieses Monats", en: "Bests this month", ru: "Лучшее в этом месяце")
+                : PaceLocalization.text(de: "Bestwerte im Monat", en: "Bests of the month", ru: "Лучшее за месяц")
+        }
+    }
+
+    /// Bester Tag im angezeigten Zeitraum; im Monat zusätzlich die beste Woche (nur Tage innerhalb des Monats).
+    private static func periodBests(_ input: Input) -> [Best] {
+        let calendar = input.calendar
+        let formatter = input.formatter
+        let metric = input.metric
+        let (first, last) = bounds(of: input.period, containing: input.anchor, calendar: calendar)
+        let upper = min(last, input.today)
+        guard first <= upper else { return [] }
+        let values = input.history.summaries(from: first, through: upper, calendar: calendar)
+            .compactMap { day in metric.value(of: day).map { (day: day.date, value: $0) } }
+            .filter { $0.value > 0 }
+        var result: [Best] = []
+        if let best = values.max(by: { ($0.value, $0.day) < ($1.value, $1.day) }) {
+            result.append(Best(
+                kind: .periodDay,
+                title: input.period == .week
+                    ? PaceLocalization.text(de: "Bester Tag der Woche", en: "Best day of the week", ru: "Лучший день недели")
+                    : PaceLocalization.text(de: "Bester Tag des Monats", en: "Best day of the month", ru: "Лучший день месяца"),
+                value: metric.formatWithUnit(best.value, formatter: formatter),
+                detail: formatter.dayWithWeekdayShort(best.day)
+            ))
+        }
+        if input.period == .month {
+            var weeks: [LocalDate: Double] = [:]
+            for entry in values {
+                weeks[calendar.startOfWeek(containing: entry.day), default: 0] += entry.value
+            }
+            if weeks.count > 1, let best = weeks.max(by: { ($0.value, $0.key) < ($1.value, $1.key) }) {
+                let start = max(best.key, first)
+                let end = min(calendar.adding(6, to: best.key), last)
+                result.append(Best(
+                    kind: .periodWeek,
+                    title: PaceLocalization.text(de: "Beste Woche im Monat", en: "Best week of the month", ru: "Лучшая неделя месяца"),
+                    value: metric.formatWithUnit(best.value, formatter: formatter),
+                    detail: formatter.dayRange(start, end)
+                ))
+            }
+        }
+        return result
     }
 
     /// Aktive Kalorien: Herkunft kennzeichnen (gemessen/geschätzt), geschätzte Werte mit `≈` und Erklärung.
@@ -415,6 +488,26 @@ public struct StatisticsReport: Equatable, Sendable {
                 title: PaceLocalization.text(de: "Längste Serie", en: "Longest streak", ru: "Самая длинная серия"),
                 value: ActivityTexts.days(record.days),
                 detail: formatter.dayRange(record.start, record.end)
+            ))
+        }
+        if metric == .steps, let current = input.currentStreak, current > 0 {
+            result.append(Best(
+                kind: .currentStreak,
+                title: PaceLocalization.text(de: "Aktuelle Serie", en: "Current streak", ru: "Текущая серия"),
+                value: ActivityTexts.days(current),
+                detail: nil
+            ))
+        }
+        // Weiteste Strecke an einem Tag (Schritte-Ansicht; in der Distanz-Ansicht ist das schon der „Beste Tag“).
+        if metric == .steps,
+           let best = days.compactMap({ day in day.walkingRunningDistanceMeters.map { (day.date, $0) } })
+               .filter({ $0.1 > 0 })
+               .max(by: { ($0.1, $0.0) < ($1.1, $1.0) }) {
+            result.append(Best(
+                kind: .distanceDay,
+                title: PaceLocalization.text(de: "Weiteste Strecke", en: "Longest distance", ru: "Самая длинная дистанция"),
+                value: formatter.distance(meters: best.1),
+                detail: formatter.dayWithWeekdayShort(best.0)
             ))
         }
         return result

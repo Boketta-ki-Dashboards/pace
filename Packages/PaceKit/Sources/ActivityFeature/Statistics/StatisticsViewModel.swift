@@ -103,6 +103,7 @@ public final class StatisticsViewModel {
             history: loaded,
             goals: streak.goals.history,
             record: streak.record,
+            currentStreak: streak.streak?.current,
             hourly: hourlyValues,
             today: calendar.day(containing: currentDate),
             currentHour: components.hour ?? 0,
