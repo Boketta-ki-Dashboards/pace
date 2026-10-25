@@ -122,6 +122,29 @@ Unterseite von Home: „‹ Anpassen“ → pace → „Widget hinzufügen“ (b
 - **Freunde-Widget**: nur die ausgewählten Freunde + „Du“ aus dem echten Freundesranking; Plätze innerhalb der
   Auswahl. Nicht mehr befreundete Personen werden als Hinweis gezählt.
 
+## Eigene Inhalte je Widget (Auftrag 4)
+
+Im Bearbeitungsmodus → Widget bearbeiten → **Inhalte** wählt man je Art eigene Zusatzinhalte
+(`HomeWidgetDetail`, `HomeWidgetDetails.swift`). Ohne eigene Auswahl zeigt jedes Widget genau den bisherigen
+Standard seiner Größe (Tabelle oben); eine Auswahl, die dem Standard entspricht, wird nicht gespeichert.
+
+| Widget | Wählbare Inhalte |
+|---|---|
+| Schritte heute | Distanz & Kalorien, Stockwerke & Training, Vergleich gestern/Ø 7 Tage, persönlicher Tagesbestwert |
+| Persönliche Flamme | Rekord, kompakte Woche, nächster Meilenstein (3, 7, 14, 21, 30, 50, 75, 100 … 365, dann volle Hundert), letzte erfolgreiche Tage |
+| Freunde | Abstand zum Platz davor (je Zeile), Diagramm (ab „Groß“) |
+| Gruppe (eine gewählte) | heute erreicht, Tagesziel & beste Serie, Mitglieder als Kennzahlen |
+| Ranking-Umfeld | Abstand zum nächsten Platz ein/aus |
+
+- **Passend zur Größe**: Klein zeigt nur das Wichtigste, Mittel höchstens zwei, Groß drei, Max alle Zusatzinhalte –
+  immer in fester Reihenfolge; die Auswahl erklärt das.
+- **Eigener Name**: jetzt für jedes Widget (bisher nur Freunde), höchstens 30 Zeichen.
+- **Tagesbestwert**: bester Tag im geladenen Verlauf aus Wettbewerbsschritten (manuell eingetragene Schritte zählen
+  nicht); übertrifft heute den Wert, steht „Heute“.
+- **Nicht angeboten**, weil Pace die Daten nicht hat: Platzierungsänderung gegenüber gestern, Tagesbeste einer
+  Gruppe, Position einer Gruppe – keine erfundenen Werte.
+- Persönliche Flamme → eigene Seite „Deine Flamme“ mit Flammenkalender (`HomeRoute.streak`), nie Gruppe oder Chat.
+
 ## Speicherformat (Version 3)
 
 `UserDefaults`-Schlüssel `pace.home.preferences`, JSON:
@@ -136,12 +159,15 @@ Unterseite von Home: „‹ Anpassen“ → pace → „Widget hinzufügen“ (b
       "config": { "friendIDs": ["…", "…"], "name": "Meine Laufrunde" } },
     { "id": "…", "kind": "groups", "size": "small", "config": { "groupID": "…" } },
     { "id": "…", "kind": "neighborhood", "size": "max", "regionLevel": "district" },
-    { "id": "…", "kind": "activity", "size": "medium", "config": { "metric": "distance" } }
+    { "id": "…", "kind": "activity", "size": "medium", "config": { "metric": "distance" } },
+    { "id": "…", "kind": "streak", "size": "large",
+      "config": { "name": "Meine Flamme", "details": ["record", "milestone"] } }
   ]
 }
 ```
 
-- Position = Reihenfolge in `modules`. `config` fehlt bei Widgets ohne eigene Einstellungen.
+- Position = Reihenfolge in `modules`. `config` fehlt bei Widgets ohne eigene Einstellungen. `details` fehlt =
+  Standard der Größe, `[]` = keine Zusatzinhalte; unbekannte Werte (neuere App-Version) werden übersprungen.
 - Version 2 (gleiche Felder ohne `config`/`max`) wird verlustfrei übernommen; Version 1 (`sections` mit
   `isVisible`) wird in Nutzer-Reihenfolge migriert, die Streak kommt nach der Woche. `stepGoal` bleibt, bis der
   Zielverlauf es übernommen hat.

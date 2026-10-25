@@ -37,7 +37,7 @@ struct ChatSnapshotTests {
                 viewModel: chat,
                 recorder: ChatVoiceRecorder(),
                 player: ChatVoicePlayer(),
-                onPickMedia: {},
+                attachments: ChatAttachmentActions(onPhoto: {}, onGIF: {}, onProfile: {}),
                 onSend: {},
                 onSendVoice: {},
                 onDiscardVoice: {}
@@ -109,6 +109,51 @@ struct ChatSnapshotTests {
 
         let offline = ChatListViewModel(repository: nil, media: nil).chat(for: .direct(ChatSnapshotData.mia))
         try Snapshot.render(chatPage(offline), name: "chat-unavailable")
+    }
+
+    // MARK: Anhänge (Auftrag 4)
+
+    /// GIF-Suche im echten Fenster (Suchfeld, Raster, „Powered by …“) und ohne eingerichteten Schlüssel.
+    @Test func gifPicker() async throws {
+        try await Snapshot.renderInWindow(GIFPickerSheet(search: SnapshotGIFSearch(), onSend: { _ in }), name: "chat-gif-picker")
+        try await Snapshot.renderInWindow(GIFPickerSheet(search: nil, onSend: { _ in }), name: "chat-gif-not-configured")
+    }
+
+    @Test func shareProfileSheet() async throws {
+        let profiles = [ChatSnapshotData.mia, ChatSnapshotData.profile(2, "Leon", "leon"), ChatSnapshotData.profile(3, "Marie", "marie")]
+        try await Snapshot.renderInWindow(
+            ChatProfileShareSheet(profiles: profiles, ownPublicID: ChatSnapshotData.mia.publicID, onShare: { _ in }),
+            name: "chat-share-profile"
+        )
+    }
+}
+
+/// Feste Treffer für den GIF-Snapshot (keine Anfragen an GIPHY; die Standbilder bleiben Platzhalter).
+private struct SnapshotGIFSearch: GIFSearching {
+    var attribution: String { "Powered by GIPHY" }
+    var privacyNote: String {
+        PaceLocalization.text(de: "Suchbegriffe gehen an GIPHY.", en: "Search terms are sent to GIPHY.", ru: "Запросы передаются GIPHY.")
+    }
+
+    func trending(limit: Int, offset: Int) async throws(GIFSearchError) -> [GIFSearchResult] {
+        (0..<12).map { index in
+            GIFSearchResult(
+                id: "\(index)",
+                title: "GIF \(index)",
+                stillURL: URL(string: "https://invalid.invalid/\(index).gif")!,
+                sendURL: URL(string: "https://invalid.invalid/\(index).gif")!,
+                width: 480,
+                height: 270
+            )
+        }
+    }
+
+    func search(_ query: String, limit: Int, offset: Int) async throws(GIFSearchError) -> [GIFSearchResult] {
+        try await trending(limit: limit, offset: offset)
+    }
+
+    func download(_ result: GIFSearchResult, maximumBytes: Int) async throws(GIFSearchError) -> Data {
+        throw .failed
     }
 }
 

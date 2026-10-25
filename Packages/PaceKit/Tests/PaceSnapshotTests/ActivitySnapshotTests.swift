@@ -68,6 +68,26 @@ struct ActivitySnapshotTests {
         try Snapshot.render(page(DayDetailsSnapshotHost(viewModel: past)), name: "day-details-past")
     }
 
+    // MARK: Persönliche Flamme (Auftrag 4)
+
+    @Test func streakDetail() async throws {
+        let environment = await ActivitySnapshotEnvironment.make(october: ActivitySnapshotEnvironment.calendarOctober)
+        let viewModel = StreakDetailViewModel(
+            streak: environment.streak,
+            calendar: environment.calendar,
+            formatter: ActivityFormatter(calendar: environment.calendar),
+            now: environment.now
+        )
+        await viewModel.load()
+        try Snapshot.render(
+            page(StreakDetailContent(content: viewModel.content, backTitle: "Home")),
+            name: "streak-detail",
+            languages: Self.languages
+        )
+        viewModel.select(Fixtures.day(2026, 10, 14))
+        try Snapshot.render(page(StreakDetailContent(content: viewModel.content, backTitle: "Home")), name: "streak-detail-selected")
+    }
+
     // MARK: Statistiken
 
     @Test func statistics() async throws {

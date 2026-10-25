@@ -84,9 +84,44 @@ Alles ohne SwiftUI (ViewModels, Texte, Verlauf, Medienregeln) wird auf Linux geb
 - Fehler bleiben sichtbar und erholbar: Laden (Karte mit „Erneut versuchen“), Aktualisieren (Hinweis über dem
   Verlauf), ältere Nachrichten („Ältere Nachrichten laden“), Senden/Hochladen (an der Nachricht).
 
-## Bilder und GIFs
+## Anhangsmenü am „+“ (Auftrag 4)
 
-- Auswahl per `PhotosPicker` (`matching: .images`, `preferredItemEncoding: .current`), kein externer GIF-Dienst.
+Das „+“ öffnet ein natives Menü (`ChatInputBar` → `ChatAttachmentActions`): **Foto aus Mediathek** (wie bisher, auch
+GIFs aus Fotos), **GIF suchen** (`GIFPickerSheet`) und **Profil teilen** (`ChatProfileShareSheet`). Videos werden
+nicht angeboten – das Backend erlaubt in Chats nur Bilder, GIFs und Sprachnachrichten (eine Erweiterung bräuchte eine
+neue Migration).
+
+### GIF-Suche (GIPHY)
+
+- Schnittstelle `GIFSearching` (PaceCore), Umsetzung `GIPHYSearchService` (PaceBackend), Zustand
+  `GIFPickerViewModel` (SocialFeature). Verdrahtet über `AppDependencies.gifSearch` → `ChatListViewModel.gifSearch`.
+- Schlüssel: `GIPHY_API_KEY` in `Config/Pace.xcconfig` (von Git ignoriert) → `PaceGIPHYAPIKey` in der Info.plist.
+  `Config/Base.xcconfig` und `Pace.xcconfig.example` enthalten nur leere Werte. Ohne Schlüssel zeigt die Auswahl
+  „nicht eingerichtet“ – keine Platzhalter-GIFs.
+- Anfragen: `v1/gifs/search` bzw. `v1/gifs/trending` (ohne Suchbegriff), `rating=pg`, Sprache der App, 30 je Seite,
+  höchstens 150 Treffer. Suche erst 350 ms nach der letzten Eingabe.
+- Raster mit kleinen Standbildern (`fixed_width_still`), animiert wird nur das gewählte GIF (Vorschau über
+  `PaceImageLoader.decoded(_:size:)` mit Byte-Budget, außerhalb des Main Threads).
+- Senden: Die Datei („downsized“ < 2 MB, sonst „fixed_width“) wird heruntergeladen – nur HTTPS von `giphy.com` und
+  Subdomains, geprüft auf GIF-Signatur und 10-MB-Grenze – und wie ein GIF aus der Mediathek über
+  `ChatViewModel.sendMedia(_:contentType: "image/gif")` in den privaten Bucket `chat-media` hochgeladen. Es wird nie
+  ein fremder Link gespeichert; das GIF bleibt verfügbar und ist nur für die Teilnehmer lesbar. Storage-Policies
+  bleiben unverändert, keine Migration.
+- Pflichtangabe „Powered by GIPHY“ und Datenschutzhinweis (Suchbegriffe gehen an GIPHY) in der Auswahl; zusätzlich
+  in Hilfe → Datenschutz.
+- Fehler: `notConfigured` (kein/abgelehnter Schlüssel), `offline`, `rateLimited`, `unsuitableFile`, `failed` – je
+  mit eigenem Hinweis und (außer „nicht eingerichtet“) „Erneut versuchen“.
+
+### Profil teilen aus dem Chat
+
+`ChatProfileShareSheet` listet das eigene Profil („Mein Profil“) und die Freunde (`SocialViewModel` →
+`ChatListViewModel.shareableProfiles`). Gesendet wird über `ChatViewModel.shareProfile(_:)` →
+`ChatListViewModel.shareProfile(_:with:)` – derselbe Weg wie von einer Profilseite (Server prüft Sichtbarkeit und
+Blockierungen).
+
+## Bilder und GIFs aus der Mediathek
+
+- Auswahl per `PhotosPicker` (`matching: .images`, `preferredItemEncoding: .current`).
 - GIF (Mediathek-Typ `com.compuserve.gif`, erkannt an der Dateisignatur `GIF87a`/`GIF89a`): unverändert als
   `image/gif` hochladen. Fotos: auf höchstens 2.048 px verkleinern und als JPEG (Qualität 0,85 → 0,45) unter die
   Grenze von `MediaRules` (10 MB für Chats) bringen. Format und Größe prüft das ViewModel vor dem Hochladen.

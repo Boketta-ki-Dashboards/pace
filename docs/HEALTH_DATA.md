@@ -114,9 +114,29 @@ Das betrifft nur die Statistik der letzten 7 Tage.
 - **gemessen** – Summe der aktiven Energie des Tages aus Apple Health,
 - **gemessene 0** – Health hat Samples, aber 0 kcal für den Tag,
 - **nicht verfügbar** – für den Tag liegt kein Wert vor (kein Zugriff, kein Gerät, das misst). Angezeigt als
-  „Nicht verfügbar“ mit Erklärung – nie als erfundene 0. Pace schätzt keine Kalorien.
+  „Nicht verfügbar“ mit Erklärung – nie als erfundene 0.
 
 Gleich auf Home, in den Tagesdetails, der Woche, dem Monat und im Kalender.
+
+### Kalorienschätzung ohne Apple Watch (Auftrag 4, freiwillig)
+
+Profil → Einstellungen → Aktivität & Gesundheit → **Kalorienschätzung**: Größe (100–250 cm), Gewicht (30–300 kg),
+Schalter (Standard: aus). Nur wenn eingeschaltet, beide Werte gültig sind **und Apple Health für den Tag keine
+gemessenen aktiven Kalorien hat**, zeigt Pace einen Schätzwert (`CalorieEstimator`, `PaceCore/Activity`):
+
+- Modell: ACSM-Gleichung für Gehen auf ebener Strecke – Netto-Sauerstoffbedarf 0,1 ml je kg und Meter, 1 l O₂ ≈ 5 kcal
+  → **0,0005 kcal je kg Körpergewicht und Meter** (≈ 0,5 kcal je kg und km, ohne Grundumsatz).
+- Strecke: Distanz aus Apple Health; fehlt sie (oder sind manuell eingetragene Schritte im Spiel), automatisch
+  erfasste Schritte × Schrittlänge (0,414 × Körpergröße). Kein fester Wert pro Schritt.
+- Ohne erfasste Bewegung gibt es keinen Schätzwert (nicht „0 kcal“).
+- Gemessen hat immer Vorrang; Messung und Schätzung werden nie addiert. Ein Zeitraum mit mindestens einem geschätzten
+  Tag gilt als geschätzt.
+- Kennzeichnung überall: „≈ 245 kcal“ mit „Geschätzte aktive Kalorien“ (Home, Aktivitäts-Widget, Tagesdetails),
+  Statistik mit Herkunft „Gemessen“/„Geschätzt“.
+- Grenzen: Steigungen, Treppen und Laufen werden nicht eigens berücksichtigt (Laufen kostet etwa doppelt so viel).
+- Datenschutz: Größe und Gewicht liegen nur auf dem Gerät (`UserDefaults`, Schlüssel `pace.bodyMetrics.v1`, im
+  Datenexport enthalten, beim Löschen entfernt) und gehen nie an Server, Freunde, Gruppen, Rankings oder Chats.
+  Schritte, Wettbewerbsschritte und Rankings bleiben von der Schätzung unberührt.
 
 ## Live-Schritte (Core Motion)
 
@@ -162,8 +182,8 @@ verhindert doppeltes Zählen:
   Sommerzeitwechsel wird jeder Tag genau einmal gezählt); spät synchronisierte Werte fließen über die live
   aktualisierten letzten 7 Tage bzw. das stündliche Neuladen des Verlaufs ein.
 - Alle Werte bleiben auf dem Gerät. Für Streak und Zieltage zählt wie überall die Wettbewerbsschrittzahl.
-- CoreMotion wird nicht verwendet: Die Schritte des iPhones stehen über Health bereits zur Verfügung, und nur Health
-  führt iPhone und Apple Watch ohne Doppelzählung zusammen.
+- Gezählt wird aus Apple Health: Nur Health führt iPhone und Apple Watch ohne Doppelzählung zusammen. Core Motion
+  dient ausschließlich der Live-Anzeige auf Home (siehe „Live-Schritte“).
 
 ## Was ins Backend geht
 

@@ -1,9 +1,12 @@
-# Nächster iPhone-Test – einfache Anleitung
+# Nächster iPhone-Test – einfache Anleitung (Auftrag 4)
 
 Diese Anleitung setzt voraus, dass Pace schon einmal aus Xcode auf deinem iPhone lief (Personal Team, eigene
-`Config/Pace.xcconfig` mit den Supabase-Werten). Daran ändert sich nichts: Signing, Bundle Identifier und deine
-lokale Konfiguration bleiben, wie sie sind. `Config/Pace.xcconfig` ist von Git ausgeschlossen und wird beim
-Aktualisieren nicht überschrieben.
+`Config/Pace.xcconfig` mit den Supabase-Werten). Daran ändert sich nichts: Signing, Bundle Identifier
+(`com.boketta.pace.ios` auf deinem iPhone) und deine lokale Konfiguration bleiben, wie sie sind.
+`Config/Pace.xcconfig` ist von Git ausgeschlossen und wird beim Aktualisieren nicht überschrieben.
+
+Wichtig: Alle Punkte unten wurden bisher nur automatisch (Unit-Tests, Simulator in der CI) geprüft – **nicht auf
+einem echten iPhone**. Genau dafür ist diese Liste da.
 
 ## 1. Letzten Stand herunterladen
 
@@ -21,77 +24,106 @@ Aktualisieren nicht überschrieben.
    Meldet Git „Your local changes would be overwritten“, hast du lokal etwas geändert. Dann nicht weitermachen und
    mir die Meldung schicken – nichts löschen.
 
-## 2. Xcode öffnen
+## 2. Optional: GIF-Suche einrichten (GIPHY)
+
+Die GIF-Suche im Chat braucht einen eigenen, kostenlosen GIPHY-Schlüssel. Ohne Schlüssel funktioniert alles andere;
+„GIF suchen“ zeigt dann ehrlich „Die GIF-Suche ist in dieser App-Version nicht eingerichtet“.
+
+1. Auf <https://developers.giphy.com> anmelden → **Create an App** → Typ **API** wählen → Namen „Pace“ eingeben.
+   Der angezeigte **API Key** ist ein Beta-Schlüssel mit begrenztem Kontingent (für deine Tests reicht das).
+2. Öffne `Config/Pace.xcconfig` (dieselbe Datei mit deinen Supabase-Werten) in einem Texteditor und ergänze eine
+   Zeile:
+   ```
+   GIPHY_API_KEY = dein_schlüssel_ohne_anführungszeichen
+   ```
+3. Speichern. Die Datei bleibt lokal (von Git ausgeschlossen) – der Schlüssel kommt nie ins Repository.
+
+## 3. Xcode öffnen
 
 1. Doppelklick auf **Pace.xcodeproj** im Pace-Ordner.
-2. Xcode lädt beim ersten Öffnen neue Bausteine (unten rechts „Resolving Packages“). Warte, bis das fertig ist.
-   Falls Xcode meldet, dass Pakete fehlen: Menü **File → Packages → Resolve Package Versions**.
+2. Warte, bis unten rechts „Resolving Packages“ fertig ist. Falls Xcode meldet, dass Pakete fehlen: Menü
+   **File → Packages → Resolve Package Versions**.
 3. Einmal **Product → Clean Build Folder** (⇧ ⌘ K) ausführen.
 
-## 3. iPhone auswählen
+## 4. iPhone auswählen und installieren
 
-1. iPhone per Kabel verbinden und entsperren (oder WLAN-Verbindung wie beim letzten Mal).
-2. Oben in der Mitte der Xcode-Leiste auf den Gerätenamen klicken und dein **iPhone** auswählen (nicht
-   „iPhone … Simulator“).
+1. iPhone per Kabel verbinden und entsperren.
+2. Oben in der Mitte der Xcode-Leiste dein **iPhone** auswählen (nicht „iPhone … Simulator“).
 3. Unter **Signing & Capabilities** muss weiter dein Personal Team stehen. Nur falls Xcode es zurückgesetzt hat,
    wieder auswählen – sonst nichts ändern.
+4. **Play-Knopf** (▶) oder ⌘ R. Deine Daten (Profil, Tagesziel, Home-Layout, Widget-Einstellungen) bleiben erhalten.
 
-## 4. Update installieren
+Dieses Update fragt nach **keinen neuen Berechtigungen**.
 
-1. Auf den **Play-Knopf** (▶) oben links klicken oder ⌘ R drücken.
-2. Die App startet auf dem iPhone. Deine bisherigen Daten (Profil, Tagesziel, Home-Layout) bleiben erhalten; das
-   Home-Layout wird automatisch ins neue Format übernommen.
+### „Pace ist nicht mehr verfügbar“
 
-## 5. Neue Abfragen beim ersten Start
+Mit einem kostenlosen Personal Team ist eine aus Xcode installierte App nur **7 Tage** gültig. Danach öffnet iOS sie
+nicht mehr und meldet „Pace ist nicht mehr verfügbar“ – das ist sehr wahrscheinlich die Ursache der Meldung (nicht
+bestätigt; bitte so prüfen):
 
-Dieses Update fragt einmalig nach zwei neuen Berechtigungen. Beide sind nur Einträge in der Info.plist – Signing,
-Bundle Identifier und Capabilities bleiben unverändert:
+1. iPhone-Einstellungen → **Allgemein → VPN & Geräteverwaltung** → unter „Entwickler-App“ deine Apple-ID antippen.
+   Steht dort kein Eintrag mehr oder lässt sich die App nicht vertrauen, ist das Profil abgelaufen.
+2. Lösung: iPhone verbinden, in Xcode erneut ▶ drücken. Die App wird neu signiert, Daten bleiben erhalten.
+3. Notiere das Installationsdatum. Kommt die Meldung **vor** Ablauf der 7 Tage, schick mir bitte Datum und
+   Uhrzeit sowie (falls vorhanden) einen Absturzbericht: Einstellungen → Datenschutz & Sicherheit → Analyse &
+   Verbesserungen → Analysedaten → Einträge, die mit „Pace“ beginnen.
 
-- **Bewegung & Fitness** (beim ersten Öffnen von Home): Damit zählt die Schrittanzeige live mit, während Pace offen
-  ist. Ohne Erlaubnis zeigt Pace wie bisher die Werte aus Apple Health.
-- **Mikrofon** (beim ersten Halten des Mikrofon-Knopfs im Chat): nur für Sprachnachrichten. Nach der Erlaubnis
-  nimmt das nächste Halten auf.
+## 5. Testfälle
 
-Bestehende Einstellungen, Home-Layout, Tagesziel und die Erinnerung an das Tagesziel bleiben erhalten (die alte
-Erinnerungszeit wird übernommen).
+Hake ab, was klappt. Bei einem Fehler bitte Screenshot und die Nummer des Testfalls schicken. Für die Fälle mit zwei
+Personen brauchst du einen Freund mit Pace oder ein zweites Gerät.
 
-## 6. Die 22 Testfälle
+### P0 – zuerst
 
-Hake ab, was klappt. Bei einem Fehler bitte Screenshot und die Nummer des Testfalls schicken.
+| Nr. | Was tun | Was soll passieren |
+|---|---|---|
+| 1 | Social → eine Gruppe → Flamme → „Chat“ → im Chat-Kopf wieder zur Flamme → wieder zum Chat. Das **20-mal** wiederholen, danach mit „‹“ ganz zurück. | Es entstehen keine neuen Ebenen: Nach höchstens zwei, drei „‹“ bist du wieder in der Gruppe bzw. auf Social. Kein Ruckeln, kein seitliches Zucken. Danach dieselbe Gruppe erneut öffnen – alles normal. |
+| 2 | Auf Home, Rankings, Social und Profil seitlich wischen. | Finger von rechts nach links → nächster Tab rechts (Home → Rankings → Social → Profil). Finger von links nach rechts → vorheriger Tab. Die Seiten folgen dem Finger, die mintgrüne Fläche unten gleitet in dieselbe Richtung. An Home und Profil endet die Reihe. |
+| 3 | Wischen anfangen, auf halbem Weg anhalten, zurückziehen, loslassen. | Der Wechsel wird abgebrochen, der bisherige Tab bleibt; die Hervorhebung gleitet sauber zurück. |
+| 4 | Eine Unterseite öffnen (Kalender, Statistik, Chat, Einstellungen) und seitlich wischen. | Kein Tab-Wechsel – nur die normale Zurück-Geste vom linken Rand. |
+| 5 | Chat öffnen, ins Eingabefeld tippen. | Das Eingabefeld sitzt **direkt über der Tastatur** (kein Spalt, nichts verdeckt), die Tab-Leiste ist weg. Tastatur nach unten wischen → Eingabe gleitet mit. |
+| 6 | Nachricht gedrückt halten → „Antworten“, dann ins Feld tippen. | Antwortvorschau und Eingabe sind beide über der Tastatur sichtbar. |
+| 7 | Mikrofon gedrückt halten und **10 Sekunden** sprechen, dann loslassen. | Die Aufnahme läuft die ganze Zeit (Zeit zählt weiter, kein Abbruch nach 1 s). Danach Vorschau mit Abspielen, Papierkorb, Senden. |
+| 8 | Wieder halten, Finger nach oben wischen (gesperrt), 15 s weiterreden, Senden. | Sprachnachricht mit ca. 0:15 Dauer erscheint und lässt sich abspielen. |
+| 9 | Halten und nach links wischen. | Aufnahme verworfen, nichts gesendet. |
+| 10 | Home → „Anpassen“, ein Widget am Griff (sechs Punkte) langsam nach unten ziehen, dann schnell nach oben, zwischendurch anhalten. | Die anderen Widgets weichen ruhig aus, das gezogene Widget bleibt unter dem Finger, kein Flackern oder Springen. Am Rand scrollt die Seite mit. Loslassen → das Widget rastet weich ein und bleibt nach Neustart dort. |
+| 11 | Beim Ziehen einen zweiten Finger auflegen bzw. während des Ziehens die App verlassen. | Das Ziehen endet sauber, nichts scrollt weiter, nichts hängt. |
+| 12 | Den Ablauf aus Nr. 1 mit **50 Wiederholungen** machen und dabei in Xcode links den **Debug-Navigator** (⌘ 7) → „Memory“ beobachten. | Der Speicher steigt nicht immer weiter an (kurze Spitzen sind normal), die App bleibt flüssig. Wert vorher/nachher bitte notieren. |
 
-**A = sofort testbar.** **B = erst nach Freigabe und Einspielen der drei neuen Migrationen** (Spitznamen,
-Nachrichtenaktionen, Gruppenkalender – siehe `docs/SUPABASE_ROLLOUT.md`, Abschnitt „Auftrag 3“). Vorher zeigt die
-App an diesen Stellen ehrlich „auf dem Server noch nicht eingerichtet“. Freunde, Gruppen und Chats selbst
-funktionieren schon (die bisherigen sechs Migrationen sind eingespielt).
+### Messenger und Social
 
-| Nr. | Was tun | Was soll passieren | |
-|---|---|---|---|
-| 1 | Home offen lassen und 100 Schritte gehen. | „Deine Schritte heute“ zählt beim Gehen mit (alle paar Sekunden), ohne Sprünge zurück. Nach dem Schließen und Öffnen stimmt der Wert mit Apple Health überein (manuell eingetragene Schritte zählen nicht). | A |
-| 2 | Apple Health → Aktivität → Aktive Energie von heute ansehen, dann Pace. | Pace zeigt denselben Wert (kcal) an. Hat Health für heute keine Werte, steht „Nicht verfügbar“ – nie eine erfundene 0. | A |
-| 3 | Einen Chat öffnen, Nachricht schreiben, senden. | Kopf mit „‹ Social“ oben links, die Nachricht erscheint sofort unten; das Eingabefeld ist immer sichtbar. | A |
-| 4 | Ins Eingabefeld tippen, Tastatur wieder schließen (nach unten wischen). | Das Eingabefeld sitzt direkt über der Tastatur, die Tab-Leiste verschwindet solange; nichts wird verdeckt. | A |
-| 5 | Auf Home, Rankings, Social und Profil seitlich wischen. | Die Seiten folgen dem Finger, die helle Tab-Fläche gleitet mit. Finger von rechts nach links → nächster Tab rechts (Home → Rankings → Social → Profil), Finger von links nach rechts → vorheriger Tab. | A |
-| 6 | Wischen anfangen und auf halbem Weg zurückziehen. | Der Wechsel wird abgebrochen, der bisherige Tab bleibt. | A |
-| 7 | Eine Unterseite öffnen (z. B. Kalender oder ein Chat) und seitlich wischen. | Kein Tab-Wechsel – nur die normale Zurück-Geste vom linken Rand. | A |
-| 8 | Home → „Anpassen“, ein Widget am Griff (sechs Punkte) festhalten und weit nach unten ziehen. | Die Seite scrollt am Rand mit, das Widget lässt sich über mehrere Bildschirmhöhen verschieben und bleibt nach dem Neustart dort. | A |
-| 9 | Freund öffnen → „Spitzname vergeben“ → z. B. „Laufpartner“ → Speichern. | Überall (Freunde, Top-Freunde, Rankings, Chatliste, Chat) steht sofort der Spitzname; im Profil darunter der echte Anzeigename. Nur du siehst ihn. | B |
-| 10 | Gruppenchat öffnen, in dem dieser Freund schreibt. | Über seinen Nachrichten steht dein Spitzname für ihn. | B |
-| 11 | Im Chat bei leerem Feld das Mikrofon gedrückt halten und sprechen. | Roter Punkt, Zeit läuft, leichtes Vibrieren. Loslassen → Vorschau mit Abspielen, Papierkorb und Senden. Gesendet wird noch nichts. | A (Aufnahme) |
-| 12 | Wieder halten und den Finger nach links wischen (oder in der Vorschau den Papierkorb). | Aufnahme verworfen, nichts wird hochgeladen. | A |
-| 13 | Aufnehmen, Finger nach oben wischen (gesperrt), weiterreden, dann Senden. | Die Sprachnachricht erscheint mit Dauer; Antippen spielt sie ab, Ziehen auf dem Balken springt. In der Chatliste steht „Sprachnachricht · 0:12“. | B |
-| 14 | Eine Nachricht gedrückt halten → „Antworten“ → Text senden. | Über der Eingabe „Antwort auf …“; die neue Nachricht zeigt einen Verweis. Antippen des Verweises springt zur Original-Nachricht und hebt sie kurz hervor. | B |
-| 15 | Eigene Textnachricht gedrückt halten → „Bearbeiten“ → Text ändern → Haken. | Der Text ändert sich, darunter „Bearbeitet“. Auf dem zweiten Gerät erscheint der neue Text. | B |
-| 16 | Nachricht gedrückt halten → „Als Favorit speichern“; dann Stern oben im Chat. | Kleiner Stern an der Nachricht; die Liste „Favoriten“ zeigt sie. Andere sehen das nicht. | B |
-| 17 | In einer eigenen Gruppe (du bist Owner) Nachricht gedrückt halten → „Anpinnen“. | Oben im Chat erscheint „Angepinnte Nachricht“ mit Vorschau; Antippen springt hin. Mitglieder ohne Recht sehen „Anpinnen“ gar nicht im Menü. | B |
-| 18 | Gruppendetails → „Gruppenkalender“. | Monat mit Montag als erstem Tag; gesicherte Tage mintgrün, Pokal beim Tagesbesten; Vor/Zurück und „Heute“. | B |
-| 19 | Einen vergangenen Tag antippen. | Darunter die vollständige Tagesrangliste mit echten Schritten, deine Zeile hervorgehoben, „x von n Mitgliedern haben das Tagesziel erreicht“, benötigte Mitglieder und Flamme. Tage ohne Daten: „Keine Daten verfügbar.“ | B |
-| 20 | Profil → Mitteilungen → Tagesziel-Erinnerungen einschalten, „Uhrzeit hinzufügen“, Zeiten ändern und eine entfernen. | Bis zu 6 Uhrzeiten; sie bleiben nach dem Neustart. Zur Zeit kommt eine Mitteilung, morgens allgemein, später mit den fehlenden Schritten (wenn Pace kurz vorher offen war). Ist das Ziel erreicht, kommen heute keine „fehlen noch“-Mitteilungen mehr. | A |
-| 21 | Dunkle Darstellung, Home → Kalender, verschiedene Tage antippen. | Der ausgewählte Tag hat einen deutlichen mintgrünen Rahmen außen – auch um grün gefüllte Tage. Auswahl sieht nie wie „Ziel erreicht“ aus. | A |
-| 22 | Auf Home, Rankings, Social und Profil ganz nach unten scrollen. | Das Letzte ist vollständig über der Tab-Leiste sichtbar; keine Scrollleiste am Rand. Den aktiven Tab erneut antippen → die Seite scrollt nach oben. | A |
+| Nr. | Was tun | Was soll passieren |
+|---|---|---|
+| 13 | Unten die Tab-Leiste ansehen (iPhone mit Home-Balken). | Unter den Symbolen ist weniger Leerraum als vorher; Symbole und Texte sind gleich groß wie bisher. |
+| 14 | Weit nach oben scrollen (eigene, alte Nachricht noch nicht geladen) und auf diese antworten lassen bzw. eine Antwort darauf ansehen. | Im Verweis steht „Du“, nicht dein eigener Name. |
+| 15 | Freund → Spitzname ändern, dann Rankings → Freunde. | Der neue Spitzname steht dort sofort. |
+| 16 | Chat → „+“. | Kleines Menü: „Foto aus Mediathek“, „GIF suchen“, „Profil teilen“. „Foto aus Mediathek“ funktioniert wie bisher (auch GIFs aus Fotos). |
+| 17 | „+“ → „GIF suchen“ (mit Schlüssel aus Abschnitt 2), „laufen“ suchen, ein GIF antippen, „Senden“. | Raster mit echten GIFs (Standbilder), Antippen zeigt das GIF animiert; nach „Senden“ erscheint es animiert im Chat, nicht riesig. Unten „Powered by GIPHY“. Ohne Schlüssel: Hinweis „nicht eingerichtet“. |
+| 18 | Flugmodus an, „GIF suchen“. | Hinweis „Keine Internetverbindung“ mit „Erneut versuchen“. |
+| 19 | Den Chat schließen und wieder öffnen; dasselbe in einem Gruppenchat; auf dem zweiten Gerät ansehen. | Das GIF ist weiter da und läuft – in Privat- und Gruppenchat, auch beim Gegenüber. |
+| 20 | Einen Chat mit vielen GIFs lange auf und ab scrollen (Debug-Navigator → Memory). | Flüssig, der Speicher wächst nicht immer weiter. |
+| 21 | „+“ → „Profil teilen“ → „Mein Profil“ bzw. einen Freund. | Eine antippbare Profilkarte erscheint im Chat. |
+| 22 | Social oben: Symbol für Freundschaftsanfragen (Briefumschlag mit Person). | Mit offener Anfrage eine Zahl am Symbol; Antippen öffnet die Anfragen. In heller und dunkler Darstellung gut erkennbar. |
+| 23 | Gruppendetails → Gruppenkalender; einen vergangenen Tag antippen. | Gesicherte Tage mintgrün, Tagesbester mit Pokal; Tagesrangliste mit echten Schritten, „x von n Mitgliedern“. Namen und Zahlen nicht abgeschnitten. |
 
-**Grenzen (ehrlich):** Mitteilungen zu neuen Chatnachrichten kommen nur, solange Pace geöffnet ist. Bei
-geschlossener App bräuchte es Push-Mitteilungen über Apple (APNs) – mit einem kostenlosen Personal Team nicht möglich
-und nicht eingerichtet. Erinnerungen werden im Voraus geplant: Ist Pace länger nicht offen, kennen sie den aktuellen
-Schrittstand nicht und erinnern ohne Zahl.
+### Neue Funktionen
+
+| Nr. | Was tun | Was soll passieren |
+|---|---|---|
+| 24 | Profil → Einstellungen. | Sieben Bereiche: Konto & Profil, Privatsphäre & Sicherheit, Mitteilungen, Aktivität & Gesundheit, Darstellung & Sprache, Social & Gruppen, Daten/Hilfe/Rechtliches. Jeder öffnet sich, „‹“ führt immer zurück – keine Schleifen. „Social & Gruppen → Meine Gruppen“ wechselt zum Social-Tab. |
+| 25 | Einstellungen → Aktivität & Gesundheit → Kalorienschätzung: Größe (z. B. 180) und Gewicht (z. B. 75) eintragen, einschalten. | Ungültige Werte (z. B. 20 kg) werden abgelehnt. Gibt es für heute **keine** gemessenen Kalorien in Apple Health, zeigt Home „≈ … kcal“ und „Geschätzte aktive Kalorien“. Mit Apple Watch (gemessene Werte) bleibt der gemessene Wert – nie beides addiert. Ausschalten → wieder „Nicht verfügbar“ bzw. der gemessene Wert. |
+| 26 | Home → Flammen-Widget antippen. | Eigene Seite „Deine Flamme“: aktuelle Serie, Rekord, Beginn, Flammenkalender des Monats, frühere Serien, Erklärung. Kein Weg in eine Gruppe oder einen Chat. |
+| 27 | Im Flammenkalender seitlich wischen und einen Tag antippen. | Finger nach rechts → vorheriger Monat, nach links → nächster. Unter dem Kalender: Schritte des Tages, damaliges Ziel, ob die Serie weiterging. |
+| 28 | Home → Statistik (Schritte) → Tag: über Wert oder Diagramm seitlich wischen; dasselbe bei Woche und Monat. | Finger nach rechts → vorheriger Tag/Woche/Monat, nach links → nächster. Werte, Diagramm, Distanz, Kalorien und Vergleich wechseln zusammen. Nach heute geht es nicht weiter (federt zurück). Senkrechtes Scrollen bleibt normal, kein Tab-Wechsel. |
+| 29 | Statistik → Woche bzw. Monat ganz nach unten; Home → Kalender → Tag antippen. | Bestwerte des Zeitraums (bester Tag, beste Woche des Monats, weiteste Strecke, aktuelle Serie) und „Deine Bestwerte“ im Kalender – nur aus deinen echten Schritten. |
+| 30 | Home → Anpassen → Flammen-Widget → Bearbeiten → „Inhalte“: „Nächster Meilenstein“ wählen, Größe ändern, eigenen Namen eintragen, sichern. | Das Widget zeigt z. B. „Noch 2 Tage bis zu 7 Tagen in Folge“ und den neuen Namen. „Mittel“ zeigt höchstens zwei Zusatzinhalte (Hinweis in der Auswahl). |
+| 31 | Ebenso: Schritte-Widget → „Persönlicher Tagesbestwert“; Freunde-Widget → „Abstand zum Platz davor“; Gruppen-Widget (eine Gruppe gewählt) → Inhalte; Umfeld → Abstand aus. | Jedes Widget zeigt genau die gewählten Inhalte; nach Neustart unverändert. Ohne eigene Auswahl sehen alle Widgets aus wie vorher. |
+| 32 | Profil → Mitteilungen: Erinnerungen wie bisher (bis 6 Uhrzeiten). | Unverändert funktionsfähig. |
+| 33 | Sprache auf English bzw. Русский stellen und die neuen Seiten (Flamme, GIF-Suche, Widget-Inhalte, Kalorienschätzung) ansehen. | Alles übersetzt, nichts abgeschnitten. |
+
+**Grenzen (ehrlich):** Mitteilungen zu neuen Chatnachrichten kommen nur, solange Pace geöffnet ist. Push-Mitteilungen
+über Apple (APNs) sind nicht eingerichtet und mit einem kostenlosen Personal Team nicht möglich. Videos lassen sich im
+Chat nicht senden (der Server erlaubt Bilder, GIFs und Sprachnachrichten). Die Kalorienschätzung ist eine Schätzung
+fürs Gehen (Steigungen und Laufen werden nicht eigens berücksichtigt).
 
 Wenn etwas nicht klappt: Screenshot und eine kurze Beschreibung (welcher Schritt, was passiert ist) an mich.

@@ -13,15 +13,30 @@ die Einstellungen als Kategorien mit eigenen Unterseiten. Alle Unterseiten verwe
 | Deine Aktivität | Tagesziel, Serie und Rekord, Statistik (Tag · Woche · Monat) | nur Gerät |
 | Deine Region | Gemeinde, Kreis, Bundesland, „Region ändern“ | Server (nur Gemeinde-ID) |
 | Sichtbarkeit in Rankings | „In regionalen Rankings erscheinen“ | Server, serverseitig durchgesetzt |
-| Darstellung | Automatisch · Hell · Dunkel, Zugang zum App-Icon | nur Gerät (`pace.preferences`) |
-| Konto | Konto & Profil, Sprache | – |
-| Privatsphäre & Mitteilungen | Privatsphäre, Social-Einstellungen, Mitteilungen | – |
-| Daten & Hilfe | Datenschutz & Daten, Hilfe & Feedback, Rechtliches | – |
+| Einstellungen (Auftrag 4) | sieben Kategorien, siehe unten | – |
 | Fußzeile | App-Version (`AppDependencies.appVersion`) | – |
 
 Navigation: `ProfileRoute` (Wert-basiert) in `ProfileViewModel.path`. Von außen öffnet
 `MainViewModel.openProfileSettings(_:)` eine Unterseite direkt (z. B. die Social-Einstellungen im Social-Tab →
 Privatsphäre über `SocialViewModel.openPrivacySettings`).
+
+## Sieben Kategorien (Auftrag 4)
+
+Profil → **Einstellungen** bündelt alles an einer Stelle; vorhandene Seiten wurden eingeordnet, nicht doppelt
+gebaut (`ProfileRoute`, `ProfileView`):
+
+| Kategorie | Enthält |
+|---|---|
+| Konto & Profil | Name, Benutzername, Profilbild, Konto |
+| Privatsphäre & Sicherheit | Sichtbarkeit, Rankings, blockierte Personen |
+| Mitteilungen | Tagesziel-Erinnerungen (bis 6 Uhrzeiten), Chat-Hinweise (nur bei geöffneter App) |
+| Aktivität & Gesundheit (`.activityHealth`) | Apple-Health-Zugriff, Tagesziel, Kalorienschätzung (`.calorieEstimation`: Größe, Gewicht, Schalter) |
+| Darstellung & Sprache | Automatisch · Hell · Dunkel, App-Icon, Sprache (Deutsch, English, Русский) |
+| Social & Gruppen | Anfragen, Einladungen, Chats, Gruppen; „Meine Gruppen“ wechselt zum Social-Tab (`social.navigator.show(.groups)`) |
+| Daten, Hilfe & Rechtliches (`.dataHelpLegal`) | Datenexport, Konto löschen, Hilfe & Feedback, Rechtliches |
+
+Keine Schleifen: Das Öffnen einer bereits offenen Seite kehrt zu ihr zurück (`PaceNavigationRules.opening`), statt
+eine zweite Ebene zu stapeln; das Social-/Gruppen-Zahnrad im Social-Tab bleibt erhalten.
 
 ## Unterseiten
 

@@ -25,7 +25,7 @@ Grundsätze:
 | `Config/Base.xcconfig` | ja | leere Standardwerte, bindet `Pace.xcconfig` optional ein (`#include?`) |
 | `Config/Pace.xcconfig.example` | ja | nur Platzhalter |
 | `Config/Pace.xcconfig` | **nein** (`.gitignore`) | deine echten Werte |
-| `Config/Info.plist` | ja | reicht `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` als `PaceSupabaseURL` / `PaceSupabasePublishableKey` an die App weiter |
+| `Config/Info.plist` | ja | reicht `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` als `PaceSupabaseURL` / `PaceSupabasePublishableKey` an die App weiter, optional `GIPHY_API_KEY` als `PaceGIPHYAPIKey` (GIF-Suche im Chat, siehe `docs/CHAT.md`) |
 
 Einrichten:
 
