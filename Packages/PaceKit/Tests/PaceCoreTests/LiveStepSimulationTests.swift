@@ -203,22 +203,23 @@ struct LiveStepSimulationTests {
 
     /// Neuer Tag während der Simulation: Messung ab Mitternacht zählt nur Schritte ab dann (Stabilitäts-Review).
     @Test func simulatedSensorCountsFromALaterStart() async {
-        // Simulation lief seit 1 s (Zeitraffer 600× = 10 Minuten, 1.000 Schritte), Messung ab der Hälfte.
-        let origin = Date().addingTimeInterval(-1)
+        // Feste Uhr (unabhängig von der Last auf dem Rechner): Simulation läuft seit 10 Minuten (1.000 Schritte),
+        // Messung ab Minute 5.
+        let origin = Date(timeIntervalSince1970: 1_800_000_000)
         let simulated = SimulatedLiveSteps(
             profile: .constant(stepsPerMinute: 100, duration: 3_600),
             origin: origin,
             stepsBeforeOrigin: 1_000,
             interval: 2.5,
-            timeScale: 600
+            now: { origin.addingTimeInterval(600) }
         )
         var first: Int?
-        for await reading in simulated.readings(since: origin.addingTimeInterval(0.5)) {
+        for await reading in simulated.readings(since: origin.addingTimeInterval(300)) {
             first = reading.steps
             break
         }
-        // ≈ 500 Schritte seit dem Messbeginn – weder die 1.000 vor der Simulation noch die erste Hälfte.
-        #expect(first.map { (450...900).contains($0) } == true)
+        // 500 Schritte seit dem Messbeginn – weder die 1.000 vor der Simulation noch die ersten 500.
+        #expect(first == 500)
     }
 
     @Test func endlessSimulatorOnlyForPlausibleRates() {

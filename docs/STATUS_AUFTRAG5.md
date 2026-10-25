@@ -455,7 +455,8 @@ Branch `claude/gallant-brahmagupta-hvvp13`:
 | `1ca8660` | Snapshot-Sammelbild verkleinert, Doku und Vorschau-Snapshots |
 | `ff4f62a` | Gruppenfortschritt: Fehlerzustand und Gruppen-Vorschlag |
 | `2ec903a` | Review-Befunde (Live-Schritte verfallen ohne Bestätigung, Begriffe, RU-Texte, Ladezustand) |
-| (letzter Commit) | Screenshots, Index und dieser Bericht – nur Dokumentation |
+| `c6e717d` | Screenshots, Index und dieser Bericht |
+| (letzter Commit) | Simulator-Test mit fester Uhr statt Echtzeit; Bericht ergänzt |
 
 ## 22. Push
 
@@ -471,10 +472,15 @@ Request.
 | `66deab7` (B, D) | rot: Sammelbild aller Widgets in Max zu hoch zum Speichern → `1ca8660` | grün |
 | `1ca8660` | vom nächsten Push abgebrochen (`cancel-in-progress`) | grün |
 | `ff4f62a` | grün | grün |
-| `2ec903a` (Review-Befunde, letzter Code-Stand) | **grün** (1.073 Tests) | **grün** |
+| `2ec903a` (Review-Befunde) | **grün** (1.073 Tests) | **grün** |
+| `c6e717d` (Bericht, Bilder) | rot: 1 Test – siehe unten | grün |
 
-Der letzte Commit enthält nur Bericht, Index und PNG-Dateien. Er löst dieselben Workflows erneut aus; ihr
-Ergebnis steht in der Abschlussmeldung.
+Der rote Test in `c6e717d` war der in `2ec903a` neu hinzugekommene `simulatedSensorCountsFromALaterStart`.
+- Er lief mit echter Uhr im Zeitraffer und war unter CI-Last zu langsam: Bis zum ersten Messwert waren mehr
+  simulierte Minuten vergangen als erwartet.
+- In `2ec903a` lief er zufällig grün; die App selbst ist nicht betroffen.
+- Der letzte Commit gibt dem Test eine feste Uhr, damit ist er unabhängig von der Rechnerlast.
+- Ergebnis des letzten Laufs: siehe Abschlussmeldung.
 
 ## 24. iPhone-Anleitung
 
