@@ -740,7 +740,43 @@ struct InsightWidgetLoadingTests {
         _ = dashboard.settings.add(group)
         // Das Widget braucht die Gruppen (ohne eigene Abfrage, über das geteilte Social-ViewModel).
         #expect(dashboard.showsSocial)
-        // Gruppen noch nicht geladen: „wird geladen“, nicht „gelöscht“.
-        #expect(dashboard.groupProgressWidget(for: group) == .loading)
+        // Ohne Social-Backend: ehrlicher Hinweis – weder endloses Laden noch „gelöscht“.
+        guard case .unavailable(let message) = dashboard.groupProgressWidget(for: group) else {
+            Issue.record("Hinweis erwartet")
+            return
+        }
+        #expect(!message.isEmpty)
+    }
+}
+
+/// Galerie für den Gruppenfortschritt (Auftrag 5): erste Gruppe als Vorschlag, Pflichtauswahl, kein Übertrag zu „Gruppen“.
+@MainActor
+struct GroupProgressGalleryTests {
+    @Test func aGroupIsSuggestedAndRequired() async throws {
+        let social = SocialRepositoryStub { state in
+            state.groups = [
+                SocialRepositoryStub.group(id: UUID(uuidString: "70000000-0000-4000-8000-000000000001")!, name: "Laufteam"),
+                SocialRepositoryStub.group(id: UUID(uuidString: "70000000-0000-4000-8000-000000000002")!, name: "Klasse 8b"),
+            ]
+        }
+        let harness = await DashboardHarness(social: social)
+        await harness.dashboard.social.load()
+        let gallery = harness.dashboard.gallery(for: HomeWidgetGalleryRoute())
+        gallery.select(.groupProgress)
+        #expect(gallery.groupID == harness.dashboard.social.groups.first?.id)
+        #expect(gallery.canSave)
+        // Zu „Gruppen“ gewechselt: der bloße Vorschlag gilt nicht – dort weiter „Alle Gruppen“.
+        gallery.select(.groups)
+        #expect(gallery.groupID == nil)
+        // Selbst gewählt bleibt gewählt.
+        gallery.select(.groupProgress)
+        let second = try #require(harness.dashboard.social.groups.last?.id)
+        gallery.groupID = second
+        gallery.select(.groups)
+        #expect(gallery.groupID == second)
+        // Ohne Gruppe lässt sich der Gruppenfortschritt nicht sichern.
+        gallery.select(.groupProgress)
+        gallery.groupID = nil
+        #expect(!gallery.canSave)
     }
 }

@@ -463,6 +463,8 @@ struct GroupProgressWidgetContent: View {
         case .loading:
             ProgressView()
                 .frame(maxWidth: .infinity, minHeight: 44)
+        case .unavailable(let message):
+            HomeWidgetHint(systemImage: "arrow.clockwise", text: message)
         }
     }
 

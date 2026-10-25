@@ -314,16 +314,23 @@ public enum HomeGroupProgressWidget: Equatable, Sendable {
     case missing
     /// Gruppen werden noch geladen.
     case loading
+    /// Gruppen konnten nicht geladen werden (Hinweis statt endlosem Laden).
+    case unavailable(String)
 
-    public init(groupID: UUID?, groups: [GroupSummary], isLoaded: Bool) {
+    /// - Parameter failure: Fehlertext, wenn die Gruppen nicht geladen werden konnten.
+    public init(groupID: UUID?, groups: [GroupSummary], isLoaded: Bool, failure: String? = nil) {
         guard let groupID else {
             self = .unselected
             return
         }
         if let group = groups.first(where: { $0.id == groupID }) {
             self = .group(group, GroupDayProgress(group: group))
+        } else if isLoaded {
+            self = .missing
+        } else if let failure {
+            self = .unavailable(failure)
         } else {
-            self = isLoaded ? .missing : .loading
+            self = .loading
         }
     }
 

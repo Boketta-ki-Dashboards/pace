@@ -126,6 +126,8 @@ struct InsightWidgetTests {
         #expect(HomeGroupProgressWidget(groupID: nil, groups: [group], isLoaded: true) == .unselected)
         #expect(HomeGroupProgressWidget(groupID: UUID(), groups: [group], isLoaded: true) == .missing)
         #expect(HomeGroupProgressWidget(groupID: UUID(), groups: [], isLoaded: false) == .loading)
+        // Laden fehlgeschlagen: Hinweis statt endlosem Laden.
+        #expect(HomeGroupProgressWidget(groupID: UUID(), groups: [], isLoaded: false, failure: "offline") == .unavailable("offline"))
         guard case .group(let shown, let progress) = HomeGroupProgressWidget(groupID: group.id, groups: [group], isLoaded: true) else {
             Issue.record("Gruppe erwartet")
             return

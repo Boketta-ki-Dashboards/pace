@@ -40,6 +40,8 @@ public final class HomeWidgetGalleryViewModel {
     @ObservationIgnored private let settings: HomeSettings
     @ObservationIgnored private let standings: RegionalStandingsViewModel
     @ObservationIgnored private let draftID: HomeModule.ID
+    /// Von der Galerie vorgeschlagene (nicht selbst gewählte) Gruppe für den Gruppenfortschritt.
+    @ObservationIgnored private var suggestedGroupID: UUID?
 
     public init(mode: Mode, settings: HomeSettings, social: SocialViewModel, standings: RegionalStandingsViewModel) {
         self.mode = mode
@@ -121,9 +123,13 @@ public final class HomeWidgetGalleryViewModel {
         guard isSelectable(category), !isEditing else { return }
         kind = category
         details = nil
-        // Gruppenfortschritt zeigt immer eine Gruppe: die erste vorschlagen, solange keine gewählt ist.
+        // Gruppenfortschritt zeigt immer eine Gruppe: die erste vorschlagen, solange keine gewählt ist. Beim Wechsel zu
+        // „Gruppen“ gilt ein bloßer Vorschlag nicht als Auswahl (dort bleibt der Standard „Alle Gruppen“).
         if category == .groupProgress, groupID == nil || !social.groups.contains(where: { $0.id == groupID }) {
             groupID = social.groups.first?.id
+            suggestedGroupID = groupID
+        } else if category == .groups, groupID != nil, groupID == suggestedGroupID {
+            groupID = nil
         }
         if !category.supportedSizes.contains(size) {
             size = category.defaultSize

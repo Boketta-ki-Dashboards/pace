@@ -241,7 +241,16 @@ public final class HomeDashboardViewModel {
 
     /// Gruppenfortschritt einer gewählten Gruppe (aus den geladenen Gruppen, keine eigene Abfrage).
     public func groupProgressWidget(for module: HomeModule) -> HomeGroupProgressWidget {
-        HomeGroupProgressWidget(groupID: module.configuration.groupID, groups: social.groups, isLoaded: social.state == .loaded)
+        let failure: String? = switch social.state {
+        case .failed(let message), .unavailable(let message): message
+        case .idle, .loading, .loaded: nil
+        }
+        return HomeGroupProgressWidget(
+            groupID: module.configuration.groupID,
+            groups: social.groups,
+            isLoaded: social.state == .loaded,
+            failure: failure
+        )
     }
 
     /// Kalender-Widget in einer Größe. Bewertet jeden Tag mit dem damals geltenden Ziel.
