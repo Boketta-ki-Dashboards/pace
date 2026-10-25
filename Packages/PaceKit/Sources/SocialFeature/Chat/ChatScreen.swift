@@ -60,6 +60,7 @@ struct ChatContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
             ChatTitleBar(viewModel: viewModel, backTitle: backTitle ?? SocialText.social, actions: actions)
+            ChatGroupBar(viewModel: viewModel, actions: actions)
             ChatBody(viewModel: viewModel, actions: actions, isLazy: isLazy)
         }
     }
@@ -172,67 +173,94 @@ struct ChatTitleBar: View {
     }
 }
 
-/// Gruppen- bzw. Profilkopf unter dem festen Kopf: Mitglieder und Gruppen-Streak bzw. Profilkarte des Gegenübers.
-/// Scrollt mit dem Verlauf, damit beim Schreiben mehr Platz für Nachrichten bleibt.
+/// Profilkopf im Privatchat (scrollt mit dem Verlauf). Gruppen haben stattdessen die feste ``ChatGroupBar``.
 struct ChatInfoHeader: View {
     let viewModel: ChatViewModel
     let actions: ChatActions
 
     var body: some View {
-        if viewModel.kind == .group {
-            groupHeader
-        } else if let peer = viewModel.peer {
+        if viewModel.kind != .group, let peer = viewModel.peer {
             ChatPeerCard(profile: peer) { actions.openProfile(peer) }
         }
     }
+}
 
-    @ViewBuilder
-    private var groupHeader: some View {
-        if let groupID = viewModel.groupID {
-            VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
-                HStack(spacing: -4) {
-                    if !viewModel.memberPreview.isEmpty {
-                        ChatRouteLink(route: .groupMembers(groupID), openRoute: actions.openRoute) {
-                            HStack(spacing: -4) {
-                                ForEach(viewModel.memberPreview) { member in
-                                    PaceAvatar(name: member.shownName, seed: member.publicID.uuidString, size: 44, image: member.avatar)
+/// Feste Leiste unter dem Kopf eines Gruppenchats (scrollt nicht mit): links echte Mitgliederbilder, Anzahl und „+“,
+/// rechts nur Flamme und Zahl.
+///
+/// Antippen: Bilder bzw. Anzahl → Mitglieder (mit Profilen), „+“ → Mitglieder einladen, Flamme → Gruppenkalender –
+/// jeweils über den Navigator des Social-Tabs, damit keine Seite doppelt aufgelegt wird.
+struct ChatGroupBar: View {
+    let viewModel: ChatViewModel
+    let actions: ChatActions
+
+    /// Höchstens so viele Bilder überlappend; der Rest steckt in der Anzahl.
+    static let shownAvatars = 4
+
+    var body: some View {
+        if viewModel.kind == .group, let groupID = viewModel.groupID {
+            HStack(spacing: PaceSpacing.xs) {
+                ChatRouteLink(route: .groupMembers(groupID), openRoute: actions.openRoute) {
+                    HStack(spacing: PaceSpacing.xs) {
+                        if !avatars.isEmpty {
+                            HStack(spacing: -10) {
+                                ForEach(avatars) { member in
+                                    PaceAvatar(name: member.shownName, seed: member.publicID.uuidString, size: 30, image: member.avatar)
                                         .padding(2)
                                         .background(Circle().fill(PaceColor.background))
                                 }
                             }
                         }
-                        .buttonStyle(.pacePressable)
-                        .accessibilityLabel(ChatUIText.showMembers)
+                        Text(ChatFormatting.members(viewModel.memberCount))
+                            .font(PaceFont.callout.weight(.semibold))
+                            .foregroundStyle(PaceColor.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
-                    if viewModel.canInvite {
-                        ChatRouteLink(route: .groupMembers(groupID), openRoute: actions.openRoute) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 20, weight: .regular))
-                                .foregroundStyle(PaceColor.textSecondary)
-                                .frame(width: 44, height: 44)
-                                .background(PaceColor.fieldBackground, in: Circle())
-                                .padding(2)
-                                .background(Circle().fill(PaceColor.background))
-                        }
-                        .buttonStyle(.pacePressable)
-                        .accessibilityLabel(ChatUIText.inviteMembers)
-                    }
-                }
-                Text(ChatFormatting.members(viewModel.memberCount))
-                    .font(.subheadline)
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .padding(.leading, PaceSpacing.xxs)
-            }
-            if let group = viewModel.group, let title = viewModel.streakTitle, let status = viewModel.streakStatus {
-                ChatRouteLink(route: .group(groupID), openRoute: actions.openRoute) {
-                    ChatStreakCard(group: group, title: title, status: status)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.pacePressable)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(ChatUIText.streakAccessibility(title: title, status: status))
-                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel(ChatFormatting.members(viewModel.memberCount))
+                .accessibilityHint(ChatUIText.showMembers)
+
+                if viewModel.canInvite {
+                    ChatRouteLink(route: .groupMembers(groupID), openRoute: actions.openRoute) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(PaceColor.textSecondary)
+                            .frame(width: 30, height: 30)
+                            .background(PaceColor.fieldBackground, in: Circle())
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.pacePressable)
+                    .accessibilityLabel(ChatUIText.inviteMembers)
+                }
+
+                Spacer(minLength: PaceSpacing.xs)
+
+                if let group = viewModel.group {
+                    let progress = GroupDayProgress(group: group)
+                    ChatRouteLink(route: .groupCalendar(groupID), openRoute: actions.openRoute) {
+                        GroupFlameCount(progress: progress)
+                            .padding(.horizontal, PaceSpacing.xs)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.pacePressable)
+                    .accessibilityLabel(ChatUIText.groupFlameAccessibility(days: group.currentStreak))
+                    .accessibilityHint(PaceLocalization.text(
+                        de: "Öffnet den Gruppenkalender", en: "Opens the group calendar", ru: "Открывает календарь группы"
+                    ))
+                }
             }
         }
+    }
+
+    private var avatars: [SocialProfile] {
+        Array(viewModel.memberPreview.prefix(Self.shownAvatars))
     }
 }
 
@@ -267,50 +295,6 @@ struct ChatIconLabel: View {
             .background(colorScheme == .dark ? PaceColor.accentSoft : PaceColor.selectionFill, in: shape)
             .overlay(shape.strokeBorder(PaceColor.accent.opacity(colorScheme == .dark ? 0.3 : 0), lineWidth: 1))
             .contentShape(shape)
-    }
-}
-
-/// Kompakte Streak-Karte der Gruppe: Flamme, „12 Tage Streak“ mit Häkchen, „Flamme gesichert“, Pfeil.
-struct ChatStreakCard: View {
-    let group: GroupSummary
-    let title: String
-    let status: String
-
-    var body: some View {
-        HStack(spacing: PaceSpacing.s) {
-            Image(systemName: group.currentStreak > 0 ? "flame.fill" : "flame")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(group.currentStreak > 0 ? PaceColor.streak : PaceColor.textSecondary)
-                .frame(width: 40, height: 40)
-                .background(PaceColor.accentSoft, in: Circle())
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(title)
-                        .font(PaceFont.headline)
-                        .foregroundStyle(PaceColor.textPrimary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if group.todayComplete {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.subheadline)
-                            .foregroundStyle(PaceColor.accent)
-                    }
-                }
-                Text(status)
-                    .font(.subheadline)
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: PaceSpacing.xs)
-            Image(systemName: "chevron.right")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(PaceColor.textPrimary)
-        }
-        .padding(.horizontal, PaceSpacing.m)
-        .padding(.vertical, PaceSpacing.s)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .paceCardBackground(cornerRadius: PaceRadius.tile)
     }
 }
 

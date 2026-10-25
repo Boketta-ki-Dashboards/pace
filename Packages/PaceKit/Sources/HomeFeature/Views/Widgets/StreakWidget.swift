@@ -159,7 +159,7 @@ struct StreakWidgetContent: View {
 }
 
 /// Die laufende Woche als Leiste: erreichte Tage gefüllt, verpasste neutral, heute umrandet.
-private struct StreakWeekStrip: View {
+struct StreakWeekStrip: View {
     let days: [HomeStreakWidget.Day]
 
     var body: some View {
@@ -196,7 +196,7 @@ private struct StreakHistoryGrid: View {
     }
 }
 
-private struct StreakDayMark: View {
+struct StreakDayMark: View {
     let status: StepStreakDayStatus
     let isToday: Bool
     let size: CGFloat

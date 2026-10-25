@@ -31,6 +31,8 @@ public final class HomeWidgetGalleryViewModel {
     public var metric: HomeActivityMetric
     /// Eigene Auswahl der Zusatzinhalte; `nil` = Standard der gewählten Größe.
     public private(set) var details: [HomeWidgetDetail]?
+    /// Persönliche Rekorde: gezeigter Rekord.
+    public var record: HomeRecordKind
 
     /// Freunde und Gruppen für die Auswahl (geteilt mit dem Social-Tab).
     public let social: SocialViewModel
@@ -60,6 +62,7 @@ public final class HomeWidgetGalleryViewModel {
             neighborhoodLevel = existing.regionLevel ?? .municipality
             metric = existing.metric
             details = existing.configuration.details
+            record = existing.record
         } else {
             draftID = UUID().uuidString
             let addable = settings.addableKinds
@@ -72,6 +75,7 @@ public final class HomeWidgetGalleryViewModel {
             neighborhoodLevel = .municipality
             metric = .steps
             details = nil
+            record = .bestDay
         }
         neighborhoodLevel = RegionalStandingsViewModel.effectiveLevel(for: neighborhoodLevel, available: standings.scopes.map(\.level))
     }
@@ -117,6 +121,10 @@ public final class HomeWidgetGalleryViewModel {
         guard isSelectable(category), !isEditing else { return }
         kind = category
         details = nil
+        // Gruppenfortschritt zeigt immer eine Gruppe: die erste vorschlagen, solange keine gewählt ist.
+        if category == .groupProgress, groupID == nil || !social.groups.contains(where: { $0.id == groupID }) {
+            groupID = social.groups.first?.id
+        }
         if !category.supportedSizes.contains(size) {
             size = category.defaultSize
         }
@@ -322,7 +330,8 @@ public final class HomeWidgetGalleryViewModel {
                 groupID: groupID,
                 regionLevels: regionLevels,
                 metric: metric,
-                details: storedDetails
+                details: storedDetails,
+                record: record
             )
         )
     }
@@ -367,6 +376,13 @@ public final class HomeWidgetGalleryViewModel {
                 de: "„\(duplicate.title)“ zeigt das schon auf deiner Übersicht.",
                 en: "“\(duplicate.title)” already shows this on your overview.",
                 ru: "«\(duplicate.title)» уже показывает это в твоём обзоре."
+            )
+        }
+        if kind == .groupProgress, groupID == nil {
+            return PaceLocalization.text(
+                de: "Wähle eine Gruppe aus – ohne Gruppe gibt es keinen Fortschritt.",
+                en: "Choose a group – without a group there is no progress.",
+                ru: "Выбери группу – без группы прогресса нет."
             )
         }
         if case .edit(let id) = mode, settings.module(id: id) == nil {

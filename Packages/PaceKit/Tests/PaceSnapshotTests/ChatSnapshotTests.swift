@@ -26,8 +26,9 @@ struct ChatSnapshotTests {
             // Wie in der App: fester Kopf, darunter der Pin-Hinweis, dann der Verlauf.
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
                 ChatTitleBar(viewModel: chat, backTitle: SocialText.social, actions: ChatActions())
-                if let pin = chat.shownPin {
-                    ChatPinBanner(pin: pin, index: 0, count: chat.pins.count, onTap: {})
+                ChatGroupBar(viewModel: chat, actions: ChatActions())
+                if let preview = chat.shownPinPreview {
+                    ChatPinBanner(preview: preview, onTap: {})
                 }
                 ChatBody(viewModel: chat, isLazy: false)
             }
@@ -45,6 +46,33 @@ struct ChatSnapshotTests {
         }
         .environment(\.paceImageLoader, loader)
         .environment(ChatVoicePlayer())
+    }
+
+    /// Pin-Vorschau mit Inhalt (Auftrag 5, B6): Text mit Absender, Foto- und GIF-Miniatur, Sprachnachricht mit Dauer,
+    /// geteiltes Profil, verborgener Pin und Markierungen bei mehreren Pins.
+    @Test func pinPreviews() async throws {
+        let (_, loader) = await ChatSnapshotData.groupSetup()
+        let id = ChatSnapshotData.groupConversationID
+        let at = ChatSnapshotData.at(18, 10)
+        let text = ChatFixtures.message(in: id, from: ChatSnapshotData.leon, text: "Treffpunkt: Samstag 9 Uhr am Bahnhof, wer kommt mit zur großen Runde um den See?", at: at)
+        let photo = ChatFixtures.message(in: id, from: ChatSnapshotData.marie, kind: .image, text: "Hier treffen wir uns", mediaPath: ChatSnapshotData.parkPath, at: at)
+        let gif = ChatFixtures.message(in: id, from: ChatSnapshotData.gotscha, kind: .gif, mediaPath: ChatSnapshotData.gifPath, at: at)
+        let voice = ChatFixtures.message(in: id, from: nil, isOwn: true, kind: .voice, mediaPath: "\(id.uuidString.lowercased())/v.m4a", at: at, mediaDuration: .seconds(18))
+        let profile = ChatFixtures.message(in: id, from: ChatSnapshotData.marie, kind: .profile, sharedProfile: ChatSnapshotData.leon, at: at)
+        let previews = [
+            ChatPinPreview(pin: ChatPin(message: text, pinnedBy: nil, pinnedAt: at), index: 0, count: 3, showsSender: true),
+            ChatPinPreview(pin: ChatPin(message: photo, pinnedBy: nil, pinnedAt: at), index: 1, count: 3, showsSender: true),
+            ChatPinPreview(pin: ChatPin(message: gif, pinnedBy: nil, pinnedAt: at), index: 2, count: 3, showsSender: true),
+            ChatPinPreview(pin: ChatPin(message: voice, pinnedBy: nil, pinnedAt: at), index: 0, count: 1, showsSender: true),
+            ChatPinPreview(pin: ChatPin(message: profile, pinnedBy: nil, pinnedAt: at), index: 0, count: 1, showsSender: false),
+            ChatPinPreview(pin: ChatPin(message: text, pinnedBy: nil, pinnedAt: at, isHidden: true), index: 4, count: 6, showsSender: true),
+        ]
+        let content = VStack(spacing: PaceSpacing.s) {
+            ForEach(Array(previews.enumerated()), id: \.offset) { _, preview in
+                ChatPinBanner(preview: preview, onTap: {})
+            }
+        }
+        try Snapshot.render(page(content, loader: loader), name: "chat-pin-previews", languages: languages)
     }
 
     @Test func chatList() async throws {
@@ -226,11 +254,18 @@ enum ChatSnapshotData {
     @MainActor
     static func groupSetup() async -> (ChatListViewModel, PaceImageLoader) {
         let conversation = ChatFixtures.group(id: groupConversationID, groupID: groupID, title: "Smoking red", memberCount: 12, updatedAt: at(18, 17))
+        let question = ChatFixtures.message(in: groupConversationID, from: leon, text: "Wer ist heute Abend bei einer Runde dabei?", at: at(18, 10))
+        let meetingPoint = ChatFixtures.message(in: groupConversationID, from: marie, kind: .image, mediaPath: parkPath, at: at(18, 11), isPinned: true)
         let repository = ChatRepositoryStub { state in
             state.conversations = [conversation]
+            // Zwei Pins: Foto mit Treffpunkt (gezeigt) und die Frage.
+            state.pins[groupConversationID] = [
+                ChatPin(message: meetingPoint, pinnedBy: marie, pinnedAt: at(18, 12)),
+                ChatPin(message: question, pinnedBy: leon, pinnedAt: at(18, 13)),
+            ]
             state.messages[groupConversationID] = [
-                ChatFixtures.message(in: groupConversationID, from: leon, text: "Wer ist heute Abend bei einer Runde dabei?", at: at(18, 10)),
-                ChatFixtures.message(in: groupConversationID, from: marie, kind: .image, mediaPath: parkPath, at: at(18, 11)),
+                question,
+                meetingPoint,
                 ChatFixtures.message(in: groupConversationID, from: marie, text: "Hier treffen wir uns", at: at(18, 12)),
                 ChatFixtures.message(in: groupConversationID, from: nil, isOwn: true, text: "Ich komme mit. Mir fehlen noch ein paar Schritte.", at: at(18, 14)),
                 ChatFixtures.message(in: groupConversationID, from: gotscha, kind: .gif, mediaPath: gifPath, at: at(18, 16)),

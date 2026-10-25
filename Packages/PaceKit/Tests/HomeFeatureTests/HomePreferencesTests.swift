@@ -183,7 +183,11 @@ struct HomeSettingsTests {
         #expect(settings.modules.allSatisfy { $0.size == .medium })
         #expect(settings.modules.first { $0.kind == .neighborhood }?.regionLevel == .municipality)
         #expect(settings.modules.first { $0.kind == .week }?.regionLevel == nil)
-        #expect(settings.addableKinds == [.regionRanks, .neighborhood, .friends, .groups, .activity, .calendar])
+        #expect(settings.addableKinds == [
+            .regionRanks, .neighborhood, .friends, .groups, .activity, .calendar,
+            // Auftrag 5: neue Widgets
+            .dayComparison, .streakWeek, .records, .activityTimes, .groupProgress,
+        ])
     }
 
     @Test func widgetsCanBeAddedRemovedResizedAndPersistAcrossRestarts() throws {

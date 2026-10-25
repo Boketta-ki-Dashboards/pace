@@ -64,7 +64,8 @@ struct HomeModuleView: View {
     /// Kleine Widgets kommen ohne Kopfzeile aus, wenn ihr Inhalt für sich spricht.
     private var showsHeader: Bool {
         switch module.kind {
-        case .regionRanks, .neighborhood, .friends, .groups, .stepsToday:
+        case .regionRanks, .neighborhood, .friends, .groups, .stepsToday,
+             .dayComparison, .streakWeek, .records, .activityTimes, .groupProgress:
             true
         case .week, .streak, .activity, .calendar:
             module.size != .small
@@ -137,6 +138,41 @@ struct HomeModuleView: View {
             .allowsHitTesting(mode.isInteractive)
         case .regionRanks, .activity:
             HomeWidgetTitleRow(title)
+        case .dayComparison, .activityTimes:
+            // Tippen → Tagesstatistik der Schritte.
+            NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .day, metric: .steps))) {
+                HomeWidgetTitleRow(title) { HomeChevron() }
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pacePressable)
+            .allowsHitTesting(mode.isInteractive)
+        case .streakWeek:
+            NavigationLink(value: HomeRoute.streak) {
+                HomeWidgetTitleRow(title) { HomeChevron() }
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pacePressable)
+            .allowsHitTesting(mode.isInteractive)
+        case .records:
+            NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .month, metric: .steps))) {
+                HomeWidgetTitleRow(title) { HomeChevron() }
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pacePressable)
+            .allowsHitTesting(mode.isInteractive)
+        case .groupProgress:
+            if case .group(let group, _) = viewModel.groupProgressWidget(for: module) {
+                Button {
+                    viewModel.openGroup(group.id)
+                } label: {
+                    HomeWidgetTitleRow(title) { HomeChevron() }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.pacePressable)
+                .allowsHitTesting(mode.isInteractive)
+            } else {
+                HomeWidgetTitleRow(title)
+            }
         }
     }
 
@@ -235,6 +271,56 @@ struct HomeModuleView: View {
                     widget: viewModel.calendarWidget(size: module.size),
                     size: module.size,
                     isLoading: viewModel.isHistoryLoading
+                )
+            case .dayComparison:
+                NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .day, metric: .steps))) {
+                    DayComparisonWidgetContent(
+                        widget: viewModel.dayComparisonWidget,
+                        size: module.size,
+                        details: module.shownDetails,
+                        unavailableText: viewModel.weekUnavailableText
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.pacePressable)
+            case .streakWeek:
+                NavigationLink(value: HomeRoute.streak) {
+                    StreakWeekWidgetContent(
+                        widget: viewModel.streakWidget,
+                        state: viewModel.streak.history.state,
+                        size: module.size,
+                        details: module.shownDetails
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.pacePressable)
+            case .records:
+                NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .month, metric: .steps))) {
+                    RecordsWidgetContent(
+                        widget: viewModel.recordsWidget(for: module),
+                        state: viewModel.streak.history.state,
+                        size: module.size
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.pacePressable)
+            case .activityTimes:
+                NavigationLink(value: HomeRoute.statistics(StatisticsRoute(period: .day, metric: .steps))) {
+                    ActivityTimesWidgetContent(
+                        widget: viewModel.activityTimesWidget,
+                        size: module.size,
+                        unavailableText: viewModel.weekUnavailableText
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.pacePressable)
+            case .groupProgress:
+                GroupProgressWidgetContent(
+                    widget: viewModel.groupProgressWidget(for: module),
+                    size: module.size,
+                    details: module.shownDetails,
+                    onOpenGroup: { id in viewModel.openGroup(id) },
+                    onOpenCalendar: { id in viewModel.openGroupCalendar(id) }
                 )
             }
         }

@@ -77,6 +77,34 @@ struct SocialNavigatorTests {
         #expect(social.chats.chat(for: .conversation(id: groupConversationID, kind: .group, title: "Smoking red")) === chat)
     }
 
+    /// Feste Leiste im Gruppenchat (Auftrag 5, B5): Flamme → Gruppenkalender, Bilder bzw. „+“ → Mitglieder. 50 Wechsel
+    /// zwischen Chat, Kalender und Mitgliedern lassen den Stapel nicht wachsen.
+    @Test func chatBarRoutesNeverStackPages() async {
+        let (social, _) = await makeSocial()
+        let navigator = social.navigator
+        let chat = ChatTarget.group(id: groupID, name: "Smoking red")
+        navigator.open(.group(groupID))
+        navigator.openChat(chat)
+        var longest = navigator.path.count
+        for round in 0..<50 {
+            // Flamme in der Leiste.
+            navigator.open(.groupCalendar(groupID))
+            #expect(navigator.path == [.route(.group(groupID)), .chat(chat), .route(.groupCalendar(groupID))])
+            // Zurück in den Chat (z. B. über den Chat-Knopf oder Zurück): der vorhandene Chat, kein zweiter.
+            navigator.openChat(chat)
+            #expect(navigator.path == [.route(.group(groupID)), .chat(chat)])
+            // Bilder bzw. „+“: Mitglieder, zweimal getippt nur einmal offen.
+            navigator.open(.groupMembers(groupID))
+            navigator.open(.groupMembers(groupID))
+            #expect(navigator.path.last == .route(.groupMembers(groupID)))
+            #expect(navigator.path.count == 3, "Runde \(round)")
+            longest = max(longest, navigator.path.count)
+            navigator.path.removeLast()
+        }
+        #expect(longest == 3)
+        #expect(navigator.path == [.route(.group(groupID)), .chat(chat)])
+    }
+
     @Test func enteringFromTheChatListReturnsToTheSameChat() async {
         let (social, _) = await makeSocial()
         let navigator = social.navigator

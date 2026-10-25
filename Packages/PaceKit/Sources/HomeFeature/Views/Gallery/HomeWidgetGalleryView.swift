@@ -81,17 +81,26 @@ struct HomeWidgetGalleryContent: View {
             PaceSubpageHeader(backTitle: HomeTexts.customize, title: gallery.title)
 
             section(PaceLocalization.text(de: "Kategorie", en: "Category", ru: "Категория")) {
-                LazyVGrid(columns: columns, alignment: .leading, spacing: PaceSpacing.s) {
-                    ForEach(gallery.categories) { category in
-                        HomeGalleryCategoryTile(
-                            category: category,
-                            isSelected: gallery.selectedCategory == category,
-                            isEnabled: gallery.isSelectable(category),
-                            note: gallery.isAlreadyOnHome(category)
-                                ? PaceLocalization.text(de: "Schon auf Home", en: "Already on Home", ru: "Уже на главной")
-                                : nil
-                        ) {
-                            gallery.select(category)
+                // Abschnitte: Aktivität, Motivation, Social.
+                VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                    ForEach(HomeGallerySection.allCases) { gallerySection in
+                        Text(gallerySection.title)
+                            .font(PaceFont.callout.weight(.semibold))
+                            .foregroundStyle(PaceColor.textSecondary)
+                            .accessibilityAddTraits(.isHeader)
+                        LazyVGrid(columns: columns, alignment: .leading, spacing: PaceSpacing.s) {
+                            ForEach(gallerySection.kinds) { category in
+                                HomeGalleryCategoryTile(
+                                    category: category,
+                                    isSelected: gallery.selectedCategory == category,
+                                    isEnabled: gallery.isSelectable(category),
+                                    note: gallery.isAlreadyOnHome(category)
+                                        ? PaceLocalization.text(de: "Schon auf Home", en: "Already on Home", ru: "Уже на главной")
+                                        : nil
+                                ) {
+                                    gallery.select(category)
+                                }
+                            }
                         }
                     }
                 }
@@ -253,7 +262,46 @@ struct HomeWidgetGalleryContent: View {
                     }
                 }
             }
-        case .stepsToday, .week, .streak, .calendar:
+        case .groupProgress:
+            configurationCard {
+                configurationTitle(PaceLocalization.text(de: "Gruppe auswählen", en: "Choose a group", ru: "Выбери группу"))
+                VStack(spacing: PaceSpacing.xs) {
+                    ForEach(gallery.groups) { group in
+                        HomeGalleryChoiceRow(
+                            title: group.name,
+                            systemImage: "flame",
+                            isSelected: gallery.groupID == group.id
+                        ) {
+                            gallery.groupID = group.id
+                        }
+                    }
+                }
+                if gallery.groups.isEmpty {
+                    Text(PaceLocalization.text(
+                        de: "Du bist noch in keiner Gruppe. Erstelle im Social-Tab eine Gruppe oder tritt per Code bei.",
+                        en: "You're not in a group yet. Create one in the Social tab or join with a code.",
+                        ru: "Ты пока не состоишь в группе. Создай группу во вкладке «Друзья» или вступи по коду."
+                    ))
+                    .font(PaceFont.caption)
+                    .foregroundStyle(PaceColor.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        case .records:
+            configurationCard {
+                configurationTitle(PaceLocalization.text(de: "Rekord auswählen", en: "Choose a record", ru: "Выбери рекорд"))
+                LazyVGrid(columns: columns, alignment: .leading, spacing: PaceSpacing.xs) {
+                    ForEach(HomeRecordKind.allCases) { record in
+                        HomeGalleryChip(title: record.title, systemImage: record.systemImage, isSelected: gallery.record == record) {
+                            gallery.record = record
+                        }
+                    }
+                }
+                Text(HomeRecordsWidget.periodText)
+                    .font(PaceFont.caption)
+                    .foregroundStyle(PaceColor.textSecondary)
+            }
+        case .stepsToday, .week, .streak, .calendar, .dayComparison, .streakWeek, .activityTimes:
             configurationCard {
                 configurationTitle(gallery.kind.title)
                 Text(gallery.kind == .stepsToday

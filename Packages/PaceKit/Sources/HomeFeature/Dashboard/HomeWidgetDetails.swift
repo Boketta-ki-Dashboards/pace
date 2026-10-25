@@ -49,6 +49,20 @@ public enum HomeWidgetDetail: String, Codable, CaseIterable, Sendable, Identifia
     /// „Noch … Schritte bis Platz …“ unter dem Umfeld.
     case rankGap
 
+    // Tagesvergleich
+    /// Balken heute und gestern bis zur gleichen Uhrzeit.
+    case comparisonBars
+    /// Schritte gestern insgesamt.
+    case yesterdayTotal
+
+    // Flammen-Woche
+    /// Aktuelle Serie in Tagen.
+    case streakCount
+
+    // Gruppenfortschritt
+    /// Hinweis zur heutigen Gruppenflamme (⌈n/3⌉-Regel).
+    case groupHint
+
     public var id: String { rawValue }
 
     public var title: String {
@@ -83,6 +97,14 @@ public enum HomeWidgetDetail: String, Codable, CaseIterable, Sendable, Identifia
             PaceLocalization.text(de: "Mitglieder als Kennzahlen", en: "Members as figures", ru: "Участники в цифрах")
         case .rankGap:
             PaceLocalization.text(de: "Abstand zum nächsten Platz", en: "Gap to the next rank", ru: "До следующего места")
+        case .comparisonBars:
+            PaceLocalization.text(de: "Balken heute & gestern", en: "Bars today & yesterday", ru: "Столбцы: сегодня и вчера")
+        case .yesterdayTotal:
+            PaceLocalization.text(de: "Gestern insgesamt", en: "Yesterday in total", ru: "Вчера всего")
+        case .streakCount:
+            PaceLocalization.text(de: "Aktuelle Serie", en: "Current streak", ru: "Текущая серия")
+        case .groupHint:
+            PaceLocalization.text(de: "Hinweis zur Gruppenflamme", en: "Group flame hint", ru: "Подсказка об огне группы")
         }
     }
 
@@ -103,6 +125,10 @@ public enum HomeWidgetDetail: String, Codable, CaseIterable, Sendable, Identifia
         case .groupGoal: "scope"
         case .groupMembers: "person.3"
         case .rankGap: "arrow.up.right"
+        case .comparisonBars: "chart.bar.doc.horizontal"
+        case .yesterdayTotal: "clock.arrow.circlepath"
+        case .streakCount: "flame"
+        case .groupHint: "info.circle"
         }
     }
 }
@@ -116,7 +142,10 @@ public extension HomeModuleKind {
         case .friends: [.friendGap, .friendChart]
         case .groups: [.groupProgress, .groupGoal, .groupMembers]
         case .neighborhood: [.rankGap]
-        case .regionRanks, .week, .activity, .calendar: []
+        case .dayComparison: [.comparisonBars, .yesterdayTotal]
+        case .streakWeek: [.streakCount, .record, .milestone]
+        case .groupProgress: [.groupHint, .groupGoal]
+        case .regionRanks, .week, .activity, .calendar, .records, .activityTimes: []
         }
     }
 
@@ -164,7 +193,17 @@ public extension HomeModuleKind {
         case (.groups, .large): [.groupProgress, .groupGoal]
         case (.groups, .max): [.groupProgress, .groupGoal, .groupMembers]
         case (.neighborhood, _): [.rankGap]
-        case (.regionRanks, _), (.week, _), (.activity, _), (.calendar, _): []
+        case (.dayComparison, .small): []
+        case (.dayComparison, .medium): [.comparisonBars]
+        case (.dayComparison, _): [.comparisonBars, .yesterdayTotal]
+        case (.streakWeek, .small): []
+        case (.streakWeek, .medium): [.streakCount]
+        case (.streakWeek, .large): [.streakCount, .record]
+        case (.streakWeek, .max): [.streakCount, .record, .milestone]
+        case (.groupProgress, .small): []
+        case (.groupProgress, .medium): [.groupHint]
+        case (.groupProgress, _): [.groupHint, .groupGoal]
+        case (.regionRanks, _), (.week, _), (.activity, _), (.calendar, _), (.records, _), (.activityTimes, _): []
         }
     }
 }

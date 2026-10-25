@@ -66,6 +66,13 @@ public final class HomeDashboardViewModel {
     /// Freunde, Gruppen und Chats (geteilt mit dem Social-Tab).
     public let social: SocialViewModel
 
+    /// Stundenwerte von heute (und gestern) für Tagesvergleich und Aktivitätszeiten – eine Abfrage für beide Widgets.
+    public private(set) var hourly: HourlyValues?
+    /// Für welchen Tag und HealthKit-Stand ``hourly`` geladen wurde (neu nur, wenn sich der Stand ändert).
+    @ObservationIgnored private var hourlyLoadedKey: HourlyTrigger?
+    /// Stundenwerte von gestern ändern sich (bis auf Nachträge) nicht mehr: einmal pro Tag.
+    @ObservationIgnored private var yesterdayHourly: (day: LocalDate, values: [Int: Double])?
+
     @ObservationIgnored private let activityData: any ActivityDataProviding
     @ObservationIgnored private let store: ProfileStore
     @ObservationIgnored private let calendar: ActivityCalendar
@@ -191,6 +198,52 @@ public final class HomeDashboardViewModel {
         return best.map { HomeDayBest(steps: $0.competitionSteps, date: $0.date, isToday: $0.date == today, formatter: formatter) }
     }
 
+    // MARK: Neue Widgets (Auftrag 5)
+
+    /// Tagesvergleich: heute (mit Live-Schritten) vs. gestern bis zur gleichen Uhrzeit.
+    public var dayComparisonWidget: HomeDayComparisonWidget? {
+        guard let overview = activity.overview else { return nil }
+        let currentDate = now()
+        let components = calendar.calendar.dateComponents([.hour, .minute], from: currentDate)
+        let previous = hourly?.day == overview.today.date ? hourly?.previousDay : nil
+        return HomeDayComparisonWidget(
+            todaySteps: stepsToday?.steps ?? overview.today.competitionSteps,
+            yesterdayHourly: previous,
+            yesterdayTotal: overview.yesterday.competitionSteps,
+            currentHour: components.hour ?? 0,
+            fractionOfCurrentHour: Double(components.minute ?? 0) / 60,
+            timeText: HomeTexts.untilTime(formatter.time(currentDate)),
+            formatter: formatter
+        )
+    }
+
+    /// Aktivitätszeiten aus den Stundenwerten von heute; `nil` vor dem Laden.
+    public var activityTimesWidget: HomeActivityTimesWidget? {
+        guard let overview = activity.overview else { return nil }
+        let currentHour = calendar.calendar.component(.hour, from: now())
+        let values = hourly?.day == overview.today.date ? hourly?.values : nil
+        return HomeActivityTimesWidget(hourly: values, currentHour: currentHour, formatter: formatter)
+    }
+
+    /// Persönliche Rekorde (12 Monate) mit dem gewählten Rekord; `nil`, solange der Verlauf nicht geladen ist.
+    public func recordsWidget(for module: HomeModule) -> HomeRecordsWidget? {
+        guard let history = streak.history.history else { return nil }
+        let bests = StatisticsReport.stepRecords(
+            history: history,
+            record: streak.record,
+            currentStreak: streak.streak?.current,
+            today: calendar.day(containing: now()),
+            formatter: formatter,
+            calendar: calendar
+        )
+        return HomeRecordsWidget(bests: bests, selected: module.record)
+    }
+
+    /// Gruppenfortschritt einer gewählten Gruppe (aus den geladenen Gruppen, keine eigene Abfrage).
+    public func groupProgressWidget(for module: HomeModule) -> HomeGroupProgressWidget {
+        HomeGroupProgressWidget(groupID: module.configuration.groupID, groups: social.groups, isLoaded: social.state == .loaded)
+    }
+
     /// Kalender-Widget in einer Größe. Bewertet jeden Tag mit dem damals geltenden Ziel.
     public func calendarWidget(size: HomeModuleSize) -> HomeCalendarWidget {
         let overview = activity.overview
@@ -290,14 +343,57 @@ public final class HomeDashboardViewModel {
         settings.showsStandings
     }
 
-    /// Ob ein Widget den Verlauf braucht (Streak, Kalender).
+    /// Ob ein Widget den Verlauf braucht (Streak, Kalender, Flammen-Woche, Rekorde).
     public var showsStreak: Bool {
-        modules.contains { $0.kind == .streak || $0.kind == .calendar }
+        modules.contains { [.streak, .calendar, .streakWeek, .records].contains($0.kind) }
     }
 
     /// Ob ein Widget Freunde oder Gruppen zeigt.
     public var showsSocial: Bool {
-        modules.contains { $0.kind == .friends || $0.kind == .groups }
+        modules.contains { [.friends, .groups, .groupProgress].contains($0.kind) }
+    }
+
+    /// Ob ein Widget Stundenwerte braucht (Tagesvergleich, Aktivitätszeiten).
+    public var showsHourly: Bool {
+        modules.contains { $0.kind == .dayComparison || $0.kind == .activityTimes }
+    }
+
+    public struct HourlyTrigger: Hashable, Sendable {
+        let day: LocalDate?
+        let healthKitSteps: Int?
+        let isShown: Bool
+    }
+
+    /// Ändert sich, wenn die Stundenwerte neu geladen werden müssen: neuer Tag oder neuer HealthKit-Stand.
+    public var hourlyReloadKey: HourlyTrigger {
+        HourlyTrigger(day: activity.overview?.today.date, healthKitSteps: activity.overview?.today.competitionSteps, isShown: showsHourly)
+    }
+
+    /// Lädt die Stundenwerte für Tagesvergleich und Aktivitätszeiten – nur, wenn ein solches Widget auf Home ist und
+    /// sich Tag oder HealthKit-Stand geändert haben (sonst keine erneute Abfrage).
+    public func loadHourlyIfNeeded() async {
+        let key = hourlyReloadKey
+        guard key.isShown, let day = key.day, key != hourlyLoadedKey else { return }
+        let metric = StatisticsMetric.steps.activityMetric
+        do {
+            let values = try await activityData.hourlyTotals(of: metric, on: day, calendar: calendar)
+            let yesterday = calendar.adding(-1, to: day)
+            let previous: [Int: Double]
+            if let cached = yesterdayHourly, cached.day == yesterday {
+                previous = cached.values
+            } else {
+                previous = try await activityData.hourlyTotals(of: metric, on: yesterday, calendar: calendar)
+                yesterdayHourly = (yesterday, previous)
+            }
+            // Inzwischen ein anderer Stand: Ergebnis verwerfen, der nächste Auslöser lädt neu.
+            guard hourlyReloadKey == key else { return }
+            hourly = HourlyValues(day: day, metric: .steps, values: values, previousDay: previous)
+            hourlyLoadedKey = key
+        } catch {
+            // Ohne Stundenwerte zeigen beide Widgets ihren Leerzustand – nie erfundene Werte.
+            guard hourlyReloadKey == key else { return }
+            hourly = nil
+        }
     }
 
     /// Freunde und Gruppen laden, wenn ein Widget sie zeigt (höchstens einmal pro Minute).
@@ -519,6 +615,12 @@ public final class HomeDashboardViewModel {
     /// Öffnet eine Gruppe im Social-Tab (Gruppen-Widget).
     public func openGroup(_ id: UUID) {
         social.showGroup(id)
+        onOpenSocial()
+    }
+
+    /// Öffnet den Gruppenkalender im Social-Tab (Flamme im Widget „Gruppenfortschritt“); Zurück führt zur Gruppe.
+    public func openGroupCalendar(_ id: UUID) {
+        social.showGroup(id, calendar: true)
         onOpenSocial()
     }
 

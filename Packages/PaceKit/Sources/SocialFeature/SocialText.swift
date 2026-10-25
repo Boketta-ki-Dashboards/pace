@@ -397,6 +397,14 @@ enum SocialText {
     }
 
     static func groupRowDetail(reached: Int, required: Int, memberCount: Int) -> String {
+        // Mehr erreicht als nötig: nicht „9 von 8 nötig“, sondern gesichert mit der Zahl der Erreichten.
+        if required > 0, reached >= required {
+            return t(
+                "Heute gesichert (\(reached.paceFormatted) erreicht)",
+                "Secured today (\(reached.paceFormatted) reached)",
+                "Сегодня сохранён (выполнили: \(reached.paceFormatted))"
+            ) + " · " + members(memberCount)
+        }
         let needed = PaceLocalization.plural(
             required,
             de: ("nötig", "nötig"),

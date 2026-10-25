@@ -473,6 +473,34 @@ public struct StatisticsReport: Equatable, Sendable {
         }
     }
 
+    /// Persönliche Rekorde der Schritte im geladenen Verlauf (bis zu 12 Monate): bester Tag, beste Woche, bester Monat,
+    /// längste und aktuelle Serie, weiteste Strecke – dieselbe Berechnung wie in der Statistik (z. B. für das Widget
+    /// „Persönliche Rekorde“).
+    public static func stepRecords(
+        history: ActivityHistory,
+        record: StepStreakRecord?,
+        currentStreak: Int?,
+        today: LocalDate,
+        formatter: ActivityFormatter,
+        calendar: ActivityCalendar
+    ) -> [Best] {
+        bests(Input(
+            period: .month,
+            metric: .steps,
+            anchor: today,
+            history: history,
+            goals: StepGoalHistory(initialGoal: StepGoalRules.defaultGoal),
+            record: record,
+            currentStreak: currentStreak,
+            hourly: nil,
+            today: today,
+            currentHour: 0,
+            fractionOfCurrentHour: 0,
+            formatter: formatter,
+            calendar: calendar
+        ))
+    }
+
     /// Bestwerte im geladenen Verlauf (bis zu 12 Monate) für die gewählte Kennzahl.
     private static func bests(_ input: Input) -> [Best] {
         let calendar = input.calendar

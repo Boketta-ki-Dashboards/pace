@@ -68,6 +68,8 @@ public final class SocialViewModel {
     public private(set) var requestedProfile: String?
     /// Gruppe, die von außen geöffnet werden soll (z. B. aus einem Gruppen-Widget auf Home).
     public private(set) var requestedGroup: UUID?
+    /// Mit ``requestedGroup``: gleich den Gruppenkalender zeigen.
+    public private(set) var requestsGroupCalendar = false
     /// Öffnet die Privatsphäre-Einstellungen im Profil-Tab (vom App-Rahmen gesetzt). Ohne Angabe erklären die
     /// Social-Einstellungen nur, wo sich die Auffindbarkeit einstellen lässt.
     public var openPrivacySettings: (@MainActor () -> Void)?
@@ -228,12 +230,15 @@ public final class SocialViewModel {
 
     /// Öffnet die Details einer Gruppe (z. B. aus einem Home-Widget). Die Social-Ansicht zeigt sie an und setzt die
     /// Anfrage danach mit ``clearRequestedGroup()`` zurück.
-    public func showGroup(_ groupID: UUID) {
+    /// Öffnet eine Gruppe von außen (z. B. Home-Widget); mit `calendar` direkt ihren Gruppenkalender (Zurück → Gruppe).
+    public func showGroup(_ groupID: UUID, calendar: Bool = false) {
+        requestsGroupCalendar = calendar
         requestedGroup = groupID
     }
 
     public func clearRequestedGroup() {
         requestedGroup = nil
+        requestsGroupCalendar = false
     }
 
     /// Sucht das angefragte Profil (``requestedProfile``) über den genauen Benutzernamen und setzt die Anfrage zurück.

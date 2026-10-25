@@ -346,13 +346,20 @@ struct SocialMoreLabel: View {
 // MARK: - Gruppen
 
 /// Gruppenbild oder – solange keins gesetzt ist – ein ruhiger Platzhalter mit dem Symbol der Gruppenart.
-struct GroupAvatar: View {
+public struct GroupAvatar: View {
     let name: String
     let kind: GroupKind
     let image: MediaReference?
     var size: CGFloat = 56
 
-    var body: some View {
+    public init(name: String, kind: GroupKind, image: MediaReference?, size: CGFloat = 56) {
+        self.name = name
+        self.kind = kind
+        self.image = image
+        self.size = size
+    }
+
+    public var body: some View {
         if let image {
             PaceAvatar(name: name, seed: name, size: size, image: image)
         } else {

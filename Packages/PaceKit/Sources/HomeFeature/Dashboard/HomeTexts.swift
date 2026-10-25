@@ -27,6 +27,31 @@ public enum HomeTexts {
         PaceLocalization.text(de: "Letzte 7 Tage", en: "Last 7 days", ru: "Последние 7 дней")
     }
 
+    /// z. B. `bis 14:20`.
+    public static func untilTime(_ time: String) -> String {
+        PaceLocalization.text(de: "bis \(time)", en: "until \(time)", ru: "до \(time)")
+    }
+
+    /// z. B. `12 Mitglieder`.
+    public static func members(_ count: Int) -> String {
+        "\(count.paceFormatted) " + PaceLocalization.plural(
+            count,
+            de: ("Mitglied", "Mitglieder"),
+            en: ("member", "members"),
+            ru: ("участник", "участника", "участников")
+        )
+    }
+
+    /// z. B. `Diese Woche: Ziel an 3 Tagen erreicht`.
+    public static func goalDaysThisWeek(_ count: Int) -> String {
+        let days = PaceLocalization.plural(count, de: ("Tag", "Tagen"), en: ("day", "days"), ru: ("день", "дня", "дней"))
+        return PaceLocalization.text(
+            de: "Diese Woche: Ziel an \(count.paceFormatted) \(days) erreicht",
+            en: "This week: goal reached on \(count.paceFormatted) \(days)",
+            ru: "На этой неделе: цель выполнена \(count.paceFormatted) \(days)"
+        )
+    }
+
     public static var showAllLevels: String {
         PaceLocalization.text(de: "Alle vier zeigen", en: "Show all four", ru: "Показать все четыре")
     }

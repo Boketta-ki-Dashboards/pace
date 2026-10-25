@@ -77,11 +77,13 @@ public struct ChatView: View {
             ChatTitleBar(viewModel: viewModel, backTitle: backTitle ?? SocialText.social, actions: actions(proxy: nil))
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.xs)
-            if let pin = viewModel.shownPin {
+            // Gruppen: feste Leiste mit Mitgliedern und Flamme (scrollt nicht mit).
+            ChatGroupBar(viewModel: viewModel, actions: actions(proxy: nil))
+                .padding(.horizontal, PaceSpacing.m)
+                .padding(.bottom, PaceSpacing.xxs)
+            if let pin = viewModel.shownPin, let preview = viewModel.shownPinPreview {
                 ChatPinBanner(
-                    pin: pin,
-                    index: viewModel.pins.firstIndex(of: pin) ?? 0,
-                    count: viewModel.pins.count,
+                    preview: preview,
                     onTap: { [viewModel] in
                         Task { await viewModel.openShownPin() }
                     },

@@ -87,8 +87,13 @@ public struct SocialView: View {
     /// Eine Gruppe von außen (z. B. aus einem Home-Widget).
     private func openRequestedGroup() {
         guard let groupID = viewModel.requestedGroup else { return }
+        let showsCalendar = viewModel.requestsGroupCalendar
         viewModel.clearRequestedGroup()
-        navigator.show(.group(groupID))
+        if showsCalendar {
+            navigator.showGroupCalendar(groupID)
+        } else {
+            navigator.show(.group(groupID))
+        }
     }
 }
 

@@ -60,8 +60,9 @@ enum ChatUIText {
     static var reportPerson: String { t("Person melden", "Report person", "Пожаловаться на пользователя") }
     static var blockPerson: String { t("Person blockieren", "Block person", "Заблокировать") }
 
-    static func streakAccessibility(title: String, status: String) -> String {
-        title + ", " + status + ". " + t("Öffnet die Gruppendetails.", "Opens the group details.", "Открывает сведения о группе.")
+    /// z. B. „Gruppenflamme: 12 Tage“.
+    static func groupFlameAccessibility(days: Int) -> String {
+        t("Gruppenflamme: ", "Group flame: ", "Огонь группы: ") + PaceLocalization.days(days)
     }
 
     // MARK: Verlauf

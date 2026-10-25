@@ -630,11 +630,11 @@ struct ChatMessageMarks: View {
     }
 }
 
-/// Hinweis oben im Chat auf die angepinnte(n) Nachricht(en); Antippen springt hin und zeigt danach die nächste.
+/// Hinweis oben im Chat auf die angepinnte(n) Nachricht(en) mit Vorschau des Inhalts: Text-Ausschnitt, Miniatur von
+/// Foto bzw. GIF, Sprachnachricht mit Dauer oder Profilbild – platzsparend in zwei Zeilen. Antippen springt zur
+/// Nachricht und hebt sie hervor; bei mehreren Pins zeigt der Hinweis danach den nächsten (Markierungen links).
 struct ChatPinBanner: View {
-    let pin: ChatPin
-    let index: Int
-    let count: Int
+    let preview: ChatPinPreview
     let onTap: () -> Void
     /// Lösen (nur mit Recht zum Anpinnen) – nötig für verborgene Pins, die man nicht im Verlauf findet.
     var onUnpin: (() -> Void)?
@@ -642,24 +642,23 @@ struct ChatPinBanner: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: PaceSpacing.s) {
-                Image(systemName: "pin.fill")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(PaceColor.accent)
-                    .frame(width: 28, height: 28)
-                    .background(PaceColor.accent.opacity(0.14), in: Circle())
+                if preview.showsSegments {
+                    segments
+                }
+                visual
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(ChatUIText.pinnedBanner(index + 1, of: count))
+                    Text(preview.title)
                         .font(PaceFont.caption.weight(.semibold))
                         .foregroundStyle(PaceColor.accent)
                         .lineLimit(1)
-                    Text(pin.isHidden ? ChatUIText.originalUnavailable : ChatReplySnippet.text(for: pin.message))
+                    Text(preview.line)
                         .font(PaceFont.callout)
-                        .italic(pin.isHidden)
-                        .foregroundStyle(pin.isHidden ? PaceColor.textSecondary : PaceColor.textPrimary)
+                        .italic(preview.isHidden)
+                        .foregroundStyle(preview.isHidden ? PaceColor.textSecondary : PaceColor.textPrimary)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                if count > 1 {
+                if preview.count > 1 {
                     Image(systemName: "chevron.down")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(PaceColor.textSecondary)
@@ -680,12 +679,64 @@ struct ChatPinBanner: View {
                 }
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(preview.accessibilityLabel)
         .accessibilityHint(ChatUIText.pinnedBannerHint)
+        .accessibilityAddTraits(.isButton)
         .accessibilityActions {
             if let onUnpin {
                 Button(ChatUIText.unpin, action: onUnpin)
             }
         }
+    }
+
+    /// Senkrechte Markierungen: welcher von bis zu vier Pins gerade gezeigt wird.
+    private var segments: some View {
+        VStack(spacing: 2) {
+            ForEach(0..<preview.count, id: \.self) { position in
+                Capsule()
+                    .fill(position == preview.index ? PaceColor.accent : PaceColor.accent.opacity(0.25))
+                    .frame(width: 3)
+            }
+        }
+        .frame(height: 34)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var visual: some View {
+        switch preview.visual {
+        case .image(let reference), .gif(let reference):
+            ChatMediaImage(reference: reference, localData: nil, animates: false)
+                .frame(width: 36, height: 36)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(alignment: .bottomTrailing) {
+                    if case .gif = preview.visual {
+                        Text(verbatim: "GIF")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 3)
+                            .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+                            .padding(2)
+                    }
+                }
+                .accessibilityHidden(true)
+        case .profile(let profile):
+            PaceAvatar(name: profile.shownName, seed: profile.publicID.uuidString, size: 36, image: profile.avatar)
+                .accessibilityHidden(true)
+        case .voice:
+            pinIcon("waveform")
+        case .text, .unavailable:
+            pinIcon("pin.fill")
+        }
+    }
+
+    private func pinIcon(_ systemImage: String) -> some View {
+        Image(systemName: systemImage)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(PaceColor.accent)
+            .frame(width: 36, height: 36)
+            .background(PaceColor.accent.opacity(0.14), in: Circle())
+            .accessibilityHidden(true)
     }
 }

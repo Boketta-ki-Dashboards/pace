@@ -1036,6 +1036,17 @@ public final class ChatViewModel {
         pins.indices.contains(pinIndex) ? pins[pinIndex] : pins.first
     }
 
+    /// Vorschau des gezeigten Pins (Inhalt, Absender in Gruppen, Position unter mehreren Pins).
+    public var shownPinPreview: ChatPinPreview? {
+        guard let pin = shownPin else { return nil }
+        return ChatPinPreview(
+            pin: pin,
+            index: pins.firstIndex(of: pin) ?? 0,
+            count: pins.count,
+            showsSender: kind == .group
+        )
+    }
+
     /// Antippen des Pin-Hinweises: zur Nachricht springen und danach den nächsten Pin zeigen.
     public func openShownPin() async {
         guard let pin = shownPin else { return }

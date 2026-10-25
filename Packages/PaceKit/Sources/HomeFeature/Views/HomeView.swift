@@ -101,6 +101,10 @@ public struct HomeView: View {
         .task(id: viewModel.showsSocial) { [viewModel] in
             await viewModel.loadSocialIfNeeded()
         }
+        // Tagesvergleich und Aktivitätszeiten: Stundenwerte nur bei neuem Tag oder neuem HealthKit-Stand.
+        .task(id: viewModel.hourlyReloadKey) { [viewModel] in
+            await viewModel.loadHourlyIfNeeded()
+        }
         .task { [viewModel] in
             await viewModel.loadNotificationsIfNeeded()
         }

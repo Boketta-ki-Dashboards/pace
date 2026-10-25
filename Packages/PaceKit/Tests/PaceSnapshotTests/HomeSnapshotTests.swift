@@ -99,6 +99,26 @@ struct HomeSnapshotTests {
         }
     }
 
+    /// Die fünf neuen Widgets (Auftrag 5, D) in jeder Größe mit Beispieldaten: Tagesvergleich, Flammen-Woche,
+    /// Persönliche Rekorde, Aktivitätszeiten, Gruppenfortschritt.
+    @Test func newWidgetsInAllSizes() async throws {
+        let (dashboard, _) = try await SnapshotFixtures.makeDashboard()
+        await dashboard.loadStreakIfNeeded()
+        for module in SnapshotFixtures.newWidgets(size: .medium) {
+            _ = dashboard.settings.add(module)
+        }
+        await dashboard.loadSocialIfNeeded()
+        await dashboard.loadHourlyIfNeeded()
+        for size in HomeModuleSize.allCases {
+            let content = VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                ForEach(SnapshotFixtures.newWidgets(size: size)) { module in
+                    HomeModuleView(module: module, viewModel: dashboard, mode: .normal)
+                }
+            }
+            try Snapshot.render(page(content), name: "home-new-widgets-\(size.rawValue)", languages: size == .medium ? languages : [.german])
+        }
+    }
+
     /// Ebenen-Editor der regionalen Karten (Auftrag 5, A3): „3 von 4 Ebenen sichtbar“ mit „Alle vier zeigen“.
     @Test func regionLevelEditor() async throws {
         let (dashboard, _) = try await SnapshotFixtures.makeDashboard()
@@ -164,8 +184,19 @@ extension SnapshotFixtures {
             HomeModule(id: "groups", kind: .groups, size: size),
             HomeModule(id: "distance", kind: .activity, size: size, configuration: HomeWidgetConfiguration(metric: .distance)),
             HomeModule(id: "calendar", kind: .calendar, size: size),
-        ]
+        ] + newWidgets(size: size)
         modules.removeAll { !$0.kind.supportedSizes.contains(size) }
         return modules
+    }
+
+    /// Die fünf neuen Widgets (Auftrag 5) in einer Größe.
+    static func newWidgets(size: HomeModuleSize) -> [HomeModule] {
+        [
+            HomeModule(id: "compare", kind: .dayComparison, size: size),
+            HomeModule(id: "flameweek", kind: .streakWeek, size: size),
+            HomeModule(id: "records", kind: .records, size: size, configuration: HomeWidgetConfiguration(record: .bestDay)),
+            HomeModule(id: "times", kind: .activityTimes, size: size),
+            HomeModule(id: "groupprogress", kind: .groupProgress, size: size, configuration: HomeWidgetConfiguration(groupID: classID)),
+        ]
     }
 }

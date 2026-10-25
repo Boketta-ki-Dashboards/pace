@@ -2,8 +2,8 @@ import DesignSystem
 import PaceCore
 import SwiftUI
 
-/// Gruppendetails (Referenzbild 4): Gruppen-Streak, Fortschritt des Tages, Gruppenchat, Mitglieder, Einstellungen
-/// und „Heute in der Gruppe“.
+/// Gruppendetails (Referenzbild 4): eine kombinierte Karte für Fortschritt und Flamme des Tages (öffnet den
+/// Gruppenkalender), Gruppenchat, Mitglieder, Einstellungen und „Heute in der Gruppe“.
 struct GroupDetailView: View {
     @State private var viewModel: GroupDetailViewModel
     private let onOpen: (SocialRoute) -> Void
@@ -45,8 +45,10 @@ struct GroupDetailContent: View {
                 if let notice = viewModel.notice {
                     NoticeBanner(notice: notice) { viewModel.dismissNotice() }
                 }
-                streakCard
-                progressCard
+                // Eine Karte statt Streak-, Fortschritts- und Kalenderkarte (Auftrag 5, B7).
+                GroupDayProgressCard(progress: GroupDayProgress(group: group)) {
+                    onOpen(.groupCalendar(group.id))
+                }
                 navigationCards
                 ranking
             }
@@ -71,119 +73,24 @@ struct GroupDetailContent: View {
                 }
                 .font(PaceFont.callout)
                 .foregroundStyle(PaceColor.textSecondary)
+                // Tagesziel pro Mitglied (früher in der eigenen Streak-Karte).
+                Label {
+                    Text(SocialText.goalPerMember(group.dailyGoal))
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "scope")
+                }
+                .font(PaceFont.callout)
+                .foregroundStyle(PaceColor.textSecondary)
+                if let next = group.nextDailyGoal, next != group.dailyGoal {
+                    Text(SocialText.nextGoal(next))
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                }
             }
             Spacer(minLength: 0)
         }
         .padding(.vertical, PaceSpacing.xs)
-    }
-
-    // MARK: Streak und Fortschritt
-
-    private var streakCard: some View {
-        PaceCard {
-            HStack(spacing: PaceSpacing.m) {
-                Image(systemName: group.currentStreak > 0 ? "flame.fill" : "flame")
-                    .font(.system(size: 40, weight: .semibold))
-                    .foregroundStyle(group.currentStreak > 0 ? PaceColor.streak : PaceColor.textSecondary)
-                    .frame(width: 48)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(SocialText.streakTitle(group.currentStreak))
-                        .font(.system(.title3, weight: .bold))
-                        .foregroundStyle(PaceColor.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(SocialText.goalPerMember(group.dailyGoal))
-                        .font(.subheadline)
-                        .foregroundStyle(PaceColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let next = group.nextDailyGoal, next != group.dailyGoal {
-                        Text(SocialText.nextGoal(next))
-                            .font(PaceFont.caption)
-                            .foregroundStyle(PaceColor.textSecondary)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private var progressCard: some View {
-        PaceCard {
-            VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                Text(viewModel.todayText)
-                    .font(.system(.title3, weight: .bold))
-                    .foregroundStyle(PaceColor.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                memberPills
-                VStack(alignment: .leading, spacing: PaceSpacing.xs) {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .firstTextBaseline) {
-                            requiredGoalsLabel
-                            Spacer(minLength: PaceSpacing.xs)
-                            flameStatusLabel
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            requiredGoalsLabel
-                            flameStatusLabel
-                        }
-                    }
-                    PaceProgressBar(progress: viewModel.requiredProgress, height: 14)
-                    Text(viewModel.thirdRuleText)
-                        .font(PaceFont.caption)
-                        .foregroundStyle(PaceColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(PaceSpacing.s)
-                .background(PaceColor.accentSoft, in: RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous)
-                        .strokeBorder(PaceColor.accent.opacity(0.25), lineWidth: 1)
-                )
-                .accessibilityElement(children: .combine)
-            }
-        }
-    }
-
-    private var requiredGoalsLabel: some View {
-        Text(viewModel.requiredGoalsText)
-            .font(PaceFont.callout)
-            .foregroundStyle(PaceColor.textPrimary)
-    }
-
-    private var flameStatusLabel: some View {
-        Text(viewModel.flameStatusText)
-            .font(.system(.subheadline, weight: .semibold))
-            .foregroundStyle(group.todayComplete ? PaceColor.accent : PaceColor.textSecondary)
-    }
-
-    /// Eine Pille je Mitglied (bei sehr großen Gruppen ein Balken).
-    @ViewBuilder
-    private var memberPills: some View {
-        let pills = viewModel.memberPills
-        Group {
-            if pills.isEmpty {
-                Text(SocialText.noMembersToday)
-                    .font(PaceFont.caption)
-                    .foregroundStyle(PaceColor.textSecondary)
-            } else if pills.count <= 20 {
-                HStack(spacing: pills.count > 12 ? 4 : 6) {
-                    ForEach(Array(pills.enumerated()), id: \.offset) { pill in
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(pill.element ? PaceColor.goalReachedFill : PaceColor.track)
-                            .frame(maxWidth: 40)
-                            .frame(height: 30)
-                    }
-                }
-            } else {
-                PaceProgressBar(
-                    progress: Double(group.todayReachedCount) / Double(max(group.memberCount, 1)),
-                    height: 14
-                )
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(viewModel.todayText)
     }
 
     // MARK: Navigation
@@ -201,37 +108,6 @@ struct GroupDetailContent: View {
                 onOpen(.groupSettings(group.id))
             }
         }
-        // Eigene Zeile, damit die drei Karten wie in der Referenz bleiben.
-        Button {
-            onOpen(.groupCalendar(group.id))
-        } label: {
-            HStack(spacing: PaceSpacing.s) {
-                Image(systemName: "calendar")
-                    .font(.system(size: 20, weight: .regular))
-                    .foregroundStyle(PaceColor.accent)
-                    .frame(width: 28)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(SocialText.groupCalendar)
-                        .font(PaceFont.headline)
-                        .foregroundStyle(PaceColor.textPrimary)
-                    Text(SocialText.groupCalendarSubtitle)
-                        .font(PaceFont.caption)
-                        .foregroundStyle(PaceColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .accessibilityHidden(true)
-            }
-            .padding(PaceSpacing.m)
-            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
-            .paceCardBackground(cornerRadius: PaceRadius.tile)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.pacePressable)
     }
 
     private func navigationCard(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {

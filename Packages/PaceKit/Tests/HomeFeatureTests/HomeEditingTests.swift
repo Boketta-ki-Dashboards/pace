@@ -14,6 +14,7 @@ private struct DashboardHarness {
     let profiles: ProfileRepositoryStub
     let store: InMemoryHomePreferencesStore
     let log: OpenLog
+    let health: HealthServiceStub
 
     init(
         participating: Bool = true,
@@ -31,7 +32,14 @@ private struct DashboardHarness {
             $0.rankings[Fixtures.germany.id] = Fixtures.ranking(count: 2_000, currentUserRank: 1_852)
         }
         let now: @Sendable () -> Date = { Fixtures.date(2026, 10, 16, 9) }
-        let health = HealthServiceStub { $0.setSteps(8_432, on: Fixtures.day(2026, 10, 16)) }
+        let health = HealthServiceStub {
+            $0.setSteps(8_432, on: Fixtures.day(2026, 10, 16))
+            $0.setSteps(6_000, on: Fixtures.day(2026, 10, 15))
+            $0.hourlyTotals[.competitionSteps] = [
+                Fixtures.day(2026, 10, 16): [7: 2_000, 8: 6_432],
+                Fixtures.day(2026, 10, 15): [7: 1_000, 8: 2_000, 18: 3_000],
+            ]
+        }
         let activity = HomeViewModel(activityData: health, calendar: Fixtures.activityCalendar, now: now)
         let socialViewModel = SocialViewModel(
             repository: social,
@@ -71,6 +79,7 @@ private struct DashboardHarness {
         self.profiles = profiles
         self.store = store
         self.log = log
+        self.health = health
         await activity.loadIfNeeded()
     }
 }
@@ -667,5 +676,71 @@ struct RegionCardsReliabilityTests {
             #expect(gallery.validationMessage?.contains("Größe") == true)
         }
         #expect(!gallery.canSave)
+    }
+}
+
+/// Stundenwerte für Tagesvergleich und Aktivitätszeiten (Auftrag 5, D): eine Abfrage für beide Widgets, keine
+/// Wiederholung ohne neuen HealthKit-Stand, gestern nur einmal pro Tag.
+@MainActor
+struct InsightWidgetLoadingTests {
+    private func hourlyRequests(_ harness: DashboardHarness) -> [LocalDate] {
+        harness.health.recordedCalls.hourlyTotalsRequests.map(\.1)
+    }
+
+    @Test func hourlyValuesAreLoadedOnceForBothWidgets() async throws {
+        let harness = await DashboardHarness()
+        let dashboard = harness.dashboard
+        // Ohne passendes Widget wird nichts abgefragt.
+        await dashboard.loadHourlyIfNeeded()
+        #expect(hourlyRequests(harness).isEmpty)
+
+        _ = dashboard.settings.add(.dayComparison)
+        _ = dashboard.settings.add(.activityTimes)
+        await dashboard.loadHourlyIfNeeded()
+        #expect(hourlyRequests(harness) == [Fixtures.day(2026, 10, 16), Fixtures.day(2026, 10, 15)])
+        // Erneut ohne neuen HealthKit-Stand: keine weitere Abfrage.
+        await dashboard.loadHourlyIfNeeded()
+        await dashboard.loadHourlyIfNeeded()
+        #expect(hourlyRequests(harness).count == 2)
+
+        // Tagesvergleich bis 9:00: gestern 1.000 + 2.000 = 3.000, heute 8.432.
+        let comparison = try #require(dashboard.dayComparisonWidget)
+        #expect(comparison.yesterdaySteps == 3_000)
+        #expect(comparison.todaySteps == 8_432)
+        #expect(comparison.yesterdayTotal == 6_000)
+        let times = try #require(dashboard.activityTimesWidget)
+        #expect(times.totalSteps == 8_432)
+        #expect(times.peak?.id == "morning")
+
+        // Neuer HealthKit-Stand: nur heute neu, gestern aus dem Speicher.
+        harness.health.update { $0.setSteps(8_900, on: Fixtures.day(2026, 10, 16)) }
+        await dashboard.activity.refresh(trigger: .healthKitUpdate)
+        await dashboard.loadHourlyIfNeeded()
+        #expect(hourlyRequests(harness) == [Fixtures.day(2026, 10, 16), Fixtures.day(2026, 10, 15), Fixtures.day(2026, 10, 16)])
+    }
+
+    @Test func groupProgressAndRecordsUseLoadedData() async throws {
+        let harness = await DashboardHarness()
+        let dashboard = harness.dashboard
+        _ = dashboard.settings.add(.records)
+        _ = dashboard.settings.add(.streakWeek)
+        #expect(dashboard.showsStreak)
+        await dashboard.loadStreakIfNeeded()
+        let records = try #require(dashboard.settings.modules.first { $0.kind == .records })
+        let widget = try #require(dashboard.recordsWidget(for: records))
+        #expect(widget.selected == .bestDay)
+        #expect(widget.primary?.value == "8.432 Schritte")
+        #expect(dashboard.streakWidget?.week.count == 7)
+
+        let group = HomeModule(kind: .groupProgress, configuration: HomeWidgetConfiguration(groupID: UUID()))
+        for module in dashboard.settings.modules where module.kind == .friends || module.kind == .groups {
+            _ = dashboard.settings.remove(module.id)
+        }
+        #expect(!dashboard.showsSocial)
+        _ = dashboard.settings.add(group)
+        // Das Widget braucht die Gruppen (ohne eigene Abfrage, über das geteilte Social-ViewModel).
+        #expect(dashboard.showsSocial)
+        // Gruppen noch nicht geladen: „wird geladen“, nicht „gelöscht“.
+        #expect(dashboard.groupProgressWidget(for: group) == .loading)
     }
 }

@@ -178,6 +178,11 @@ public final class SocialNavigator {
         set([.route(route)])
     }
 
+    /// Gruppenkalender einer Gruppe von außen (z. B. Home-Widget): Gruppe darunter, damit Zurück zur Gruppe führt.
+    public func showGroupCalendar(_ groupID: UUID) {
+        set([.route(.group(groupID)), .route(.groupCalendar(groupID))])
+    }
+
     /// Zurück zur Hauptseite.
     public func popToRoot() {
         set([])

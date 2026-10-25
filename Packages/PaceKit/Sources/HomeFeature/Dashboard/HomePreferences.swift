@@ -18,6 +18,16 @@ public enum HomeModuleKind: String, Codable, CaseIterable, Sendable, Identifiabl
     case activity
     /// Kompakter Kalender mit erreichten Tageszielen.
     case calendar
+    /// Heute vs. gestern bis zur gleichen Uhrzeit (Stundenwerte).
+    case dayComparison
+    /// Laufende Woche als Flammen-Kalender (Ziel je Tag erreicht?).
+    case streakWeek
+    /// Ein gewählter persönlicher Rekord (12 Monate).
+    case records
+    /// Aktivität nach Tageszeiten (Stundenwerte von heute).
+    case activityTimes
+    /// Tagesfortschritt einer gewählten Gruppe.
+    case groupProgress
 
     public var id: String { rawValue }
 
@@ -34,6 +44,11 @@ public enum HomeModuleKind: String, Codable, CaseIterable, Sendable, Identifiabl
         case .groups: PaceLocalization.text(de: "Deine Gruppen", en: "Your groups", ru: "Твои группы")
         case .activity: PaceLocalization.text(de: "Aktivität", en: "Activity", ru: "Активность")
         case .calendar: PaceLocalization.text(de: "Kalender", en: "Calendar", ru: "Календарь")
+        case .dayComparison: PaceLocalization.text(de: "Tagesvergleich", en: "Day comparison", ru: "Сравнение дня")
+        case .streakWeek: PaceLocalization.text(de: "Flammen-Woche", en: "Flame week", ru: "Неделя огня")
+        case .records: PaceLocalization.text(de: "Persönliche Rekorde", en: "Personal records", ru: "Личные рекорды")
+        case .activityTimes: PaceLocalization.text(de: "Aktivitätszeiten", en: "Activity times", ru: "Время активности")
+        case .groupProgress: PaceLocalization.text(de: "Gruppenfortschritt", en: "Group progress", ru: "Прогресс группы")
         }
     }
 
@@ -82,6 +97,36 @@ public enum HomeModuleKind: String, Codable, CaseIterable, Sendable, Identifiabl
                 en: "Reached daily goals in a calendar",
                 ru: "Выполненные дневные цели в календаре"
             )
+        case .dayComparison:
+            PaceLocalization.text(
+                de: "Heute und gestern bis zur gleichen Uhrzeit",
+                en: "Today and yesterday up to the same time",
+                ru: "Сегодня и вчера до того же времени"
+            )
+        case .streakWeek:
+            PaceLocalization.text(
+                de: "Diese Woche: Tagesziel je Tag erreicht?",
+                en: "This week: daily goal reached each day?",
+                ru: "Эта неделя: цель выполнена по дням?"
+            )
+        case .records:
+            PaceLocalization.text(
+                de: "Dein bester Tag, deine beste Woche und mehr",
+                en: "Your best day, best week and more",
+                ru: "Твой лучший день, лучшая неделя и другое"
+            )
+        case .activityTimes:
+            PaceLocalization.text(
+                de: "Wann du heute am aktivsten warst",
+                en: "When you were most active today",
+                ru: "Когда ты был активнее всего сегодня"
+            )
+        case .groupProgress:
+            PaceLocalization.text(
+                de: "Ziel, Mitglieder und Flamme einer Gruppe",
+                en: "Goal, members and flame of a group",
+                ru: "Цель, участники и огонь группы"
+            )
         }
     }
 
@@ -96,14 +141,24 @@ public enum HomeModuleKind: String, Codable, CaseIterable, Sendable, Identifiabl
         case .groups: "person.3"
         case .activity: "shoe"
         case .calendar: "calendar.badge.plus"
+        case .dayComparison: "arrow.left.arrow.right"
+        case .streakWeek: "flame"
+        case .records: "trophy"
+        case .activityTimes: "clock"
+        case .groupProgress: "person.3.sequence"
         }
     }
 
     /// Kategorien der Widget-Galerie in der Reihenfolge des freigegebenen Designs. Die Schrittkarte ist immer auf
     /// Home und erscheint nur beim Bearbeiten (unter „Schritte und Aktivität“).
-    public static let galleryKinds: [HomeModuleKind] = [
-        .activity, .week, .streak, .friends, .groups, .regionRanks, .neighborhood, .calendar,
-    ]
+    public static var galleryKinds: [HomeModuleKind] {
+        HomeGallerySection.allCases.flatMap(\.kinds)
+    }
+
+    /// Abschnitt der Galerie (Aktivität, Motivation, Social).
+    public var gallerySection: HomeGallerySection {
+        HomeGallerySection.allCases.first { $0.kinds.contains(galleryCategory) } ?? .activity
+    }
 
     /// Kategorie, unter der das Widget in der Galerie steht.
     public var galleryCategory: HomeModuleKind {
@@ -122,6 +177,7 @@ public enum HomeModuleKind: String, Codable, CaseIterable, Sendable, Identifiabl
         case .regionRanks: PaceLocalization.text(de: "Regionale Rankings", en: "Regional rankings", ru: "Региональные рейтинги")
         case .neighborhood: PaceLocalization.text(de: "Ranking-Umfeld", en: "Ranking neighbors", ru: "Соседи по рейтингу")
         case .calendar: PaceLocalization.text(de: "Kalender", en: "Calendar", ru: "Календарь")
+        case .dayComparison, .streakWeek, .records, .activityTimes, .groupProgress: title
         }
     }
 
@@ -132,7 +188,11 @@ public enum HomeModuleKind: String, Codable, CaseIterable, Sendable, Identifiabl
             PaceLocalization.text(de: "Gruppe auswählen", en: "Choose a group", ru: "Выбери группу")
         case .regionRanks:
             RegionLevel.allCases.map(\.widgetTitle).joined(separator: " · ")
-        case .activity, .stepsToday, .week, .streak, .friends, .neighborhood, .calendar:
+        case .groupProgress:
+            PaceLocalization.text(de: "Gruppe auswählen", en: "Choose a group", ru: "Выбери группу")
+        case .records:
+            HomeRecordsWidget.periodText
+        case .activity, .stepsToday, .week, .streak, .friends, .neighborhood, .calendar, .dayComparison, .streakWeek, .activityTimes:
             nil
         }
     }
@@ -151,8 +211,8 @@ public enum HomeModuleKind: String, Codable, CaseIterable, Sendable, Identifiabl
     /// Widgets, die mehrfach vorkommen dürfen – jeweils mit eigener Konfiguration (z. B. mehrere Freunde-Widgets).
     public var allowsMultiple: Bool {
         switch self {
-        case .regionRanks, .neighborhood, .friends, .groups, .activity: true
-        case .stepsToday, .week, .streak, .calendar: false
+        case .regionRanks, .neighborhood, .friends, .groups, .activity, .records, .groupProgress: true
+        case .stepsToday, .week, .streak, .calendar, .dayComparison, .streakWeek, .activityTimes: false
         }
     }
 
@@ -164,6 +224,32 @@ public enum HomeModuleKind: String, Codable, CaseIterable, Sendable, Identifiabl
     /// Regionale Ranking-Widgets – bei ausgeschalteter Ranking-Sichtbarkeit verborgen.
     public var showsRegionalRankings: Bool {
         self == .regionRanks || self == .neighborhood
+    }
+}
+
+/// Abschnitte der Widget-Galerie.
+public enum HomeGallerySection: String, CaseIterable, Sendable, Identifiable {
+    case activity
+    case motivation
+    case social
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .activity: PaceLocalization.text(de: "Aktivität", en: "Activity", ru: "Активность")
+        case .motivation: PaceLocalization.text(de: "Motivation", en: "Motivation", ru: "Мотивация")
+        case .social: PaceLocalization.text(de: "Social", en: "Social", ru: "Общение")
+        }
+    }
+
+    /// Kategorien des Abschnitts in Galerie-Reihenfolge.
+    public var kinds: [HomeModuleKind] {
+        switch self {
+        case .activity: [.activity, .week, .dayComparison, .activityTimes, .calendar]
+        case .motivation: [.streak, .streakWeek, .records]
+        case .social: [.friends, .groups, .groupProgress, .regionRanks, .neighborhood]
+        }
     }
 }
 
@@ -249,6 +335,8 @@ public struct HomeWidgetConfiguration: Hashable, Sendable {
     public var metric: HomeActivityMetric?
     /// Eigene Auswahl der Zusatzinhalte (siehe ``HomeWidgetDetail``); `nil` = Standard der Größe, leer = keine.
     public var details: [HomeWidgetDetail]?
+    /// Persönliche Rekorde: gezeigter Rekord.
+    public var record: HomeRecordKind?
 
     /// Maximale Länge des eigenen Namens.
     public static let nameLength = 30
@@ -259,7 +347,8 @@ public struct HomeWidgetConfiguration: Hashable, Sendable {
         groupID: UUID? = nil,
         regionLevels: [RegionLevel]? = nil,
         metric: HomeActivityMetric? = nil,
-        details: [HomeWidgetDetail]? = nil
+        details: [HomeWidgetDetail]? = nil,
+        record: HomeRecordKind? = nil
     ) {
         self.friendIDs = friendIDs
         self.customName = customName
@@ -267,6 +356,7 @@ public struct HomeWidgetConfiguration: Hashable, Sendable {
         self.regionLevels = regionLevels
         self.metric = metric
         self.details = details
+        self.record = record
     }
 
     public var isEmpty: Bool {
@@ -282,15 +372,17 @@ public struct HomeWidgetConfiguration: Hashable, Sendable {
             var seen: Set<UUID> = []
             let ids = (friendIDs ?? []).filter { seen.insert($0).inserted }
             result = HomeWidgetConfiguration(friendIDs: ids.isEmpty ? nil : ids)
-        case .groups:
+        case .groups, .groupProgress:
             result = HomeWidgetConfiguration(groupID: groupID)
+        case .records:
+            result = HomeWidgetConfiguration(record: record ?? .bestDay)
         case .regionRanks:
             let levels = RegionLevel.allCases.filter { (regionLevels ?? []).contains($0) }
             let shown = levels.isEmpty || levels == RegionLevel.allCases ? nil : levels
             result = HomeWidgetConfiguration(regionLevels: shown)
         case .activity:
             result = HomeWidgetConfiguration(metric: metric ?? .steps)
-        case .stepsToday, .week, .streak, .neighborhood, .calendar:
+        case .stepsToday, .week, .streak, .neighborhood, .calendar, .dayComparison, .streakWeek, .activityTimes:
             result = HomeWidgetConfiguration()
         }
         result.customName = Self.cleanedName(customName)
@@ -318,6 +410,7 @@ extension HomeWidgetConfiguration: Codable {
         case regionLevels = "levels"
         case metric
         case details
+        case record
     }
 
     /// Tolerant: unbekannte oder beschädigte Werte werden übersprungen statt das ganze Widget zu verwerfen.
@@ -334,6 +427,8 @@ extension HomeWidgetConfiguration: Codable {
         self.metric = metric.flatMap(HomeActivityMetric.init(rawValue:))
         let details = (try? container.decodeIfPresent([String].self, forKey: .details)) ?? nil
         self.details = details.map { $0.compactMap(HomeWidgetDetail.init(rawValue:)) }
+        let record = (try? container.decodeIfPresent(String.self, forKey: .record)) ?? nil
+        self.record = record.flatMap(HomeRecordKind.init(rawValue:))
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -344,6 +439,7 @@ extension HomeWidgetConfiguration: Codable {
         try container.encodeIfPresent(regionLevels?.map(\.rawValue), forKey: .regionLevels)
         try container.encodeIfPresent(metric?.rawValue, forKey: .metric)
         try container.encodeIfPresent(details?.map(\.rawValue), forKey: .details)
+        try container.encodeIfPresent(record?.rawValue, forKey: .record)
     }
 }
 
@@ -387,6 +483,11 @@ public struct HomeModule: Hashable, Sendable, Identifiable {
         configuration.metric ?? .steps
     }
 
+    /// Rekord eines Widgets „Persönliche Rekorde“.
+    public var record: HomeRecordKind {
+        configuration.record ?? .bestDay
+    }
+
     /// Zeilen im Umfeld-Widget: klein nur der eigene Platz, mittel drei, groß fünf, Max sieben (als Diagramm).
     public var neighborhoodRows: Int {
         switch size {
@@ -414,9 +515,11 @@ public struct HomeModule: Hashable, Sendable, Identifiable {
     var uniquenessKey: String? {
         switch kind {
         case .groups: "groups:\(configuration.groupID?.uuidString ?? "all")"
+        case .groupProgress: "groupProgress:\(configuration.groupID?.uuidString ?? "none")"
+        case .records: "records:\((configuration.record ?? .bestDay).rawValue)"
         case .activity: "activity:\(metric.rawValue)"
         case .regionRanks: "regionRanks:\(regionLevels.map(\.rawValue).joined(separator: ","))"
-        case .stepsToday, .week, .streak, .calendar: kind.rawValue
+        case .stepsToday, .week, .streak, .calendar, .dayComparison, .streakWeek, .activityTimes: kind.rawValue
         case .neighborhood, .friends: nil
         }
     }
