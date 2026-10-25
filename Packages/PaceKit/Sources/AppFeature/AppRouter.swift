@@ -238,6 +238,7 @@ public final class AppRouter {
             )
         )
         profile.openSocial = { [navigation] in navigation.openSocial() }
+        profile.liveStepDiagnostics = home.liveDiagnostics
         // Gruppen aus den Einstellungen: genau „Meine Gruppen“ im Social-Tab (Pfad ersetzt, keine Schleife).
         profile.openSocialGroups = { [navigation, social] in
             social.navigator.show(.groups)

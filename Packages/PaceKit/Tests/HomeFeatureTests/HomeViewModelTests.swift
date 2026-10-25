@@ -276,8 +276,8 @@ struct HomeViewModelTests {
     @Test func liveSensorStepsSpeedUpTheDisplayButSyncStaysOnHealthKit() async throws {
         let service = HealthServiceStub { $0.setSteps(8_432, on: today) }
         let syncing = ActivitySyncingSpy()
-        let live = LiveStepsStub()
         let currentDate = now
+        let live = LiveStepsStub(now: { currentDate })
         let viewModel = HomeViewModel(
             activityData: service, syncing: syncing, liveSteps: live,
             calendar: Fixtures.activityCalendar, now: { currentDate }
@@ -307,15 +307,120 @@ struct HomeViewModelTests {
         #expect(viewModel.liveCompetitionStepsToday == 8_442)
     }
 
+    /// Ursache von „nur +24 in Minuten“: Die Abfrage im Vordergrund (alle 15 s) liest oft denselben HealthKit-Wert.
+    /// Sie darf den Fortschritt des Sensors nicht verschlucken.
+    @Test func foregroundPollsDoNotSwallowLiveSteps() async throws {
+        let service = HealthServiceStub { $0.setSteps(8_000, on: today) }
+        let currentDate = now
+        let live = LiveStepsStub(now: { currentDate })
+        let viewModel = HomeViewModel(activityData: service, liveSteps: live, calendar: Fixtures.activityCalendar, now: { currentDate })
+        await viewModel.loadIfNeeded()
+        let observing = Task { await viewModel.observeLiveSteps() }
+
+        live.send(3_000)
+        for round in 1...8 {
+            // 15 s mit 100 Schritten pro Minute, danach die Abfrage – HealthKit noch beim alten Stand.
+            live.send(3_000 + round * 25)
+            try await waitUntil { viewModel.liveCompetitionStepsToday == 8_000 + round * 25 }
+            await viewModel.refresh(trigger: .healthKitUpdate)
+            #expect(viewModel.liveCompetitionStepsToday == 8_000 + round * 25)
+        }
+        #expect(viewModel.liveCompetitionStepsToday == 8_200)
+        // Rankings, Sync und Serie sehen weiter nur HealthKit.
+        #expect(viewModel.overview?.today.competitionSteps == 8_000)
+
+        live.finish()
+        await observing.value
+    }
+
+    @Test func liveMeasurementStartsAgainAfterMidnight() async throws {
+        let service = HealthServiceStub { $0.setSteps(9_000, on: today) }
+        let clock = MutableClock(now)
+        let live = LiveStepsStub(now: { clock.now })
+        let viewModel = HomeViewModel(activityData: service, liveSteps: live, calendar: Fixtures.activityCalendar, now: { clock.now })
+        await viewModel.loadIfNeeded()
+        let observing = Task { await viewModel.observeLiveSteps() }
+
+        live.send(6_000)
+        live.send(6_100)
+        try await waitUntil { viewModel.liveCompetitionStepsToday == 9_100 }
+
+        // Mitternacht: Der Sensor zählt noch ab gestern – dieser Wert wird verworfen und die Messung beginnt neu.
+        let tomorrow = Fixtures.day(2026, 10, 17)
+        clock.now = Fixtures.date(2026, 10, 17, 0, 5)
+        live.send(6_160)
+        try await waitUntil { live.allStarts.count == 2 }
+        #expect(live.lastStart == Fixtures.activityCalendar.startOfDay(tomorrow))
+
+        service.update { $0.setSteps(30, on: tomorrow) }
+        await viewModel.refresh(trigger: .foreground)
+        live.send(45)
+        try await waitUntil { viewModel.liveCompetitionStepsToday == 45 }
+        #expect(viewModel.overview?.today.date == tomorrow)
+        #expect(viewModel.liveDiagnostics.events.contains { $0.kind == .dayChanged })
+
+        live.finish()
+        await observing.value
+    }
+
     @Test func withoutMotionAccessTheDisplayFollowsHealthKit() async {
         let service = HealthServiceStub { $0.setSteps(2_000, on: today) }
         let currentDate = now
         let viewModel = HomeViewModel(
-            activityData: service, liveSteps: LiveStepsStub(isAvailable: false),
+            activityData: service, liveSteps: LiveStepsStub(status: .denied),
             calendar: Fixtures.activityCalendar, now: { currentDate }
         )
         await viewModel.loadIfNeeded()
         await viewModel.observeLiveSteps()
         #expect(viewModel.liveCompetitionStepsToday == 2_000)
+        #expect(viewModel.liveDiagnostics.status == .denied)
+        #expect(viewModel.liveDiagnostics.events.first?.kind == .unavailable)
+    }
+
+    @Test func withoutSensorTheDisplayFollowsHealthKit() async {
+        let service = HealthServiceStub { $0.setSteps(2_500, on: today) }
+        let currentDate = now
+        let viewModel = HomeViewModel(activityData: service, liveSteps: NoLiveStepCounting(), calendar: Fixtures.activityCalendar, now: { currentDate })
+        await viewModel.loadIfNeeded()
+        await viewModel.observeLiveSteps()
+        #expect(viewModel.liveCompetitionStepsToday == 2_500)
+        #expect(viewModel.liveDiagnostics.status == .unsupported)
+    }
+
+    @Test func diagnosticsRecordSensorAndHealthKitChanges() async throws {
+        let service = HealthServiceStub { $0.setSteps(1_000, on: today) }
+        let currentDate = now
+        let live = LiveStepsStub(now: { currentDate })
+        let viewModel = HomeViewModel(activityData: service, liveSteps: live, calendar: Fixtures.activityCalendar, now: { currentDate })
+        await viewModel.loadIfNeeded()
+        let observing = Task { await viewModel.observeLiveSteps() }
+        live.send(700)
+        live.send(720)
+        try await waitUntil { viewModel.liveDiagnostics.readingCount == 2 }
+        service.update { $0.setSteps(1_010, on: today) }
+        await viewModel.refresh(trigger: .healthKitUpdate)
+        live.finish()
+        await observing.value
+
+        let diagnostics = viewModel.liveDiagnostics
+        #expect(diagnostics.lastReading?.steps == 720)
+        #expect(diagnostics.estimator.confirmedSteps == 1_010)
+        #expect(diagnostics.isMeasuring == false)
+        // Neueste zuerst; ganz unten der erste HealthKit-Stand beim Laden.
+        #expect(diagnostics.events.map(\.kind) == [.stopped, .healthKit, .sensor, .sensor, .started, .healthKit])
+        #expect(diagnostics.events.first?.shown == 1_020)
+    }
+}
+
+/// Uhr, die der Test weiterstellen kann.
+private final class MutableClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var current: Date
+
+    init(_ date: Date) { current = date }
+
+    var now: Date {
+        get { lock.withLock { current } }
+        set { lock.withLock { current = newValue } }
     }
 }

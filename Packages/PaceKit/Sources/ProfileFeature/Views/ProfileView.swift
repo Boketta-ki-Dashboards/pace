@@ -77,6 +77,10 @@ public struct ProfileView: View {
             CalorieEstimationPage(settings: viewModel.bodyMetrics, backTitle: backTitle)
         case .dataHelpLegal:
             DataHelpLegalPage(backTitle: backTitle) { viewModel.open($0) }
+        case .liveStepDiagnostics:
+            if let diagnostics = viewModel.liveStepDiagnostics {
+                LiveStepDiagnosticsPage(diagnostics: diagnostics, backTitle: backTitle)
+            }
         }
     }
 

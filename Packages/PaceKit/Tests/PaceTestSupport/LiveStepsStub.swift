@@ -4,20 +4,30 @@ import PaceCore
 /// Bewegungssensor zum Steuern im Test: `send(_:)` liefert einen neuen Zählerstand, `finish()` beendet die Messung.
 public final class LiveStepsStub: LiveStepCounting, @unchecked Sendable {
     private let lock = NSLock()
-    private var continuation: AsyncStream<Int>.Continuation?
-    private var pending: [Int] = []
-    public let isAvailable: Bool
-    /// Beginn der zuletzt gestarteten Messung.
-    public private(set) var lastStart: Date?
+    private var continuation: AsyncStream<LiveStepReading>.Continuation?
+    private var pending: [LiveStepReading] = []
+    private var starts: [Date] = []
+    private let defaultDate: @Sendable () -> Date
+    public let status: LiveStepSensorStatus
 
-    public init(isAvailable: Bool = true) {
-        self.isAvailable = isAvailable
+    /// Beginn der zuletzt gestarteten Messung.
+    public var lastStart: Date? { lock.withLock { starts.last } }
+    /// Beginn aller gestarteten Messungen.
+    public var allStarts: [Date] { lock.withLock { starts } }
+
+    public init(status: LiveStepSensorStatus = .available, now: @escaping @Sendable () -> Date = { Date() }) {
+        self.status = status
+        defaultDate = now
     }
 
-    public func steps(since start: Date) -> AsyncStream<Int> {
-        let (stream, continuation) = AsyncStream<Int>.makeStream()
+    public convenience init(isAvailable: Bool) {
+        self.init(status: isAvailable ? .available : .denied)
+    }
+
+    public func readings(since start: Date) -> AsyncStream<LiveStepReading> {
+        let (stream, continuation) = AsyncStream<LiveStepReading>.makeStream()
         lock.withLock {
-            lastStart = start
+            starts.append(start)
             self.continuation = continuation
             pending.forEach { continuation.yield($0) }
             pending = []
@@ -25,17 +35,22 @@ public final class LiveStepsStub: LiveStepCounting, @unchecked Sendable {
         return stream
     }
 
-    public func send(_ steps: Int) {
+    /// Neuer Zählerstand (Schritte seit Beginn der Messung), gemessen um `date` (Standard: `now`).
+    public func send(_ steps: Int, at date: Date? = nil) {
+        let reading = LiveStepReading(steps: steps, date: date ?? defaultDate())
         lock.withLock {
             if let continuation {
-                continuation.yield(steps)
+                continuation.yield(reading)
             } else {
-                pending.append(steps)
+                pending.append(reading)
             }
         }
     }
 
     public func finish() {
-        lock.withLock { continuation?.finish() }
+        lock.withLock {
+            continuation?.finish()
+            continuation = nil
+        }
     }
 }

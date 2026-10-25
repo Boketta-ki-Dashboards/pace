@@ -29,6 +29,8 @@ public enum ProfileRoute: Hashable, Sendable {
     case calorieEstimation
     /// Daten, Hilfe & Rechtliches: Datenexport, Konto löschen, Hilfe, Feedback, Rechtliches.
     case dataHelpLegal
+    /// Diagnose des Live-Schrittzählers (nur Entwicklungs-Builds).
+    case liveStepDiagnostics
 
     /// Titel der Seite (auch Zurück-Ziel der folgenden Seite).
     public var title: String {
@@ -49,6 +51,7 @@ public enum ProfileRoute: Hashable, Sendable {
         case .activityHealth: PaceLocalization.text(de: "Aktivität & Gesundheit", en: "Activity & health", ru: "Активность и здоровье")
         case .calorieEstimation: PaceLocalization.text(de: "Kalorienschätzung", en: "Calorie estimate", ru: "Оценка калорий")
         case .dataHelpLegal: PaceLocalization.text(de: "Daten, Hilfe & Rechtliches", en: "Data, help & legal", ru: "Данные, помощь и правовая информация")
+        case .liveStepDiagnostics: PaceLocalization.text(de: "Live-Schritte · Diagnose", en: "Live steps · diagnostics", ru: "Шаги в реальном времени · диагностика")
         }
     }
 }

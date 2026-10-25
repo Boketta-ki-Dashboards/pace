@@ -69,6 +69,17 @@ struct ActivityHealthPageContent: View {
                     ProfileNoteRow(systemImage: "bolt.heart", text: ActivityHealthTexts.liveSteps)
                 }
             }
+
+            #if DEBUG
+            // Nur Entwicklungs-Builds: Diagnose des Live-Schrittzählers (nie im Home-Design).
+            if viewModel.liveStepDiagnostics != nil {
+                ProfileSettingsRow(
+                    systemImage: "stethoscope",
+                    title: ProfileRoute.liveStepDiagnostics.title,
+                    subtitle: PaceLocalization.text(de: "Nur in Entwicklungs-Builds", en: "Development builds only", ru: "Только в сборках для разработки")
+                ) { onOpen(.liveStepDiagnostics) }
+            }
+            #endif
         }
     }
 

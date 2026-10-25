@@ -54,6 +54,9 @@ public final class HomeViewModel {
     /// Abgleich der HealthKit-Werte mit den schnelleren Sensorwerten (nur für die Anzeige).
     private var liveEstimator = LiveStepEstimator()
 
+    /// Protokoll des Live-Abgleichs – nur für die Diagnose in Entwicklungs-Builds (begrenzt, nie hochgeladen).
+    public let liveDiagnostics = LiveStepDiagnostics()
+
     /// Wettbewerbsschritte von heute für die Anzeige – mit Live-Sensorwerten, solange Pace im Vordergrund ist.
     /// Rankings, Sync, Serie und Mitteilungen verwenden weiter nur die HealthKit-Werte aus ``overview``.
     public var liveCompetitionStepsToday: Int? {
@@ -150,13 +153,39 @@ public final class HomeViewModel {
 
     /// Live-Schritte vom Bewegungssensor, solange der aufrufende Task läuft (Pace im Vordergrund). Ohne Zugriff
     /// oder Sensor endet die Methode sofort; die Anzeige folgt dann nur HealthKit.
+    ///
+    /// Gemessen wird ab Tagesbeginn. Nach Mitternacht beginnt die Messung mit dem ersten Wert des neuen Tages neu
+    /// (Werte, die noch ab dem Vortag zählen, werden verworfen).
     public func observeLiveSteps() async {
-        guard liveSteps.isAvailable else { return }
-        let start = calendar.startOfDay(calendar.day(containing: now()))
-        for await steps in liveSteps.steps(since: start) {
-            liveEstimator.sensor(steps, on: calendar.day(containing: now()))
+        let status = liveSteps.status
+        guard status.canCount else {
+            liveDiagnostics.record(.unavailable, at: now(), status: status, estimator: liveEstimator)
+            return
         }
-        liveEstimator.sensorStopped()
+        while !Task.isCancelled {
+            let day = calendar.day(containing: now())
+            let start = calendar.startOfDay(day)
+            liveDiagnostics.record(.started, at: now(), status: status, estimator: liveEstimator, start: start)
+            var reachedNextDay = false
+            for await reading in liveSteps.readings(since: start) {
+                let readingDay = calendar.day(containing: reading.date)
+                if readingDay > day {
+                    reachedNextDay = true
+                    break
+                }
+                guard readingDay == day else { continue }
+                let previous = liveEstimator.latestSensor
+                liveEstimator.sensor(reading.steps, on: day)
+                if let previous, reading.steps < previous {
+                    liveDiagnostics.record(.sensorRestarted, value: reading.steps, at: reading.date, status: status, estimator: liveEstimator)
+                }
+                liveDiagnostics.record(.sensor, value: reading.steps, at: reading.date, status: status, estimator: liveEstimator)
+            }
+            liveEstimator.sensorStopped()
+            guard reachedNextDay, !Task.isCancelled else { break }
+            liveDiagnostics.record(.dayChanged, at: now(), status: status, estimator: liveEstimator)
+        }
+        liveDiagnostics.record(.stopped, at: now(), status: liveSteps.status, estimator: liveEstimator)
     }
 
     /// Lädt neu, sobald HealthKit neue Bewegungsdaten meldet. Läuft, bis der aufrufende Task beendet wird.
@@ -172,7 +201,12 @@ public final class HomeViewModel {
             case .available(let overview):
                 var estimator = liveEstimator
                 estimator.healthKit(overview.today.competitionSteps, on: overview.today.date)
-                if estimator != liveEstimator { liveEstimator = estimator }
+                if estimator != liveEstimator {
+                    liveEstimator = estimator
+                    liveDiagnostics.record(
+                        .healthKit, value: overview.today.competitionSteps, at: now(), status: liveSteps.status, estimator: estimator
+                    )
+                }
                 // Unveränderte Werte (häufig bei der Abfrage im Vordergrund) lösen kein Neuzeichnen aus.
                 if case .loaded(let current) = state, Self.hasSameValues(current, overview) {
                     submitForSync(current, trigger: trigger)

@@ -55,6 +55,35 @@ struct LayoutSnapshotTests {
         try await Snapshot.renderInWindow(screen, name: "layout-home-end", prepare: Snapshot.scrollToBottom(in:))
     }
 
+    /// Home leicht gescrollt: Unter Uhrzeit und Symbolen der Statusleiste liegt der Seitenhintergrund, kein Inhalt
+    /// (Auftrag 5, A1). „before“ zeigt den früheren Zustand ohne Statusleisten-Hintergrund.
+    @Test func homeScrolledUnderTheStatusBar() async throws {
+        let (dashboard, _) = try await SnapshotFixtures.makeDashboard()
+        await dashboard.loadStreakIfNeeded()
+        for (enabled, name) in [(true, "status-bar-home-after"), (false, "status-bar-home-before")] {
+            let screen = mainScreen(selected: 0) {
+                HomeView(viewModel: dashboard)
+            }
+            .environment(\.paceStatusBarBackdropEnabled, enabled)
+            try await Snapshot.renderInWindow(screen, name: name) { view in
+                Snapshot.scroll(in: view, by: 64)
+            }
+        }
+    }
+
+    /// Anpassen-Modus gescrollt: Griffe und „Größe auswählen“ laufen ebenfalls unter dem Statusleisten-Hintergrund.
+    @Test func homeEditModeScrolledUnderTheStatusBar() async throws {
+        let (dashboard, _) = try await SnapshotFixtures.makeDashboard()
+        await dashboard.loadStreakIfNeeded()
+        dashboard.beginEditing()
+        let screen = mainScreen(selected: 0) {
+            HomeView(viewModel: dashboard)
+        }
+        try await Snapshot.renderInWindow(screen, name: "status-bar-home-edit") { view in
+            Snapshot.scroll(in: view, by: 180)
+        }
+    }
+
     /// Anpassen-Modus im echten Layout: Griffe, X, „Größe auswählen“.
     @Test func homeEditMode() async throws {
         let (dashboard, _) = try await SnapshotFixtures.makeDashboard()
@@ -77,7 +106,7 @@ struct LayoutSnapshotTests {
 }
 
 /// Nachbau von `MainTabView` für Fenster-Snapshots.
-private struct MainScreenHarness: View {
+struct MainScreenHarness: View {
     let selected: Int
     let content: AnyView
     var labelsPages = false

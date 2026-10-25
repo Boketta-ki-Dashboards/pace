@@ -110,12 +110,45 @@ public extension View {
     /// linken Rand zum Zurückgehen.
     func paceSubpage() -> some View {
         toolbar(.hidden, for: .navigationBar)
+            .paceStatusBarBackdrop()
             .background(SwipeBackEnabler().frame(width: 0, height: 0).accessibilityHidden(true))
     }
 
     /// Für die Startseite eines Tabs: ohne Navigationsleiste (die Seite zeigt ihren eigenen Kopf).
     func paceRootPage() -> some View {
         toolbar(.hidden, for: .navigationBar)
+            .paceStatusBarBackdrop()
+    }
+
+    /// Hintergrund hinter der Statusleiste für Seiten ohne Navigationsleiste.
+    ///
+    /// Ohne Systemleiste läuft scrollender Inhalt sonst bis unter Uhrzeit und Symbole der Statusleiste und überlagert
+    /// sich mit ihnen. Der Streifen hat genau die Höhe der oberen Safe Area (Dynamic Island, Notch, ohne feste Werte),
+    /// die Farbe des Seitenhintergrunds und belegt selbst keinen Platz: Am oberen Ende ist er unsichtbar, nichts
+    /// verschiebt sich, und der Inhalt bleibt bis zum Ende scrollbar.
+    func paceStatusBarBackdrop() -> some View {
+        modifier(PaceStatusBarBackdrop())
+    }
+}
+
+public extension EnvironmentValues {
+    /// Nur für Vorher-Nachher-Bilder in Snapshot-Tests: schaltet den Statusleisten-Hintergrund ab.
+    @Entry var paceStatusBarBackdropEnabled = true
+}
+
+private struct PaceStatusBarBackdrop: ViewModifier {
+    @Environment(\.paceStatusBarBackdropEnabled) private var isEnabled
+
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .top, spacing: 0) {
+            if isEnabled {
+                Color.clear
+                    .frame(height: 0)
+                    .background(PaceColor.background, ignoresSafeAreaEdges: .top)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
     }
 }
 
