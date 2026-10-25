@@ -201,7 +201,40 @@ enum ChatUIText {
 
     static var placeholder: String { t("Nachricht schreiben", "Write a message", "Напиши сообщение") }
     static var send: String { t("Senden", "Send", "Отправить") }
-    static var attach: String { t("Foto oder GIF senden", "Send a photo or GIF", "Отправить фото или GIF") }
+    static var attach: String { t("Anhang senden", "Send an attachment", "Отправить вложение") }
+    static var attachPhoto: String { t("Foto aus Mediathek", "Photo from library", "Фото из медиатеки") }
+    static var attachGIF: String { t("GIF suchen", "Search GIFs", "Найти GIF") }
+    static var attachProfile: String { t("Profil teilen", "Share profile", "Поделиться профилем") }
+
+    // MARK: GIF-Suche und Profil teilen
+
+    static var gifSearchPlaceholder: String { t("GIFs suchen", "Search GIFs", "Искать GIF") }
+    static var gifLoading: String { t("GIFs werden geladen …", "Loading GIFs …", "Загружаем GIF …") }
+    static var gifNoResultsTitle: String { t("Keine GIFs gefunden", "No GIFs found", "GIF не найдены") }
+    static var gifNoResultsMessage: String {
+        t("Versuche einen anderen Suchbegriff.", "Try a different search term.", "Попробуй другой запрос.")
+    }
+    static var gifUnavailableTitle: String { t("GIF-Suche nicht verfügbar", "GIF search unavailable", "Поиск GIF недоступен") }
+    static var gifOfflineTitle: String { t("Keine Verbindung", "No connection", "Нет подключения") }
+    static var gifFailedTitle: String { t("GIFs nicht geladen", "GIFs not loaded", "GIF не загружены") }
+    static var gifChooseAnother: String { t("Anderes wählen", "Choose another", "Выбрать другой") }
+    static var gifPreview: String { t("Vorschau des GIFs", "GIF preview", "Предпросмотр GIF") }
+    static func gifCell(_ title: String) -> String {
+        title.isEmpty ? t("GIF auswählen", "Choose GIF", "Выбрать GIF") : title
+    }
+    static var shareProfileTitle: String { t("Profil teilen", "Share profile", "Поделиться профилем") }
+    static var shareProfileSearch: String { t("Freunde suchen", "Search friends", "Искать друзей") }
+    static var shareProfileHint: String {
+        t(
+            "Das Profil erscheint als antippbare Karte im Chat.",
+            "The profile appears as a tappable card in the chat.",
+            "Профиль появится в чате карточкой, которую можно открыть."
+        )
+    }
+    static var shareProfileEmpty: String {
+        t("Niemand gefunden.", "Nobody found.", "Никого не найдено.")
+    }
+    static var myProfile: String { t("Mein Profil", "My profile", "Мой профиль") }
     static var close: String { t("Schließen", "Close", "Закрыть") }
 
     /// Restzeichen unter dem Eingabefeld („Noch 120 Zeichen“ bzw. „5 Zeichen zu viel“).

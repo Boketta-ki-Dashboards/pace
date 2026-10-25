@@ -169,10 +169,19 @@ public final class AppRouter {
                 repository: services.chat,
                 media: services.media,
                 social: services.social,
-                ownPublicID: { [store] in store.profile.publicID }
+                ownPublicID: { [store] in store.profile.publicID },
+                gifSearch: dependencies.gifSearch
             ),
             media: services.media,
-            ownUsername: { [store] in store.profile.username }
+            ownUsername: { [store] in store.profile.username },
+            ownProfile: { [store] in
+                SocialProfile(
+                    publicID: store.profile.publicID,
+                    username: store.profile.username,
+                    displayName: store.profile.displayName,
+                    avatarPath: store.profile.avatarPath
+                )
+            }
         )
         // Das Tagesziel älterer Versionen wird einmalig in den Zielverlauf übernommen.
         let goals = StepGoalSettings(

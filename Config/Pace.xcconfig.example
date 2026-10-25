@@ -13,3 +13,7 @@
 
 SUPABASE_URL = example.supabase.co
 SUPABASE_PUBLISHABLE_KEY = sb_publishable_example
+
+// Optional: GIF-Suche im Chat (GIPHY). Auf developers.giphy.com eine App vom Typ „API“ anlegen und den API-Key
+// hier eintragen. Leer lassen = GIF-Suche zeigt „nicht eingerichtet“ (Fotos und GIFs aus der Mediathek gehen weiter).
+GIPHY_API_KEY =

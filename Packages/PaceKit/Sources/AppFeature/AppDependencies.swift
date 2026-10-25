@@ -34,6 +34,8 @@ public struct AppDependencies: Sendable {
     public let appVersion: String
     /// Alle nur auf dem Gerät gespeicherten Pace-Daten (Datenexport, Löschen nach dem Löschen des Kontos).
     public let localData: any LocalAccountDataStoring
+    /// GIF-Suche im Chat (z. B. GIPHY); `nil` ohne eingerichteten Schlüssel – die Auswahl sagt das dann.
+    public let gifSearch: (any GIFSearching)?
 
     public init(
         healthAuthorization: any HealthAuthorizationProviding,
@@ -48,7 +50,8 @@ public struct AppDependencies: Sendable {
         preferences: any AppPreferencesStoring = UserDefaultsAppPreferencesStore(),
         notifications: any LocalNotificationScheduling = NoLocalNotifications(),
         appVersion: String = "",
-        localData: any LocalAccountDataStoring = UserDefaultsLocalAccountData()
+        localData: any LocalAccountDataStoring = UserDefaultsLocalAccountData(),
+        gifSearch: (any GIFSearching)? = nil
     ) {
         self.healthAuthorization = healthAuthorization
         self.activityData = activityData
@@ -63,6 +66,7 @@ public struct AppDependencies: Sendable {
         self.notifications = notifications
         self.appVersion = appVersion
         self.localData = localData
+        self.gifSearch = gifSearch
     }
 }
 

@@ -9,6 +9,10 @@
 SUPABASE_URL =
 SUPABASE_PUBLISHABLE_KEY =
 
+// Optional: GIF-Suche im Chat über GIPHY (developers.giphy.com). Leer = keine GIF-Suche; die App sagt das ehrlich.
+// Der Schlüssel gehört wie die Supabase-Werte nur in Config/Pace.xcconfig.
+GIPHY_API_KEY =
+
 // Alternative App-Icons für Profil → Darstellung → App-Icon („Hell“ und „Dunkel“). Das primäre Icon „AppIcon“
 // (Einstellung „Automatisch“) steht in den Target-Einstellungen. Bewusst hier und nicht in project.pbxproj, damit
 // lokale Signing-Einstellungen im Projekt beim Aktualisieren nicht kollidieren.

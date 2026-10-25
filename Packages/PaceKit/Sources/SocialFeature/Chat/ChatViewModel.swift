@@ -676,6 +676,38 @@ public final class ChatViewModel {
         await deliver(message.clientID)
     }
 
+    /// Teilt ein Profil (eigenes oder das eines Freundes) als Profilnachricht in diesen Chat – über denselben Weg wie
+    /// „Profil teilen“ auf einer Profilseite (Server prüft Sichtbarkeit und Blockierungen).
+    public func shareProfile(_ profile: SocialProfile) async {
+        guard canSend, let list else {
+            notice = ChatNotice(text: ChatTexts.unavailable, isError: true)
+            return
+        }
+        do {
+            try await list.shareProfile(profile, with: [target])
+            await refresh()
+        } catch let error as ProfileShareError {
+            notice = ChatNotice(text: error.failures.first?.message ?? ChatTexts.unavailable, isError: true)
+        } catch {
+            notice = ChatNotice(text: ChatTexts.message(for: error), isError: true)
+        }
+    }
+
+    /// GIF-Suche der Anhangsauswahl (falls eingerichtet).
+    public var gifSearch: (any GIFSearching)? {
+        list?.gifSearch
+    }
+
+    /// Eigene öffentliche ID (für „Mein Profil“ in der Anhangsauswahl).
+    var ownPublicID: UUID? {
+        list?.ownPublicID()
+    }
+
+    /// Profile für „Profil teilen“ in der Anhangsauswahl.
+    public var shareableProfiles: [SocialProfile] {
+        list?.shareableProfiles() ?? []
+    }
+
     /// Meldet, dass ein ausgewähltes Bild nicht gelesen werden konnte.
     public func reportMediaSelectionFailed() {
         notice = ChatNotice(text: ChatTexts.mediaSelectionFailed, isError: true)

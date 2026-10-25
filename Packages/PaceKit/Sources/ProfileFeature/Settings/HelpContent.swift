@@ -165,9 +165,9 @@ public enum PrivacyContent {
                 systemImage: "bubble.left.and.bubble.right",
                 title: PaceLocalization.text(de: "Chats und Bilder", en: "Chats and images", ru: "Чаты и изображения"),
                 body: PaceLocalization.text(
-                    de: "Nachrichten und geteilte Bilder sind nur für die Mitglieder der jeweiligen Unterhaltung lesbar. Gemeldete Inhalte werden zur Prüfung gespeichert.",
-                    en: "Messages and shared images can only be read by the members of the conversation. Reported content is stored for review.",
-                    ru: "Сообщения и изображения доступны только участникам переписки. Жалобы на контент сохраняются для проверки."
+                    de: "Nachrichten und geteilte Bilder sind nur für die Mitglieder der jeweiligen Unterhaltung lesbar. Gemeldete Inhalte werden zur Prüfung gespeichert. Bei der GIF-Suche gehen deine Suchbegriffe an GIPHY; ein gewähltes GIF wird als Kopie im Chat gespeichert, nicht als Link.",
+                    en: "Messages and shared images can only be read by the members of the conversation. Reported content is stored for review. When you search for GIFs, your search terms are sent to GIPHY; a chosen GIF is stored in the chat as a copy, not as a link.",
+                    ru: "Сообщения и изображения доступны только участникам переписки. Жалобы на контент сохраняются для проверки. При поиске GIF запросы передаются GIPHY; выбранный GIF сохраняется в чате как копия, а не как ссылка."
                 )
             ),
             InfoSection(

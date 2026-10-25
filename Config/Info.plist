@@ -6,6 +6,8 @@
 	<string>$(SUPABASE_URL)</string>
 	<key>PaceSupabasePublishableKey</key>
 	<string>$(SUPABASE_PUBLISHABLE_KEY)</string>
+	<key>PaceGIPHYAPIKey</key>
+	<string>$(GIPHY_API_KEY)</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>de</string>

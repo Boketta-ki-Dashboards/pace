@@ -42,6 +42,8 @@ public struct ChatView: View {
     @Environment(\.paceTabIsActive) private var isTabActive
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsPhotoPicker = false
+    @State private var showsGIFPicker = false
+    @State private var showsProfileShare = false
     @State private var pickerItem: PhotosPickerItem?
     @State private var viewerItem: ChatViewerItem?
     @State private var dialog: ChatDialog?
@@ -96,7 +98,11 @@ public struct ChatView: View {
                 viewModel: viewModel,
                 recorder: recorder,
                 player: voicePlayer,
-                onPickMedia: { showsPhotoPicker = true },
+                attachments: ChatAttachmentActions(
+                    onPhoto: { showsPhotoPicker = true },
+                    onGIF: { showsGIFPicker = true },
+                    onProfile: { showsProfileShare = true }
+                ),
                 onSend: { [viewModel] in
                     Task { await viewModel.sendText() }
                 },
@@ -156,6 +162,17 @@ public struct ChatView: View {
             }
         }
         .photosPicker(isPresented: $showsPhotoPicker, selection: $pickerItem, matching: .images, preferredItemEncoding: .current)
+        // GIF suchen: Die Datei wird wie ein GIF aus der Mediathek in den geschützten Chat-Speicher hochgeladen.
+        .sheet(isPresented: $showsGIFPicker) {
+            GIFPickerSheet(search: viewModel.gifSearch) { [viewModel] data in
+                Task { await viewModel.sendMedia(data, contentType: ChatMediaSupport.gifContentType) }
+            }
+        }
+        .sheet(isPresented: $showsProfileShare) {
+            ChatProfileShareSheet(profiles: viewModel.shareableProfiles, ownPublicID: viewModel.ownPublicID) { [viewModel] profile in
+                Task { await viewModel.shareProfile(profile) }
+            }
+        }
         .onChange(of: pickerItem) { _, item in
             guard let item else { return }
             send(item)

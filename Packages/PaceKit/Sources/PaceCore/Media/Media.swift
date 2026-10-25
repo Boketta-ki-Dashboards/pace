@@ -66,10 +66,13 @@ public enum MediaRules {
     /// Gruppenbilder.
     public static func maximumBytes(for target: MediaUploadTarget) -> Int {
         switch target {
-        case .chat: 10 * 1024 * 1024
+        case .chat: maximumChatBytes
         case .avatar, .groupImage: 5 * 1024 * 1024
         }
     }
+
+    /// Größengrenze für Chat-Anhänge (wie im Bucket `chat-media`).
+    public static let maximumChatBytes = 10 * 1024 * 1024
 }
 
 public enum MediaError: Error, Equatable, Sendable {

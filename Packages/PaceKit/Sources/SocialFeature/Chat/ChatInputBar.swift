@@ -2,7 +2,8 @@ import DesignSystem
 import PaceCore
 import SwiftUI
 
-/// Eingabeleiste (Referenzbild 5): „+“ für Foto oder GIF, mehrzeiliges Textfeld „Nachricht schreiben“ und runder
+/// Eingabeleiste (Referenzbild 5): „+“ öffnet die Anhangsauswahl (Foto aus der Mediathek, GIF suchen, Profil teilen),
+/// mehrzeiliges Textfeld „Nachricht schreiben“ und runder
 /// Knopf rechts – Mikrofon bei leerem Feld, sonst Senden. Darüber bei Bedarf die Vorschau der beantworteten bzw. zu
 /// bearbeitenden Nachricht. Kann nicht (mehr) geschrieben werden, steht hier stattdessen die Erklärung.
 ///
@@ -12,7 +13,7 @@ struct ChatInputBar: View {
     @Bindable var viewModel: ChatViewModel
     let recorder: ChatVoiceRecorder
     let player: ChatVoicePlayer
-    let onPickMedia: () -> Void
+    let attachments: ChatAttachmentActions
     let onSend: () -> Void
     let onSendVoice: () -> Void
     let onDiscardVoice: () -> Void
@@ -104,8 +105,19 @@ struct ChatInputBar: View {
         .padding(.vertical, PaceSpacing.xs)
     }
 
+    /// Kompaktes Menü direkt am „+“ (natives Kontextmenü, schließt sich nach der Wahl selbst).
     private var attachButton: some View {
-        Button(action: onPickMedia) {
+        Menu {
+            Button(action: attachments.onPhoto) {
+                Label(ChatUIText.attachPhoto, systemImage: "photo.on.rectangle")
+            }
+            Button(action: attachments.onGIF) {
+                Label(ChatUIText.attachGIF, systemImage: "magnifyingglass")
+            }
+            Button(action: attachments.onProfile) {
+                Label(ChatUIText.attachProfile, systemImage: "person.crop.circle")
+            }
+        } label: {
             Image(systemName: "plus")
                 .font(.system(size: 20, weight: .regular))
                 .foregroundStyle(PaceColor.textPrimary)
@@ -114,7 +126,7 @@ struct ChatInputBar: View {
                 .overlay(Circle().strokeBorder(PaceColor.border, lineWidth: 1))
                 .contentShape(Circle())
         }
-        .buttonStyle(.pacePressable)
+        .menuOrder(.fixed)
         .disabled(!viewModel.canSend || viewModel.editingMessage != nil)
         .accessibilityLabel(ChatUIText.attach)
     }
@@ -338,4 +350,14 @@ struct ChatInputBar: View {
         .padding(.vertical, PaceSpacing.s)
         .accessibilityElement(children: .combine)
     }
+}
+
+/// Aktionen der Anhangsauswahl am „+“.
+struct ChatAttachmentActions {
+    /// Foto oder GIF aus der Mediathek.
+    let onPhoto: () -> Void
+    /// GIF-Suche (z. B. GIPHY).
+    let onGIF: () -> Void
+    /// Eigenes Profil oder das eines Freundes in den Chat teilen.
+    let onProfile: () -> Void
 }

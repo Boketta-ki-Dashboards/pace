@@ -14,7 +14,8 @@ extension AppDependencies {
             backend: makeBackend(),
             appIcons: SystemAppIconSetting(),
             notifications: UserNotificationScheduler(),
-            appVersion: appVersion
+            appVersion: appVersion,
+            gifSearch: GIPHYSearchService.fromInfoDictionary(Bundle.main.infoDictionary ?? [:])
         )
     }
 

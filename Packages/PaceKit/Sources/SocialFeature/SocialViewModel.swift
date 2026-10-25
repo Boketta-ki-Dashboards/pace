@@ -93,6 +93,7 @@ public final class SocialViewModel {
     /// - Parameters:
     ///   - repository: `nil`, wenn kein Backend konfiguriert ist.
     ///   - ownUsername: Eigener Benutzername zum Teilen.
+    ///   - ownProfile: Eigenes Profil für „Profil teilen“ in einem Chat.
     ///   - chats: Chatliste; ohne Angabe ohne Chats.
     ///   - media: Profil- und Gruppenbilder.
     public init(
@@ -100,6 +101,7 @@ public final class SocialViewModel {
         chats: ChatListViewModel? = nil,
         media: (any MediaRepository)? = nil,
         ownUsername: @escaping @MainActor () -> String? = { nil },
+        ownProfile: @escaping @MainActor () -> SocialProfile? = { nil },
         calendar: ActivityCalendar = ActivityCalendar(),
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -121,6 +123,13 @@ public final class SocialViewModel {
         self.now = now
         if repository == nil {
             state = .unavailable(SocialError.unavailable.message)
+        }
+        // „Profil teilen“ im Chat: das eigene Profil, danach die Freunde alphabetisch.
+        chats.shareableProfiles = { [weak self] in
+            guard let self else { return [] }
+            let friends = self.friends.map(\.profile)
+                .sorted { $0.shownName.localizedCaseInsensitiveCompare($1.shownName) == .orderedAscending }
+            return (ownProfile().map { [$0] } ?? []) + friends
         }
     }
 

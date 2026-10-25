@@ -97,6 +97,10 @@ public final class ChatListViewModel {
     @ObservationIgnored private var chats: [ChatViewModel] = []
     /// Eigene öffentliche ID (z. B. für „Du“ im Verweis auf eine eigene, nicht geladene Nachricht).
     @ObservationIgnored let ownPublicID: @MainActor () -> UUID?
+    /// GIF-Suche für die Anhangsauswahl; `nil`, wenn keine eingerichtet ist (dann erklärt die Auswahl das).
+    @ObservationIgnored public let gifSearch: (any GIFSearching)?
+    /// Profile, die sich aus einem Chat heraus teilen lassen (eigenes Profil und Freunde).
+    @ObservationIgnored public var shareableProfiles: @MainActor () -> [SocialProfile] = { [] }
 
     /// - Parameters:
     ///   - repository: `nil`, wenn kein Backend konfiguriert ist.
@@ -104,6 +108,7 @@ public final class ChatListViewModel {
     ///   - social: Gruppen (Kopf des Gruppenchats), blockierte Personen, Blockieren und Melden.
     ///   - pollInterval: Abstand der regelmäßigen Aktualisierung, solange Liste bzw. Chat sichtbar sind.
     ///   - sleep: Wartet zwischen zwei Aktualisierungen (in Tests steuerbar).
+    ///   - gifSearch: GIF-Suche (z. B. GIPHY) für die Anhangsauswahl.
     public init(
         repository: (any ChatRepository)?,
         media: (any MediaRepository)?,
@@ -112,9 +117,11 @@ public final class ChatListViewModel {
         now: @escaping @Sendable () -> Date = { Date() },
         pollInterval: Duration = .seconds(25),
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
-        ownPublicID: @escaping @MainActor () -> UUID? = { nil }
+        ownPublicID: @escaping @MainActor () -> UUID? = { nil },
+        gifSearch: (any GIFSearching)? = nil
     ) {
         self.ownPublicID = ownPublicID
+        self.gifSearch = gifSearch
         self.repository = repository
         self.media = media
         self.social = social

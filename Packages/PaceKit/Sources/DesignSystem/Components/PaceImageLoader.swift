@@ -129,6 +129,12 @@ public final class PaceImageLoader: @unchecked Sendable {
     }
 
     /// Dekodiert Fotos und – bei mehreren Bildern – animierte GIFs, jeweils verkleinert.
+    /// Dekodiert Bild- oder GIF-Daten, die (noch) nicht im Speicher liegen – z. B. die Vorschau eines gewählten GIFs –,
+    /// in der gewünschten Größe und mit demselben Byte-Budget, nie auf dem Main Thread.
+    public static func decoded(_ data: Data, size: Size = .bubble) async -> UIImage? {
+        decode(data, size: size)
+    }
+
     static func decode(_ data: Data, size: Size = .bubble) -> UIImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let count = CGImageSourceGetCount(source)
