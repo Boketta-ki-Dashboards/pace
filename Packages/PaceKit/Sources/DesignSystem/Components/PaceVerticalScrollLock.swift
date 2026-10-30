@@ -139,8 +139,7 @@ private struct PaceVerticalScrollLockView: UIViewRepresentable {
 
         /// KVO meldet Änderungen von UIKit auf dem Hauptthread (die Scrollansicht wird nur dort verändert).
         nonisolated private static func pinOnMainThread(_ scrollView: UIScrollView) {
-            nonisolated(unsafe) let target = scrollView
-            MainActor.assumeIsolated { PaceVerticalScrollLockRules.pin(target) }
+            MainActor.assumeIsolated { PaceVerticalScrollLockRules.pin(scrollView) }
         }
 
         private func detach() {
