@@ -46,7 +46,7 @@ struct HorizontalDriftTests {
         try await screen.settle()
 
         // 1. Home normal.
-        let normal = screen.measure()
+        let normal = try await screen.stableMeasurement()
         #expect(normal.header != nil && normal.title != nil && normal.content != nil, "Messung ohne Inhalt: \(normal)")
 
         // 2. Anpassen: Wischen zwischen den Tabs ist gesperrt.
@@ -55,7 +55,7 @@ struct HorizontalDriftTests {
         let pager = try #require(screen.pager)
         #expect(!pager.isScrollEnabled)
         let pagerOffset = pager.contentOffset.x
-        let editing = screen.measure()
+        let editing = try await screen.stableMeasurement()
         #expect(editing.header != nil && editing.title != nil && editing.content != nil, "Messung ohne Inhalt: \(editing)")
         screen.logScrollViews("Anpassen")
 
@@ -139,7 +139,7 @@ struct HorizontalDriftTests {
         for (name, page) in pages {
             let screen = DriftScreen(MainScreenHarness(selected: 0, content: page), device: .large)
             try await screen.settle(900)
-            let before = screen.measure()
+            let before = try await screen.stableMeasurement()
             for (dx, dy) in [(-120, 0), (120, 0), (70, -150), (-70, 150)] as [(CGFloat, CGFloat)] {
                 try await screen.drag(dx: dx, dy: dy, lockPager: true)
                 screen.expectNoHorizontalOffset("\(name) \(Int(dx))/\(Int(dy))")
@@ -191,6 +191,7 @@ private final class DriftScreen {
         var title: Extent?
         /// Linker und rechter Rand aller Inhalte unterhalb des Kopfes (Widget-Ränder).
         var content: Extent?
+        var titleHeight = 0
         var description: String { "Kopf \(header?.description ?? "–"), Titel \(title?.description ?? "–"), Inhalt \(content?.description ?? "–")" }
     }
 
@@ -247,7 +248,8 @@ private final class DriftScreen {
             let frame = scrollView.convert(scrollView.bounds, to: window)
             return frame.width >= device.size.width * 0.9 && frame.height >= device.size.height * 0.4
                 && window.bounds.intersects(frame)
-                && frame.minX > -1 && frame.maxX < device.size.width + 1
+                // Auf dem iPhone SE ist die Scrollansicht von Home 1 pt breiter als der Bildschirm (Rundung im Pager).
+                && frame.minX > -2 && frame.maxX < device.size.width + 2
         }
     }
 
@@ -354,7 +356,11 @@ private final class DriftScreen {
         }
         if compareRows {
             check(reference.header, now.header, "Kopfzeile (Wortmarke, Button)")
-            check(reference.title, now.title, "Überschrift")
+            // Die Überschrift nur bei gleichem Aufbau vergleichen: Auf schmalen Geräten bricht „+ Widget hinzufügen“
+            // je nach Platz in eine eigene Zeile um (ViewThatFits) – das ist keine waagerechte Verschiebung.
+            if reference.titleHeight == now.titleHeight {
+                check(reference.title, now.title, "Überschrift")
+            }
         }
         if compareContent {
             check(reference.content, now.content, "Widget-Ränder")
@@ -408,15 +414,19 @@ private final class DriftScreen {
             let index = (y * width + x) * 4
             return abs(Int(data[index]) - red) > 10 || abs(Int(data[index + 1]) - green) > 10 || abs(Int(data[index + 2]) - blue) > 10
         }
+        // Median der Zeilenränder statt Extremwert: Einzelne Elemente am Rand (z. B. das X zum Entfernen eines Widgets)
+        // verfälschen die Messung nicht; eine echte Verschiebung bewegt alle Zeilen.
         func extent(rows: Range<Int>) -> Extent? {
-            var minX = Int.max, maxX = Int.min
+            var minima: [Int] = []
+            var maxima: [Int] = []
             for y in rows where y >= 0 && y < height {
-                for x in 0..<width where isContent(x, y) {
-                    minX = min(minX, x)
-                    maxX = max(maxX, x)
-                }
+                guard let first = (0..<width).first(where: { isContent($0, y) }),
+                      let last = (0..<width).last(where: { isContent($0, y) }) else { continue }
+                minima.append(first)
+                maxima.append(last)
             }
-            return minX <= maxX ? Extent(minX: minX, maxX: maxX) : nil
+            guard !minima.isEmpty else { return nil }
+            return Extent(minX: minima.sorted()[minima.count / 2], maxX: maxima.sorted()[maxima.count / 2])
         }
         // Zusammenhängende Inhaltszeilen unterhalb der Statusleiste.
         let top = Int(device.safeArea.top)
@@ -436,7 +446,20 @@ private final class DriftScreen {
         return Measurement(
             header: runs.first.flatMap { extent(rows: $0) },
             title: runs.count > 1 ? extent(rows: runs[1]) : nil,
-            content: contentTop < contentBottom ? extent(rows: contentTop..<contentBottom) : nil
+            content: contentTop < contentBottom ? extent(rows: contentTop..<contentBottom) : nil,
+            titleHeight: runs.count > 1 ? runs[1].count : 0
         )
+    }
+
+    /// Wartet, bis das Layout ruht (zwei gleiche Messungen hintereinander), und liefert diese Messung.
+    func stableMeasurement() async throws -> Measurement {
+        var previous = measure()
+        for _ in 0..<8 {
+            try await settle(250)
+            let current = measure()
+            if current.description == previous.description { return current }
+            previous = current
+        }
+        return previous
     }
 }

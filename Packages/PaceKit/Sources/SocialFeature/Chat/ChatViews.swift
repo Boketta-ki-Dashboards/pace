@@ -13,14 +13,17 @@ import UIKit
 public struct ChatListSection: View {
     private let viewModel: ChatListViewModel
     private let onOpen: (ChatTarget) -> Void
+    private let onOpenHelpBot: (() -> Void)?
 
-    public init(viewModel: ChatListViewModel, onOpen: @escaping (ChatTarget) -> Void) {
+    /// - Parameter onOpenHelpBot: Fester Eintrag „Pace-Bot“ oben in der Liste (ohne Angabe nicht gezeigt).
+    public init(viewModel: ChatListViewModel, onOpen: @escaping (ChatTarget) -> Void, onOpenHelpBot: (() -> Void)? = nil) {
         self.viewModel = viewModel
         self.onOpen = onOpen
+        self.onOpenHelpBot = onOpenHelpBot
     }
 
     public var body: some View {
-        ChatListContent(viewModel: viewModel, onOpen: onOpen)
+        ChatListContent(viewModel: viewModel, onOpen: onOpen, onOpenHelpBot: onOpenHelpBot)
     }
 }
 

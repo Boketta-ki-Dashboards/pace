@@ -205,6 +205,7 @@ public final class AppRouter {
             social: social,
             activityData: dependencies.activityData,
             store: store,
+            systemMessages: SystemMessageCenter(store: dependencies.systemMessages),
             onOpenRankings: { [navigation] scope in navigation.openRankings(scope) },
             onOpenSocial: { [navigation] in navigation.openSocial() }
         )
@@ -230,6 +231,7 @@ public final class AppRouter {
                 },
                 account: services.account,
                 media: services.media,
+                profileDetails: services.profileDetails,
                 social: services.social,
                 auth: services.auth,
                 localData: dependencies.localData,
@@ -257,6 +259,22 @@ public final class AppRouter {
             store: store
         )
         navigation.main = main
+        social.profileDetails = services.profileDetails
+        // Pace-Bot: lokaler Verlauf, Support-Kontakt nur wenn eingerichtet, „Problem melden“ in den Einstellungen.
+        social.helpBot = PaceHelpBotSession(store: dependencies.helpHistory)
+        social.supportContact = dependencies.supportContact
+        social.openFeedback = { [navigation] in navigation.openProfileSettings(.feedback(.problem)) }
+        // Links der Willkommensmitteilung führen auf vorhandene Seiten.
+        dashboard.onOpenAddFriend = { [navigation, social] in
+            social.request(.addFriend)
+            navigation.openSocial()
+        }
+        dashboard.onOpenHelpBot = { [navigation, social] in
+            social.request(.helpBot)
+            navigation.openSocial()
+        }
+        // Profil steht: Willkommensmitteilung genau einmal je Profil (auch für bestehende Nutzer nach dem Update).
+        dashboard.systemMessages.activate(owner: store.profile.publicID.uuidString.lowercased())
         social.openPrivacySettings = { [navigation] in navigation.openProfileSettings(.privacy) }
         // Spitznamen gelten überall sofort, auch in Rankings → Freunde und Gruppen.
         social.onNicknameChange = { [weak leaderboard] profile in leaderboard?.nicknameDidChange(profile) }

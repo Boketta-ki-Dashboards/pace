@@ -17,3 +17,7 @@ SUPABASE_PUBLISHABLE_KEY = sb_publishable_example
 // Optional: GIF-Suche im Chat (GIPHY). Auf developers.giphy.com eine App vom Typ „API“ anlegen und den API-Key
 // hier eintragen. Leer lassen = GIF-Suche zeigt „nicht eingerichtet“ (Fotos und GIFs aus der Mediathek gehen weiter).
 GIPHY_API_KEY =
+
+// Optional: offizielle Support-E-Mail-Adresse für den Pace-Bot („E-Mail an den Support“). Leer lassen = kein
+// E-Mail-Knopf; der Bot verweist dann nur auf „Problem melden“ in der App. Keine Adresse erfinden.
+PACE_SUPPORT_EMAIL =

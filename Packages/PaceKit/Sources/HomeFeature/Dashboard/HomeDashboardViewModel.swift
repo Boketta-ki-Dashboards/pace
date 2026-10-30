@@ -23,6 +23,8 @@ public enum HomeRoute: Hashable, Sendable {
     case notifications
     /// Persönliche Flamme mit Flammenkalender.
     case streak
+    /// Interne Systemmitteilung (z. B. „Willkommen bei Pace! 👋“).
+    case systemMessage(SystemMessage.Kind)
 }
 
 /// Das Home-Dashboard: Bewegungsdaten, Tagesziel, Serie, regionale Platzierungen und die vom Nutzer gewählten Widgets.
@@ -97,9 +99,11 @@ public final class HomeDashboardViewModel {
         calendar: ActivityCalendar = ActivityCalendar(),
         formatter: ActivityFormatter = ActivityFormatter(),
         now: @escaping @Sendable () -> Date = { Date() },
+        systemMessages: SystemMessageCenter? = nil,
         onOpenRankings: @escaping @MainActor (Region?) -> Void = { _ in },
         onOpenSocial: @escaping @MainActor () -> Void = {}
     ) {
+        self.systemMessages = systemMessages ?? SystemMessageCenter()
         self.activity = activity
         self.standings = standings
         self.settings = settings
@@ -334,24 +338,33 @@ public final class HomeDashboardViewModel {
 
     // MARK: Mitteilungen
 
-    /// Echte Mitteilungen: eingehende Freundschaftsanfragen, Gruppeneinladungen, ungelesene Chats.
+    /// Echte Mitteilungen: eingehende Freundschaftsanfragen, Gruppeneinladungen, ungelesene Chats und interne
+    /// Systemmitteilungen (Willkommen – bleibt nach dem Lesen im Verlauf, bis sie gelöscht wird).
     public var notifications: [HomeNotificationItem] {
         HomeNotifications.items(
             incomingRequests: social.incomingRequests,
             invitations: social.invitations,
-            conversations: social.chats.conversations
+            conversations: social.chats.conversations,
+            systemMessages: systemMessages.messages
         )
     }
 
-    /// Zahl am Glocken-Symbol (0 = kein Badge).
+    /// Zahl am Glocken-Symbol (0 = kein Badge): offene Social-Einträge und ungelesene Systemmitteilungen.
     public var notificationCount: Int {
-        notifications.count
+        notifications.filter(\.isUnread).count
     }
 
     /// Ob Mitteilungen geladen werden können (Social-Backend vorhanden).
     public var areNotificationsAvailable: Bool {
         social.isAvailable
     }
+
+    /// Interne Systemmitteilungen (Willkommen). Zugestellt vom App-Rahmen, sobald das Profil steht.
+    public let systemMessages: SystemMessageCenter
+
+    /// Links aus der Willkommensmitteilung (vom App-Rahmen gesetzt; ohne Angabe ausgeblendet).
+    @ObservationIgnored public var onOpenAddFriend: (@MainActor () -> Void)?
+    @ObservationIgnored public var onOpenHelpBot: (@MainActor () -> Void)?
 
     /// Mitteilungen (Social und Chats) laden – höchstens einmal pro Minute.
     public func loadNotificationsIfNeeded() async {
@@ -360,8 +373,13 @@ public final class HomeDashboardViewModel {
         await social.chats.loadIfNeeded()
     }
 
-    /// Tippen auf eine Mitteilung: in den Social-Tab, wo Anfragen, Einladungen und Chats stehen.
+    /// Tippen auf eine Mitteilung: in den Social-Tab, wo Anfragen, Einladungen und Chats stehen. Systemmitteilungen
+    /// öffnen ihre eigene Seite (siehe ``HomeView``) und gelten damit als gelesen.
     public func open(_ notification: HomeNotificationItem) {
+        if case .system(let message) = notification.kind {
+            systemMessages.markRead(message.kind)
+            return
+        }
         onOpenSocial()
     }
 

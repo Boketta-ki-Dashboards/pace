@@ -71,6 +71,12 @@ public struct SocialView: View {
         .task(id: viewModel.requestedGroup) {
             openRequestedGroup()
         }
+        // Eine Seite von außen (Willkommensmitteilung: „Freunde hinzufügen“, „Pace-Bot öffnen“).
+        .task(id: viewModel.requestedRoute) {
+            guard let route = viewModel.requestedRoute else { return }
+            viewModel.clearRequestedRoute()
+            navigator.show(route)
+        }
     }
 
     /// Ein geteilter Link (`pace://u/<name>`): Profil öffnen oder auf der Hauptseite erklären, dass es fehlt.
@@ -286,7 +292,7 @@ struct SocialContent: View {
             .buttonStyle(.plain)
             .accessibilityValue(groupsAccessibilityValue)
         }
-        ChatListSection(viewModel: viewModel.chats, onOpen: onOpenChat)
+        ChatListSection(viewModel: viewModel.chats, onOpen: onOpenChat, onOpenHelpBot: { onOpen(.helpBot) })
     }
 
     private var groupsAccessibilityValue: String {

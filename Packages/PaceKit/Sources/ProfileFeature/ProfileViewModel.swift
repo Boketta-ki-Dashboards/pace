@@ -17,6 +17,8 @@ public struct ProfileSettingsServices {
     public var todayProgress: (@MainActor () -> GoalProgressSnapshot?)?
     public var account: (any AccountRepository)?
     public var media: (any MediaRepository)?
+    /// Bio, Interessen, Banner, freiwillige Auszeichnungen (Social-Profil 2.0).
+    public var profileDetails: (any ProfileDetailsRepository)?
     /// Blockierte Personen.
     public var social: (any SocialRepository)?
     /// Abmelden nach dem Löschen des Kontos; Konto-Art.
@@ -38,6 +40,7 @@ public struct ProfileSettingsServices {
         todayProgress: (@MainActor () -> GoalProgressSnapshot?)? = nil,
         account: (any AccountRepository)? = nil,
         media: (any MediaRepository)? = nil,
+        profileDetails: (any ProfileDetailsRepository)? = nil,
         social: (any SocialRepository)? = nil,
         auth: (any AuthProviding)? = nil,
         localData: any LocalAccountDataStoring = InMemoryLocalAccountData(),
@@ -53,6 +56,7 @@ public struct ProfileSettingsServices {
         self.todayProgress = todayProgress
         self.account = account
         self.media = media
+        self.profileDetails = profileDetails
         self.social = social
         self.auth = auth
         self.localData = localData
@@ -117,6 +121,8 @@ public final class ProfileViewModel {
     public let account: AccountSettingsViewModel
     /// Privatsphäre (Auffindbarkeit, blockierte Personen) – auch für die Social-Einstellungen.
     public let privacy: PrivacySettingsViewModel
+    /// Social-Profil 2.0: Bio, Interessen, Banner, freiwillige Auszeichnungen.
+    public let details: ProfileDetailsViewModel
     public let notifications: NotificationSettingsViewModel
     /// Datenschutz & Daten: Export und Konto löschen.
     public let dataPrivacy: DataPrivacyViewModel
@@ -172,6 +178,20 @@ public final class ProfileViewModel {
             availabilityDebounce: services.availabilityDebounce
         )
         privacy = PrivacySettingsViewModel(store: store, blockedUsers: BlockedUsersViewModel(repository: services.social))
+        details = ProfileDetailsViewModel(
+            repository: services.profileDetails,
+            media: services.media,
+            earnedAchievements: { [weak streak] in
+                guard let streak else { return [] }
+                // Vorhandene Modelle: längste Serie (Rekord oder laufende) und bester Tag im geladenen Verlauf.
+                let longest = max(streak.record?.days ?? 0, streak.streak?.longest ?? 0, streak.streak?.current ?? 0)
+                let bestDay = streak.history.history.map { history in
+                    history.summaries(from: history.range.lowerBound, through: history.range.upperBound, calendar: ActivityCalendar())
+                        .map(\.competitionSteps).max() ?? 0
+                } ?? 0
+                return ProfileAchievement.earned(longestStreak: longest, bestDaySteps: bestDay)
+            }
+        )
         let notifications = NotificationSettingsViewModel(
             settings: settings,
             notifications: services.notifications,
@@ -320,14 +340,16 @@ public final class ProfileViewModel {
         return selection.municipality.id != store.profile.municipalityID
     }
 
-    /// Lädt die Hierarchie der Gemeinde für die Anzeige.
+    /// Lädt die Hierarchie der Gemeinde und die Profilangaben (Bio, Interessen, Banner) für die Anzeige.
     public func load() async {
+        async let detailsLoaded: Void = details.load()
         do {
             try await store.loadHierarchyIfNeeded()
             regionLoadFailed = false
         } catch {
             regionLoadFailed = true
         }
+        await detailsLoaded
     }
 
     public func setRegionalLeaderboardEnabled(_ enabled: Bool) async {

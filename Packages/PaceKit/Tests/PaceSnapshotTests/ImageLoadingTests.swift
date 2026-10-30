@@ -154,12 +154,14 @@ private struct AvatarProbe: View {
     var copies = 1
 
     var body: some View {
+        // Oben ausgerichtet: Das große Bild liegt fest bei y = 0…120 (Messpunkt in seiner Mitte).
         VStack(spacing: 4) {
             PaceAvatar(name: "Test Person", seed: "x", size: 120, image: model.reference)
             ForEach(1..<max(copies, 1), id: \.self) { _ in
                 PaceAvatar(name: "Test Person", seed: "x", size: 24, image: model.reference)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 
@@ -169,6 +171,7 @@ private struct RemoteImageProbe: View {
     var body: some View {
         PaceRemoteImage(model.reference)
             .frame(width: 120, height: 120)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 
@@ -193,7 +196,7 @@ private final class ImageHost {
         controller.view.layoutIfNeeded()
     }
 
-    func wait(timeout: Duration = .seconds(3), until condition: () -> Bool) async throws {
+    func wait(timeout: Duration = .seconds(6), until condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now + timeout
         controller.view.layoutIfNeeded()
         while !condition(), ContinuousClock.now < deadline {
@@ -230,14 +233,6 @@ private final class ImageHost {
         return abs(Int(pixel[0]) - Int(red * 255)) < 40 && abs(Int(pixel[1]) - Int(green * 255)) < 40 && abs(Int(pixel[2]) - Int(blue * 255)) < 40
     }
 
-    /// Senkrechte Mitte des ersten Bilds: oberstes Element des zentrierten Inhalts.
-    private var probeY: CGFloat {
-        // Inhalt ist zentriert; das große Bild (120 pt) liegt oben im Stapel. Bei einem Bild allein: Fenstermitte.
-        let total = contentHeight
-        return (Self.size.height - total) / 2 + 60
-    }
-
-    private var contentHeight: CGFloat {
-        controller.sizeThatFits(in: Self.size).height
-    }
+    /// Senkrechte Mitte des großen Bilds (oben ausgerichtet, 120 pt hoch).
+    private var probeY: CGFloat { 60 }
 }

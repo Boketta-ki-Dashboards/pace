@@ -15,7 +15,9 @@ extension AppDependencies {
             appIcons: SystemAppIconSetting(),
             notifications: UserNotificationScheduler(),
             appVersion: appVersion,
-            gifSearch: GIPHYSearchService.fromInfoDictionary(Bundle.main.infoDictionary ?? [:])
+            gifSearch: GIPHYSearchService.fromInfoDictionary(Bundle.main.infoDictionary ?? [:]),
+            // Optional: PACE_SUPPORT_EMAIL in Config/Pace.xcconfig (leer = keine Support-E-Mail in der App).
+            supportEmail: Bundle.main.infoDictionary?["PaceSupportEmail"] as? String
         )
     }
 
@@ -42,7 +44,8 @@ extension AppDependencies {
                 social: backend.social,
                 chat: backend.chat,
                 media: backend.media,
-                account: backend.account
+                account: backend.account,
+                profileDetails: backend.profileDetails
             ))
         } catch {
             return .unavailable(reason: error.message)

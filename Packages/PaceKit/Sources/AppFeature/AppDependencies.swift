@@ -36,6 +36,12 @@ public struct AppDependencies: Sendable {
     public let localData: any LocalAccountDataStoring
     /// GIF-Suche im Chat (z. B. GIPHY); `nil` ohne eingerichteten Schlüssel – die Auswahl sagt das dann.
     public let gifSearch: (any GIFSearching)?
+    /// Interne Systemmitteilungen (Willkommen) je Profil – nur auf dem Gerät.
+    public let systemMessages: any SystemMessageStoring
+    /// Verlauf des Pace-Bots – nur auf dem Gerät, begrenzt.
+    public let helpHistory: any PaceHelpHistoryStoring
+    /// Offizieller Support-Kontakt (E-Mail nur, wenn in `Config/Pace.xcconfig` eingerichtet).
+    public let supportContact: PaceSupportContact
 
     public init(
         healthAuthorization: any HealthAuthorizationProviding,
@@ -51,7 +57,10 @@ public struct AppDependencies: Sendable {
         notifications: any LocalNotificationScheduling = NoLocalNotifications(),
         appVersion: String = "",
         localData: any LocalAccountDataStoring = UserDefaultsLocalAccountData(),
-        gifSearch: (any GIFSearching)? = nil
+        gifSearch: (any GIFSearching)? = nil,
+        systemMessages: any SystemMessageStoring = UserDefaultsSystemMessageStore(),
+        helpHistory: any PaceHelpHistoryStoring = UserDefaultsPaceHelpHistoryStore(),
+        supportEmail: String? = nil
     ) {
         self.healthAuthorization = healthAuthorization
         self.activityData = activityData
@@ -67,6 +76,10 @@ public struct AppDependencies: Sendable {
         self.appVersion = appVersion
         self.localData = localData
         self.gifSearch = gifSearch
+        self.systemMessages = systemMessages
+        self.helpHistory = helpHistory
+        // Nur eine eingerichtete, plausible Adresse – sonst kein E-Mail-Knopf (keine erfundene Adresse).
+        supportContact = PaceSupportContact(email: supportEmail)
     }
 }
 
@@ -95,6 +108,8 @@ public struct BackendServices: Sendable {
     public let media: (any MediaRepository)?
     /// Datenexport, Kontolöschung, Rückmeldungen; `nil`, wenn nicht angebunden.
     public let account: (any AccountRepository)?
+    /// Bio, Interessen, Banner, Auszeichnungen; `nil`, wenn nicht angebunden.
+    public let profileDetails: (any ProfileDetailsRepository)?
     public let profileCache: any ProfileCaching
 
     public init(
@@ -107,6 +122,7 @@ public struct BackendServices: Sendable {
         chat: (any ChatRepository)? = nil,
         media: (any MediaRepository)? = nil,
         account: (any AccountRepository)? = nil,
+        profileDetails: (any ProfileDetailsRepository)? = nil,
         profileCache: any ProfileCaching = UserDefaultsProfileCache()
     ) {
         self.auth = auth
@@ -118,6 +134,7 @@ public struct BackendServices: Sendable {
         self.chat = chat
         self.media = media
         self.account = account
+        self.profileDetails = profileDetails
         self.profileCache = profileCache
     }
 }

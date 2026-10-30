@@ -67,6 +67,8 @@ struct SocialDestination: View {
             ShareProfileView(model: viewModel.shareProfile(profile), onSentToSingleChat: onReplaceWithChat)
         case .report(let subject):
             ReportView(model: viewModel.reportForm(subject), social: viewModel)
+        case .helpBot:
+            PaceBotView(session: viewModel.helpBot, support: viewModel.supportContact, onOpenFeedback: viewModel.openFeedback)
         }
     }
 

@@ -37,7 +37,7 @@ struct HomeNotificationsContent: View {
             PaceSubpageHeader(backTitle: HomeTexts.home, title: HomeTexts.notifications)
 
             let items = viewModel.notifications
-            if !viewModel.areNotificationsAvailable {
+            if !viewModel.areNotificationsAvailable && items.isEmpty {
                 emptyState(systemImage: "bell.slash", title: HomeTexts.notifications, message: HomeNotifications.unavailableMessage)
             } else if items.isEmpty {
                 if viewModel.social.state == .loading || viewModel.social.state == .idle {
@@ -48,15 +48,37 @@ struct HomeNotificationsContent: View {
             } else {
                 VStack(spacing: PaceSpacing.xs) {
                     ForEach(items) { item in
-                        Button {
-                            onOpen(item)
-                        } label: {
-                            HomeNotificationRow(item: item)
+                        if case .system(let message) = item.kind {
+                            // Systemmitteilung: eigene Seite, gelesene ohne Hervorhebung, löschbar.
+                            Button {
+                                onOpen(item)
+                            } label: {
+                                HomeNotificationRow(item: item)
+                                    .opacity(message.isRead ? 0.75 : 1)
+                            }
+                            .buttonStyle(.pacePressable)
+                            .contextMenu {
+                                Button(WelcomeMessageContent.delete, systemImage: "trash", role: .destructive) {
+                                    viewModel.systemMessages.delete(message.kind)
+                                }
+                            }
+                            .accessibilityHint(PaceLocalization.text(
+                                de: "Öffnet die Mitteilung", en: "Opens the notification", ru: "Открывает уведомление"
+                            ))
+                            .accessibilityAction(named: WelcomeMessageContent.delete) {
+                                viewModel.systemMessages.delete(message.kind)
+                            }
+                        } else {
+                            Button {
+                                onOpen(item)
+                            } label: {
+                                HomeNotificationRow(item: item)
+                            }
+                            .buttonStyle(.pacePressable)
+                            .accessibilityHint(PaceLocalization.text(
+                                de: "Öffnet Social", en: "Opens Social", ru: "Открывает вкладку «Друзья»"
+                            ))
                         }
-                        .buttonStyle(.pacePressable)
-                        .accessibilityHint(PaceLocalization.text(
-                            de: "Öffnet Social", en: "Opens Social", ru: "Открывает вкладку «Друзья»"
-                        ))
                     }
                 }
             }

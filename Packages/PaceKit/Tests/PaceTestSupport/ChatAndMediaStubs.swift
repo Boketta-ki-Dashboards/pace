@@ -542,3 +542,54 @@ public enum ChatFixtures {
         )
     }
 }
+
+// MARK: - Profilangaben (Social-Profil 2.0)
+
+/// Test-Double für `ProfileDetailsRepository`: eigene Angaben und die anderer Personen im Speicher.
+public final class ProfileDetailsRepositoryStub: ProfileDetailsRepository, Sendable {
+    public struct State: Sendable {
+        public var own = ProfileDetails.empty
+        public var others: [UUID: ProfileDetails] = [:]
+        /// Fehler für alle Aufrufe (z. B. `.unavailable` für einen Server ohne Migration).
+        public var error: ProfileDetailsError?
+        public var saved: [ProfileDetails] = []
+    }
+
+    public let state: Locked<State>
+
+    public init(configure: (inout State) -> Void = { _ in }) {
+        var state = State()
+        configure(&state)
+        self.state = Locked(state)
+    }
+
+    public func details(of publicID: UUID) async throws -> ProfileDetails {
+        try state.withLock { state in
+            if let error = state.error { throw error }
+            guard let details = state.others[publicID] else { throw ProfileDetailsError.notFound }
+            // Wie der Server: andere sehen Auszeichnungen nur, wenn sie freigegeben sind.
+            var visible = details
+            visible.achievements = details.visibleAchievements
+            return visible
+        }
+    }
+
+    public func ownDetails() async throws -> ProfileDetails {
+        try state.withLock { state in
+            if let error = state.error { throw error }
+            return state.own
+        }
+    }
+
+    public func saveOwnDetails(_ details: ProfileDetails) async throws -> ProfileDetails {
+        try state.withLock { state in
+            if let error = state.error { throw error }
+            var stored = details
+            stored.bio = details.bio.flatMap(ProfileBioRules.normalized)
+            if let bio = stored.bio, ProfileBioRules.problem(bio) != nil { throw ProfileDetailsError.invalid }
+            state.own = stored
+            state.saved.append(stored)
+            return stored
+        }
+    }
+}

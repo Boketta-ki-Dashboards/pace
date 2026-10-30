@@ -73,6 +73,26 @@ public final class SocialViewModel {
     /// Öffnet die Privatsphäre-Einstellungen im Profil-Tab (vom App-Rahmen gesetzt). Ohne Angabe erklären die
     /// Social-Einstellungen nur, wo sich die Auffindbarkeit einstellen lässt.
     public var openPrivacySettings: (@MainActor () -> Void)?
+    /// Bio, Interessen, Banner und freigegebene Auszeichnungen anderer Personen (Social-Profil 2.0); `nil` ohne
+    /// Anbindung – Profile zeigen dann nur die bisherigen Angaben.
+    @ObservationIgnored public var profileDetails: (any ProfileDetailsRepository)?
+    /// Pace-Bot (lokal, mit Verlauf nur auf dem Gerät). Der App-Rahmen setzt den gespeicherten Verlauf ein.
+    @ObservationIgnored public var helpBot = PaceHelpBotSession()
+    /// Offizieller Support-Kontakt (E-Mail nur, wenn eingerichtet).
+    @ObservationIgnored public var supportContact = PaceSupportContact(email: nil)
+    /// „Problem melden“ in den Einstellungen (vom App-Rahmen gesetzt).
+    @ObservationIgnored public var openFeedback: (@MainActor () -> Void)?
+    /// Von außen angeforderte Seite (z. B. „Freunde hinzufügen“ oder „Pace-Bot“ aus der Willkommensmitteilung).
+    public private(set) var requestedRoute: SocialRoute?
+
+    /// Öffnet eine Seite im Social-Tab von außen (der Tab-Wechsel erfolgt durch den App-Rahmen).
+    public func request(_ route: SocialRoute) {
+        requestedRoute = route
+    }
+
+    public func clearRequestedRoute() {
+        requestedRoute = nil
+    }
     /// Ein eigener Spitzname wurde geändert – für Ansichten außerhalb des Social-Tabs (z. B. Rankings → Freunde).
     public var onNicknameChange: (@MainActor (SocialProfile) -> Void)?
 
@@ -630,7 +650,7 @@ public final class SocialViewModel {
 
     /// ViewModel für das Profil einer beliebigen Person (Freund oder nicht).
     public func userProfile(for profile: SocialProfile) -> UserProfileViewModel? {
-        repository.map { UserProfileViewModel(profile: profile, repository: $0, social: self) }
+        repository.map { UserProfileViewModel(profile: profile, repository: $0, social: self, details: profileDetails) }
     }
 
     /// „Freund hinzufügen“: Suche nach Benutzernamen.

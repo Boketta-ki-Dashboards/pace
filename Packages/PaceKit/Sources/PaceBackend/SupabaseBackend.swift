@@ -24,6 +24,8 @@ public final class SupabaseBackend: Sendable {
     public let social: any SocialRepository
     public let chat: any ChatRepository
     public let media: any MediaRepository
+    /// Bio, Interessen, Banner, freiwillige Auszeichnungen (Migration 20261030100000).
+    public let profileDetails: any ProfileDetailsRepository
     public let account: any AccountRepository
 
     /// - Parameters:
@@ -70,6 +72,11 @@ public final class SupabaseBackend: Sendable {
             ownPublicID: ownPublicID
         )
         media = SupabaseMediaRepository(storage: storage, ownPublicID: ownPublicID)
+        profileDetails = SupabaseProfileDetailsRepository(
+            client: database,
+            ownPublicID: ownPublicID,
+            currentUserID: { authClient.currentSession?.user.id }
+        )
         account = SupabaseAccountRepository(client: database, storage: storage, auth: authClient)
     }
 

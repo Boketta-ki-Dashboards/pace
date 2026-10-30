@@ -7,9 +7,17 @@ import SwiftUI
 struct ChatListContent: View {
     @Bindable var viewModel: ChatListViewModel
     var onOpen: (ChatTarget) -> Void = { _ in }
+    /// Pace-Bot oben in der Liste – lokal, deshalb auch ohne Chat-Server erreichbar.
+    var onOpenHelpBot: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
+            if let onOpenHelpBot {
+                PaceBotChatRow(action: onOpenHelpBot)
+                    .padding(.horizontal, PaceSpacing.s)
+                    .background(PaceColor.surface, in: RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous).strokeBorder(PaceColor.border, lineWidth: 1))
+            }
             switch viewModel.state {
             case .unavailable(let message):
                 ChatUnavailableCard(message: message)

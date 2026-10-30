@@ -8,6 +8,8 @@ public struct HomeNotificationItem: Equatable, Sendable, Identifiable {
         case friendRequest(FriendRequest)
         case groupInvitation(GroupInvitation)
         case unreadChat(ConversationSummary)
+        /// Interne Systemmitteilung (Willkommen).
+        case system(SystemMessage)
     }
 
     public let kind: Kind
@@ -21,7 +23,15 @@ public struct HomeNotificationItem: Equatable, Sendable, Identifiable {
         case .friendRequest(let request): "request-\(request.id.uuidString)"
         case .groupInvitation(let invitation): "invitation-\(invitation.id.uuidString)"
         case .unreadChat(let conversation): "chat-\(conversation.id.uuidString)"
+        case .system(let message): message.id
         }
+    }
+
+    /// Ob der Eintrag am Glocken-Symbol zählt: Social-Einträge immer (sie verschwinden, sobald erledigt),
+    /// Systemmitteilungen nur ungelesen.
+    public var isUnread: Bool {
+        if case .system(let message) = kind { return !message.isRead }
+        return true
     }
 
     public var date: Date {
@@ -29,6 +39,7 @@ public struct HomeNotificationItem: Equatable, Sendable, Identifiable {
         case .friendRequest(let request): request.createdAt
         case .groupInvitation(let invitation): invitation.createdAt
         case .unreadChat(let conversation): conversation.updatedAt
+        case .system(let message): message.createdAt
         }
     }
 
@@ -37,6 +48,7 @@ public struct HomeNotificationItem: Equatable, Sendable, Identifiable {
         case .friendRequest: "person.badge.plus"
         case .groupInvitation: "person.3"
         case .unreadChat: "bubble.left.and.bubble.right"
+        case .system: "hand.wave.fill"
         }
     }
 
@@ -46,6 +58,7 @@ public struct HomeNotificationItem: Equatable, Sendable, Identifiable {
         case .friendRequest(let request): request.profile.displayName
         case .groupInvitation(let invitation): invitation.groupName
         case .unreadChat(let conversation): conversation.title
+        case .system(let message): message.sender
         }
     }
 
@@ -55,6 +68,7 @@ public struct HomeNotificationItem: Equatable, Sendable, Identifiable {
         case .friendRequest(let request): request.profile.publicID.uuidString
         case .groupInvitation(let invitation): invitation.groupID.uuidString
         case .unreadChat(let conversation): conversation.peer?.publicID.uuidString ?? conversation.id.uuidString
+        case .system: "pace-team"
         }
     }
 
@@ -64,6 +78,8 @@ public struct HomeNotificationItem: Equatable, Sendable, Identifiable {
         case .groupInvitation(let invitation): .groupImage(invitation.groupImagePath)
         case .unreadChat(let conversation):
             conversation.peer?.avatar ?? .groupImage(conversation.groupImagePath)
+        case .system:
+            nil
         }
     }
 
@@ -75,6 +91,8 @@ public struct HomeNotificationItem: Equatable, Sendable, Identifiable {
             PaceLocalization.text(de: "Gruppeneinladung", en: "Group invitation", ru: "Приглашение в группу")
         case .unreadChat(let conversation):
             conversation.title
+        case .system(let message):
+            message.title
         }
     }
 
@@ -103,6 +121,8 @@ public struct HomeNotificationItem: Equatable, Sendable, Identifiable {
                 en: ("new message", "new messages"),
                 ru: ("новое сообщение", "новых сообщения", "новых сообщений")
             )
+        case .system(let message):
+            return message.preview
         }
     }
 }
@@ -112,12 +132,14 @@ public enum HomeNotifications {
     public static func items(
         incomingRequests: [FriendRequest],
         invitations: [GroupInvitation],
-        conversations: [ConversationSummary]
+        conversations: [ConversationSummary],
+        systemMessages: [SystemMessage] = []
     ) -> [HomeNotificationItem] {
         let requests = incomingRequests.filter { $0.direction == .incoming }.map { HomeNotificationItem(kind: .friendRequest($0)) }
         let invites = invitations.map { HomeNotificationItem(kind: .groupInvitation($0)) }
         let chats = conversations.filter { $0.unreadCount > 0 }.map { HomeNotificationItem(kind: .unreadChat($0)) }
-        return (requests + invites + chats).sorted { $0.date > $1.date }
+        let system = systemMessages.map { HomeNotificationItem(kind: .system($0)) }
+        return (requests + invites + chats + system).sorted { $0.date > $1.date }
     }
 
     /// VoiceOver-Name der Glocke, z. B. `Mitteilungen, 3 neu`.

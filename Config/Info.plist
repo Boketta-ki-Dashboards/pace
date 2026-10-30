@@ -8,6 +8,8 @@
 	<string>$(SUPABASE_PUBLISHABLE_KEY)</string>
 	<key>PaceGIPHYAPIKey</key>
 	<string>$(GIPHY_API_KEY)</string>
+	<key>PaceSupportEmail</key>
+	<string>$(PACE_SUPPORT_EMAIL)</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>de</string>

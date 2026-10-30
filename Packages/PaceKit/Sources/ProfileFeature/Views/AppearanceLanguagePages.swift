@@ -29,13 +29,7 @@ struct AppearancePageContent: View {
             PaceCard {
                 VStack(alignment: .leading, spacing: PaceSpacing.s) {
                     PaceCardHeader(PaceLocalization.text(de: "Farbschema", en: "Color scheme", ru: "Цветовая схема"))
-                    HStack(spacing: PaceSpacing.xs) {
-                        ForEach(AppearancePreference.allCases) { appearance in
-                            AppearanceOption(appearance: appearance, isSelected: viewModel.appearance == appearance) {
-                                viewModel.setAppearance(appearance)
-                            }
-                        }
-                    }
+                    AppearanceSelector(selection: viewModel.appearance, showsTitles: true) { viewModel.setAppearance($0) }
                     ProfileFootnote(text: PaceLocalization.text(
                         de: "„Automatisch“ folgt der Einstellung deines iPhones. Deine Wahl gilt sofort und bleibt gespeichert. Die Bildschirmhelligkeit deines iPhones ändert Pace nicht.",
                         en: "“Automatic” follows your iPhone's setting. Your choice applies immediately and is saved. Pace never changes your iPhone's screen brightness.",
@@ -85,46 +79,60 @@ struct AppearancePageContent: View {
     }
 }
 
-/// Auswahlkachel für Automatisch/Hell/Dunkel.
-private struct AppearanceOption: View {
-    let appearance: AppearancePreference
-    let isSelected: Bool
-    let action: () -> Void
+/// Automatisch/Hell/Dunkel als Symbolauswahl (Auftrag 6): Sonne/Mond für Automatisch, Sonne für Hell, Mond für Dunkel.
+/// Die aktive Auswahl ist mint hervorgehoben. Auf der Seite „Darstellung & Sprache“ steht der Name einmal unter dem
+/// Symbol, im Profil nur das Symbol; VoiceOver liest immer den vollen Namen.
+struct AppearanceSelector: View {
+    let selection: AppearancePreference
+    var showsTitles = true
+    let onSelect: (AppearancePreference) -> Void
 
     var body: some View {
-        Button(action: action) {
-            VStack(spacing: PaceSpacing.xs) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 22, weight: .semibold))
-                    .frame(height: 28)
-                    .accessibilityHidden(true)
-                Text(appearance.title)
-                    .font(.system(.subheadline, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+        HStack(spacing: PaceSpacing.xxs) {
+            ForEach(AppearancePreference.allCases) { appearance in
+                let isSelected = selection == appearance
+                Button {
+                    onSelect(appearance)
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: Self.systemImage(for: appearance, isSelected: isSelected))
+                            .font(.system(size: showsTitles ? 22 : 19, weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .frame(height: 26)
+                            .accessibilityHidden(true)
+                        if showsTitles {
+                            Text(appearance.title)
+                                .font(.system(.caption, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                    }
+                    .foregroundStyle(isSelected ? PaceColor.onSelection : PaceColor.textSecondary)
+                    .frame(maxWidth: .infinity, minHeight: showsTitles ? 64 : 44)
+                    .background(
+                        isSelected ? PaceColor.selectionFill : Color.clear,
+                        in: RoundedRectangle(cornerRadius: PaceRadius.tile - 2, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: PaceRadius.tile - 2, style: .continuous)
+                            .strokeBorder(isSelected ? PaceColor.accent : .clear, lineWidth: 1.5)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: PaceRadius.tile - 2, style: .continuous))
+                }
+                .buttonStyle(.pacePressable)
+                .accessibilityLabel(appearance.title)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
-            .foregroundStyle(isSelected ? PaceColor.onSelection : PaceColor.textPrimary)
-            .frame(maxWidth: .infinity, minHeight: 76)
-            .background(
-                isSelected ? PaceColor.selectionFill : PaceColor.fieldBackground,
-                in: RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous)
-                    .strokeBorder(isSelected ? PaceColor.accent : PaceColor.border, lineWidth: isSelected ? 1.5 : 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous))
         }
-        .buttonStyle(.pacePressable)
-        .accessibilityLabel(appearance.title)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .padding(PaceSpacing.xxs)
+        .background(PaceColor.fieldBackground, in: RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous))
     }
 
-    private var systemImage: String {
+    static func systemImage(for appearance: AppearancePreference, isSelected: Bool) -> String {
         switch appearance {
         case .automatic: "circle.lefthalf.filled"
-        case .light: "sun.max"
-        case .dark: "moon"
+        case .light: isSelected ? "sun.max.fill" : "sun.max"
+        case .dark: isSelected ? "moon.fill" : "moon"
         }
     }
 }

@@ -77,9 +77,17 @@ public struct HomeView: View {
                     HomeWidgetGalleryScreen(dashboard: viewModel, route: route)
                 case .notifications:
                     HomeNotificationsScreen(viewModel: viewModel) { notification in
-                        path = []
-                        viewModel.open(notification)
+                        // Systemmitteilungen öffnen ihre eigene Seite; alles andere führt in den Social-Tab.
+                        if case .system(let message) = notification.kind {
+                            viewModel.open(notification)
+                            open(.systemMessage(message.kind))
+                        } else {
+                            path = []
+                            viewModel.open(notification)
+                        }
                     }
+                case .systemMessage:
+                    WelcomeMessageScreen(viewModel: viewModel) { path = [] }
                 case .streak:
                     StreakDetailView(viewModel: viewModel.streakDetail(), backTitle: HomeTexts.home)
                 }

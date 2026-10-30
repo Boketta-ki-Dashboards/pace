@@ -810,3 +810,44 @@ struct GroupProgressGalleryTests {
         #expect(!gallery.canSave)
     }
 }
+
+/// Willkommensmitteilung im Mitteilungscenter (Auftrag 6, Teil C 13): Eintrag, Zähler an der Glocke, gelesen.
+@MainActor
+struct WelcomeNotificationTests {
+    @Test func welcomeAppearsOnceCountsUntilReadAndStaysInTheList() async {
+        let harness = await DashboardHarness()
+        let dashboard = harness.dashboard
+        #expect(dashboard.notificationCount == 0)
+        dashboard.systemMessages.activate(owner: "me")
+        dashboard.systemMessages.activate(owner: "me")
+        let welcome = dashboard.notifications.filter { if case .system = $0.kind { true } else { false } }
+        #expect(welcome.count == 1)
+        #expect(dashboard.notificationCount == 1)
+        PaceLocalization.$languageOverride.withValue(.german) {
+            #expect(welcome.first?.title == "Willkommen bei Pace! 👋")
+            #expect(welcome.first?.avatarName == "Pace Team")
+            #expect(welcome.first?.message.hasPrefix("Entdecke deine Schritte") == true)
+        }
+        // Öffnen: gelesen, Zähler aktualisiert, kein Wechsel in den Social-Tab.
+        let item = try? #require(welcome.first)
+        if let item { dashboard.open(item) }
+        #expect(dashboard.notificationCount == 0)
+        #expect(harness.log.socialOpened == 0)
+        #expect(dashboard.notifications.count == 1, "Bleibt im Verlauf")
+        // Löschen.
+        dashboard.systemMessages.delete(.welcome)
+        #expect(dashboard.notifications.isEmpty)
+    }
+
+    @Test func welcomeContentHasAllSectionsInEveryLanguage() {
+        for language in [AppLanguage.german, .english, .russian] {
+            PaceLocalization.$languageOverride.withValue(language) {
+                #expect(WelcomeMessageContent.sections.count == 8)
+                #expect(WelcomeMessageContent.sections.allSatisfy { !$0.title.isEmpty && !$0.text.isEmpty })
+            }
+        }
+        PaceLocalization.$languageOverride.withValue(.german) {
+            #expect(WelcomeMessageContent.sections.first?.text.contains("Du musst keine Schritte selbst eintragen") == true)
+        }
+    }
+}

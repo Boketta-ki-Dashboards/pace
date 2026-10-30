@@ -42,12 +42,12 @@ select is(
         'social_friend_profile', 'social_friend_ranking', 'social_friend_requests', 'social_friends', 'social_group',
         'social_group_calendar', 'social_group_days', 'social_group_invitations', 'social_group_outgoing_invitations',
         'social_group_ranking', 'social_invite_to_group', 'social_join_group', 'social_leave_group',
-        'social_my_groups', 'social_public_profile', 'social_regenerate_invite_code', 'social_remove_friend',
+        'social_my_groups', 'social_profile_details', 'social_public_profile', 'social_regenerate_invite_code', 'social_remove_friend',
         'social_remove_group_member', 'social_report', 'social_respond_friend_request',
         'social_respond_group_invitation', 'social_search_profiles', 'social_send_friend_request',
         'social_set_friend_nickname', 'social_set_group_goal', 'social_set_group_image', 'social_unblock_user', 'social_update_group',
         'social_update_group_details'],
-  'alle 36 Social-RPCs vorhanden (social_create_group in zwei Fassungen)'
+  'alle 37 Social-RPCs vorhanden (social_create_group in zwei Fassungen)'
 );
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p

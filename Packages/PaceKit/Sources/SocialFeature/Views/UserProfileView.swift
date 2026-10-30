@@ -124,33 +124,37 @@ struct UserProfileContent: View {
         }
     }
 
+    /// Social-Profil 2.0: Banner, Profilbild, Namen und – soweit angegeben und sichtbar – Bio, Interessen und
+    /// freigegebene Auszeichnungen. Bei einer Blockierung liefert der Server keine dieser Angaben.
     private var identity: some View {
-        HStack(spacing: PaceSpacing.m) {
-            PaceAvatar(name: model.profile.shownName, seed: model.profile.publicID.uuidString, size: 76, image: model.profile.avatar)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(model.profile.shownName)
-                    .font(.system(.title2, weight: .bold))
-                    .foregroundStyle(PaceColor.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if model.profile.nickname?.isEmpty == false {
-                    Text(SocialText.displayNameLine(model.profile.displayName))
-                        .font(PaceFont.callout)
-                        .foregroundStyle(PaceColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
+            PaceProfileShowcase(
+                displayName: model.profile.shownName,
+                username: model.profile.username,
+                seed: model.profile.publicID.uuidString,
+                avatar: model.profile.avatar,
+                details: model.loaded?.isBlockedByMe == true ? .empty : model.details
+            ) {
+                EmptyView()
+            }
+            if model.profile.nickname?.isEmpty == false || (model.loaded?.friendsSince != nil && model.relationship == .friend) {
+                VStack(alignment: .leading, spacing: 2) {
+                    if model.profile.nickname?.isEmpty == false {
+                        Text(SocialText.displayNameLine(model.profile.displayName))
+                            .font(PaceFont.callout)
+                            .foregroundStyle(PaceColor.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let since = model.loaded?.friendsSince, model.relationship == .friend {
+                        Text(SocialText.friendsSince(since))
+                            .font(PaceFont.caption)
+                            .foregroundStyle(PaceColor.textSecondary)
+                    }
                 }
-                Text(verbatim: "@\(model.profile.username)")
-                    .font(PaceFont.body)
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .textSelection(.enabled)
-                if let since = model.loaded?.friendsSince, model.relationship == .friend {
-                    Text(SocialText.friendsSince(since))
-                        .font(PaceFont.caption)
-                        .foregroundStyle(PaceColor.textSecondary)
-                }
+                .padding(.horizontal, PaceSpacing.xs)
             }
         }
-        .padding(.vertical, PaceSpacing.xs)
-        .accessibilityElement(children: .combine)
+        .padding(.vertical, PaceSpacing.xxs)
     }
 
     // MARK: Beziehung und Hauptaktion

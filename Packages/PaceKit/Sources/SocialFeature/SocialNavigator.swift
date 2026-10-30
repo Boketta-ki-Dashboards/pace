@@ -19,6 +19,8 @@ public enum SocialRoute: Hashable, Sendable {
     case settings
     case shareProfile(SocialProfile)
     case report(SocialReportSubject)
+    /// Pace-Bot: lokaler Hilfe-Chat (kein Kontakt, keine Unterhaltung auf dem Server).
+    case helpBot
 
     /// Welche Seite die Route zeigt: Zwei Routen derselben Seite (z. B. `.friend` und `.profile` derselben Person, oder
     /// dieselbe Gruppe mit anderem Anzeigenamen) gelten als gleich. Gruppenseiten unterscheiden sich über die Gruppen-ID.
@@ -38,6 +40,7 @@ public enum SocialRoute: Hashable, Sendable {
         case .shareProfile(let profile): .shareProfile(profile.publicID)
         case .report(.user(let profile)): .reportUser(profile.publicID)
         case .report(.group(let id, _)): .reportGroup(id)
+        case .helpBot: .helpBot
         }
     }
 }
@@ -58,6 +61,7 @@ enum SocialPage: Hashable {
     case groups
     case friendsRanking
     case settings
+    case helpBot
 }
 
 /// Eintrag im Navigationspfad des Social-Tabs: eine Social-Seite oder ein Chat.

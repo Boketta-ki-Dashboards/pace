@@ -81,6 +81,8 @@ public struct ProfileView: View {
             if let diagnostics = viewModel.liveStepDiagnostics {
                 LiveStepDiagnosticsPage(diagnostics: diagnostics, backTitle: backTitle)
             }
+        case .editProfile:
+            ProfileEditPage(viewModel: viewModel, backTitle: backTitle)
         }
     }
 
@@ -128,36 +130,29 @@ struct ProfileContent: View {
             .padding(.bottom, PaceSpacing.xxs)
     }
 
+    /// Social-Profil 2.0: Banner, Profilbild, Namen, Bio, Interessen, freigegebene Auszeichnungen – so, wie andere
+    /// das Profil sehen. „Profil bearbeiten“ und Teilen rechts neben dem Profilbild.
     private var identityCard: some View {
-        PaceCard {
-            HStack(alignment: .center, spacing: PaceSpacing.s) {
+        PaceProfileShowcase(
+            displayName: viewModel.displayName,
+            username: String(viewModel.username.dropFirst()),
+            seed: viewModel.avatarSeed,
+            avatar: viewModel.avatar,
+            details: viewModel.details.details,
+            bioPrompt: viewModel.details.isAvailable ? { onOpen(.editProfile) } : nil
+        ) {
+            HStack(spacing: PaceSpacing.xs) {
                 Button {
-                    onOpen(.account)
+                    onOpen(.editProfile)
                 } label: {
-                    HStack(spacing: PaceSpacing.m) {
-                        PaceAvatar(name: viewModel.displayName, seed: viewModel.avatarSeed, size: 68, image: viewModel.avatar)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(viewModel.displayName)
-                                .font(PaceFont.title)
-                                .foregroundStyle(PaceColor.textPrimary)
-                                .lineLimit(2)
-                                .minimumScaleFactor(0.8)
-                            Text(viewModel.username)
-                                .font(PaceFont.callout)
-                                .foregroundStyle(PaceColor.textSecondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .contentShape(Rectangle())
+                    Label(ProfileDetailsTexts.editProfile, systemImage: "pencil")
+                        .lineLimit(1)
                 }
-                .buttonStyle(.pacePressable)
-                .accessibilityElement(children: .combine)
+                .buttonStyle(.paceCompact)
                 .accessibilityHint(PaceLocalization.text(
-                    de: "Öffnet Konto & Profil",
-                    en: "Opens account & profile",
-                    ru: "Открывает аккаунт и профиль"
+                    de: "Banner, Bio, Interessen und Auszeichnungen",
+                    en: "Banner, bio, interests and achievements",
+                    ru: "Обложка, описание, интересы и награды"
                 ))
 
                 ShareLink(
@@ -434,18 +429,13 @@ struct RankingVisibilityControl: View {
     }
 }
 
-/// Auswahl Automatisch/Hell/Dunkel – wirkt sofort auf die ganze App.
+/// Auswahl Automatisch/Hell/Dunkel als Symbole – wirkt sofort auf die ganze App. Gleiche Quelle wie die Seite
+/// „Darstellung & Sprache“ (``ProfileViewModel/appearance``).
 struct AppearancePicker: View {
     let viewModel: ProfileViewModel
 
     var body: some View {
-        PaceSegmentedControl(
-            options: AppearancePreference.allCases.map { (value: $0, title: $0.title) },
-            selection: Binding(
-                get: { [appearance = viewModel.appearance] in appearance },
-                set: { [viewModel] appearance in viewModel.setAppearance(appearance) }
-            )
-        )
+        AppearanceSelector(selection: viewModel.appearance, showsTitles: false) { viewModel.setAppearance($0) }
     }
 }
 

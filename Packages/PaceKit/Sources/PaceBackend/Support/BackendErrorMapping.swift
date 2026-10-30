@@ -47,6 +47,25 @@ enum BackendErrorMapping {
         }
     }
 
+    /// Profilangaben (Migration 20261030100000). Unbekannte Funktion oder Spalte: Migration fehlt auf dem Server.
+    static func profileDetailsError(_ error: any Error) -> ProfileDetailsError {
+        if let error = error as? ProfileDetailsError { return error }
+        switch BackendFailure(error) {
+        case .network:
+            return .network
+        case .unauthenticated, .permissionDenied:
+            return .unexpected("not_authenticated")
+        case .database(let code, let message):
+            if ["PGRST202", "42883", "PGRST204", "42703"].contains(code) { return .unavailable }
+            if code == "23514" || message.contains("invalid_") { return .invalid }
+            if message.contains("not_found") { return .notFound }
+            if message.contains("rate_limited") { return .rateLimited }
+            return .unexpected("\(code): \(message)")
+        case .unknown(let description):
+            return .unexpected(description)
+        }
+    }
+
     static func regionError(_ error: any Error) -> RegionError {
         switch BackendFailure(error) {
         case .network:

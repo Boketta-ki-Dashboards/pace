@@ -21,14 +21,24 @@ public final class UserProfileViewModel {
     /// Bekannte Angaben – damit Kopf und Name sofort erscheinen, bevor das Profil geladen ist.
     public private(set) var profile: SocialProfile
     public private(set) var state: State = .loading
+    /// Bio, Interessen, Banner und freigegebene Auszeichnungen (leer, wenn keine angegeben, der Server sie noch nicht
+    /// kennt oder eine Blockierung besteht).
+    public private(set) var details: ProfileDetails = .empty
 
     @ObservationIgnored private let repository: any SocialRepository
     @ObservationIgnored private weak var social: SocialViewModel?
+    @ObservationIgnored private let detailsRepository: (any ProfileDetailsRepository)?
 
-    public init(profile: SocialProfile, repository: any SocialRepository, social: SocialViewModel?) {
+    public init(
+        profile: SocialProfile,
+        repository: any SocialRepository,
+        social: SocialViewModel?,
+        details: (any ProfileDetailsRepository)? = nil
+    ) {
         self.profile = profile
         self.repository = repository
         self.social = social
+        detailsRepository = details
     }
 
     public var loaded: PublicProfile? {
@@ -67,17 +77,26 @@ public final class UserProfileViewModel {
             state = .loading
         }
         let today = social?.today ?? ActivityCalendar().day(containing: Date())
+        // Profilangaben parallel; ein Fehler (z. B. Server ohne Profil-Erweiterung) lässt das Profil wie bisher.
+        async let extra = loadDetails()
         do {
-            let details = try await repository.publicProfile(profile.publicID, date: today)
-            profile = details.profile
-            state = .loaded(details)
+            let loaded = try await repository.publicProfile(profile.publicID, date: today)
+            profile = loaded.profile
+            details = await extra
+            state = .loaded(loaded)
         } catch SocialError.notFound {
+            details = .empty
             state = .notFound
         } catch is CancellationError {
             return
         } catch {
             state = .failed(SocialText.message(for: error))
         }
+    }
+
+    private func loadDetails() async -> ProfileDetails {
+        guard let detailsRepository else { return .empty }
+        return (try? await detailsRepository.details(of: profile.publicID)) ?? .empty
     }
 
     // MARK: Aktionen

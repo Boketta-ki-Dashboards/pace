@@ -401,3 +401,56 @@ struct ChatMediaDataCacheTests {
         #expect(cache.totalBytes == 0)
     }
 }
+
+/// Pace-Bot und Social-Profil 2.0 im Social-Tab (Auftrag 6).
+@MainActor
+struct HelpBotAndProfileDetailsTests {
+    @Test func helpBotIsALocalPageThatNeverStacksOrTouchesChats() async {
+        let repository = ChatRepositoryStub()
+        let chats = ChatListViewModel(repository: repository, media: nil, calendar: Fixtures.activityCalendar)
+        let social = SocialViewModel(repository: SocialRepositoryStub(), chats: chats, calendar: Fixtures.activityCalendar)
+        social.navigator.open(.helpBot)
+        social.navigator.open(.helpBot)
+        #expect(social.navigator.path == [.route(.helpBot)], "Kein doppeltes Auflegen")
+        social.helpBot.start()
+        social.helpBot.ask(.addFriends)
+        // Keine Unterhaltung am Server, keine ungelesenen Nachrichten, keine Abfragen.
+        #expect(repository.state.withLock { $0.calls }.isEmpty)
+        #expect(chats.unreadCount == 0)
+        // Von außen angefordert (Willkommensmitteilung): einmal.
+        social.request(.helpBot)
+        #expect(social.requestedRoute == .helpBot)
+        social.clearRequestedRoute()
+        #expect(social.requestedRoute == nil)
+    }
+
+    @Test func foreignProfileShowsDetailsAndOldServersStayAsBefore() async {
+        let mia = SocialProfile(publicID: UUID(), username: "mia", displayName: "Mia")
+        let repository = SocialRepositoryStub { state in
+            state.searchableProfiles = [mia]
+            state.relationships[mia.publicID] = .none
+        }
+        let social = SocialViewModel(repository: repository, calendar: Fixtures.activityCalendar)
+        social.profileDetails = ProfileDetailsRepositoryStub { state in
+            state.others[mia.publicID] = ProfileDetails(
+                bio: "Jeden Tag ein bisschen aktiver.",
+                interests: [.walking, .hiking],
+                bannerPath: nil,
+                showsAchievements: false,
+                achievements: [.streak30]
+            )
+        }
+        let model = try? #require(social.userProfile(for: mia))
+        await model?.load()
+        #expect(model?.details.bio == "Jeden Tag ein bisschen aktiver.")
+        #expect(model?.details.interests == [.walking, .hiking])
+        #expect(model?.details.visibleAchievements.isEmpty == true, "Nicht freigegeben: keine Auszeichnungen")
+
+        // Server ohne Migration: Profil wie bisher, ohne Angaben und ohne Fehler.
+        social.profileDetails = ProfileDetailsRepositoryStub { $0.error = .unavailable }
+        let old = try? #require(social.userProfile(for: mia))
+        await old?.load()
+        #expect(old?.details == .empty)
+        if case .loaded = old?.state {} else { Issue.record("Profil muss trotzdem laden") }
+    }
+}
