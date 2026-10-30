@@ -33,7 +33,8 @@ extension EnvironmentValues {
 }
 
 public extension View {
-    /// Für den Inhalt der Startseite eines Haupttabs **innerhalb** ihrer Scrollansicht.
+    /// Für den Inhalt der Startseite eines Haupttabs **innerhalb** ihrer Scrollansicht. Hält die Seite zugleich
+    /// waagerecht fest (``SwiftUI/View/paceVerticalScrollLock()``).
     ///
     /// Erneutes Antippen des aktiven Tabs: Auf der Startseite scrollt sie animiert ganz nach oben, auf einer Unterseite
     /// geht es zurück zur Startseite (wie bei iOS-Tab-Leisten) – nie zu einem anderen Tab.
@@ -55,6 +56,8 @@ private struct PaceTabRootModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // Startseiten scrollen nur senkrecht – auch im Anpassen-Modus von Home rutscht nichts zur Seite.
+            .paceVerticalScrollLock()
             .background {
                 EnclosingScrollViewFinder { [scrollView] found in
                     scrollView.value = found

@@ -26,6 +26,7 @@ public struct StreakDetailView: View {
             )
             .padding(.horizontal, PaceSpacing.m)
             .padding(.bottom, PaceSpacing.l)
+            .paceVerticalScrollLock()
         }
         .scrollIndicators(.hidden)
         .paceScreenBackground()

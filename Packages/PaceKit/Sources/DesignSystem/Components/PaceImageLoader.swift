@@ -208,22 +208,36 @@ extension EnvironmentValues {
 }
 
 /// Bild aus Storage (Gruppen- oder Chatbild) mit Platzhalter; GIFs laufen animiert.
+///
+/// Wie ``PaceAvatar``: Nach einem Wechsel des Verweises nie das vorherige Bild, verspätete Downloads werden verworfen
+/// (``MediaSlot``). Schlägt das Laden fehl, zeigt der Platzhalter ein Symbol; Antippen versucht es erneut.
 public struct PaceRemoteImage: View {
     private let reference: MediaReference?
     private let contentMode: ContentMode
 
     @Environment(\.paceImageLoader) private var loader
-    @State private var image: UIImage?
-    @State private var failed = false
+    @State private var slot = MediaSlot<UIImage>()
+    @State private var attempt = 0
 
     public init(_ reference: MediaReference?, contentMode: ContentMode = .fill) {
         self.reference = reference
         self.contentMode = contentMode
     }
 
+    /// Bild des aktuellen Verweises: geladen oder sofort aus dem Speicher.
+    private var shown: UIImage? {
+        guard let reference else { return nil }
+        if slot.reference == reference, let value = slot.value { return value }
+        return loader?.cachedImage(for: reference)
+    }
+
+    private var isFailed: Bool {
+        slot.reference == reference && slot.isFailed
+    }
+
     public var body: some View {
         ZStack {
-            if let image {
+            if let image = shown {
                 if image.images != nil {
                     AnimatedImageView(image: image, contentMode: contentMode)
                 } else {
@@ -233,26 +247,41 @@ public struct PaceRemoteImage: View {
                 }
             } else {
                 PaceColor.fieldBackground
-                if failed {
-                    Image(systemName: "photo")
-                        .font(.title2)
-                        .foregroundStyle(PaceColor.textSecondary)
+                if isFailed {
+                    Button {
+                        slot.retry()
+                        attempt += 1
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.title3)
+                            .foregroundStyle(PaceColor.textSecondary)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(PaceLocalization.text(de: "Bild erneut laden", en: "Reload image", ru: "Загрузить изображение снова"))
                 } else if reference != nil {
                     ProgressView()
                 }
             }
         }
         .clipped()
-        .task(id: reference) {
+        .task(id: LoadKey(reference: reference, attempt: attempt)) {
+            slot.show(reference)
             guard let reference, let loader else { return }
             if let cached = loader.cachedImage(for: reference) {
-                image = cached
+                slot.deliver(cached, for: reference)
                 return
             }
             let loaded = await loader.image(for: reference)
-            image = loaded
-            failed = loaded == nil
+            guard !Task.isCancelled else { return }
+            slot.deliver(loaded, for: reference)
         }
+    }
+
+    private struct LoadKey: Hashable {
+        let reference: MediaReference?
+        let attempt: Int
     }
 }
 

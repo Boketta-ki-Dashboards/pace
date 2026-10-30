@@ -33,6 +33,7 @@ public struct DayDetailsView: View {
             )
             .padding(.horizontal, PaceSpacing.m)
             .padding(.bottom, PaceSpacing.l)
+            .paceVerticalScrollLock()
         }
         .paceScreenBackground()
         .paceSubpage()

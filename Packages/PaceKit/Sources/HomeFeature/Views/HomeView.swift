@@ -51,6 +51,8 @@ public struct HomeView: View {
                 }
             }
             .scrollIndicators(.hidden)
+            // Nur senkrecht: kein waagerechtes Nachfedern (zusätzlich zur Sperre im Inhalt, ``paceTabRoot``).
+            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
             // Während ein Widget am Griff gezogen wird, scrollt nur noch das automatische Scrollen am Rand.
             .scrollDisabled(reorder.isDragging)
             .onGeometryChange(for: CGRect.self) { proxy in

@@ -277,10 +277,11 @@ struct HomeScrollViewFinder: UIViewRepresentable {
         uiView.findScrollView()
     }
 
-    /// Die waagerechte Seitenleiste der Haupttabs (breiter Inhalt) – darf nie automatisch gescrollt werden.
+    /// Die waagerechte Seitenleiste der Haupttabs – darf nie automatisch gescrollt werden. Ein senkrechter Inhalt, der
+    /// nur wenig breiter ist als der Bildschirm, zählt nicht dazu (sonst fände das Umsortieren keine Scrollansicht).
     @MainActor
     static func scrollsHorizontally(_ scrollView: UIScrollView) -> Bool {
-        scrollView.contentSize.width > scrollView.bounds.width + 1
+        PaceVerticalScrollLockRules.isPager(scrollView)
     }
 
     final class FinderView: UIView {

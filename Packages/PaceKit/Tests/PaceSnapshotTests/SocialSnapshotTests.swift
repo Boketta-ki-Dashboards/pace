@@ -123,7 +123,7 @@ struct SocialSnapshotTests {
 }
 
 /// Beispieldaten im Stil der Referenzbilder (nur für Bilder).
-private enum SocialSnapshotData {
+enum SocialSnapshotData {
     /// Gruppenkalender Oktober 2026 (6 Mitglieder, Ziel 8.000, benötigt 2): Werte nur für Bilder.
     static func calendar() -> GroupCalendar {
         let members = [me, leon, marie, gotscha, flavio, leo]

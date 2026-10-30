@@ -37,6 +37,8 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
     @State private var lastPosition: Double?
     /// Wie weit die Tastatur die Seitenleiste von unten überdeckt (0 ohne Tastatur).
     @State private var keyboardOverlap: CGFloat = 0
+    /// Die UIKit-Scrollansicht der Leiste (für das Einrasten, wenn Wischen gesperrt wird).
+    @State private var pagerView = PaceWeakPagerView()
     /// Nur für Tests: feste Überdeckung statt der gemessenen (der Simulator zeigt oft keine Bildschirmtastatur).
     var keyboardOverlapForTesting: CGFloat?
     /// Startpunkt beim ersten Anzeigen: die Seite des anfangs gewählten Tabs (nicht immer Home).
@@ -77,6 +79,14 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
                 }
             }
             .scrollTargetLayout()
+            // Die Seitenleiste ist bewusst waagerecht: ``SwiftUI/View/paceVerticalScrollLock()`` lässt sie in Ruhe.
+            .background {
+                PaceHorizontalScrollRegistrar { [pagerView] scrollView in
+                    pagerView.value = scrollView
+                }
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+            }
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.frame(in: .named(paceTabPagerSpace)).minX
             } action: { minX in
@@ -109,6 +119,12 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
         } action: { width in
             pageWidth = width
         }
+        // Wischen gesperrt (Anpassen-Modus, Unterseite, Tastatur): Die Leiste steht genau auf der gewählten Seite. Eine
+        // noch nicht eingerastete Leiste würde die Seite sonst um einen Rest versetzt zeigen.
+        .onChange(of: isPagingEnabled) { _, isEnabled in
+            guard !isEnabled else { return }
+            snapToSelection()
+        }
         .onChange(of: selection) { _, tab in
             let isAlreadyThere = lastPosition.flatMap { PaceTabPaging.settledIndex($0) } == tabs.firstIndex(of: tab)
             guard scrolledID != tab || !isAlreadyThere else { return }
@@ -117,6 +133,15 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
                 scrolledID = tab
             }
         }
+    }
+
+    /// Setzt die Leiste ohne Animation genau auf die gewählte Seite (keine Zwischenstellung).
+    private func snapToSelection() {
+        guard let scrollView = pagerView.value, let index = tabs.firstIndex(of: selection), scrollView.bounds.width > 0 else { return }
+        let x = CGFloat(index) * scrollView.bounds.width - scrollView.adjustedContentInset.left
+        pendingTarget = nil
+        guard abs(scrollView.contentOffset.x - x) > 0.5 else { return }
+        scrollView.setContentOffset(CGPoint(x: x, y: scrollView.contentOffset.y), animated: false)
     }
 
     /// Meldet die Position und übernimmt einen per Wischen erreichten Tab, sobald die Seite ruht.
@@ -198,4 +223,10 @@ struct PaceKeyboardOverlapReader: UIViewRepresentable {
             }
         }
     }
+}
+
+/// Schwache Referenz auf die Scrollansicht der Leiste (als `@State`, damit sie Neuzeichnungen übersteht).
+@MainActor
+final class PaceWeakPagerView {
+    weak var value: UIScrollView?
 }

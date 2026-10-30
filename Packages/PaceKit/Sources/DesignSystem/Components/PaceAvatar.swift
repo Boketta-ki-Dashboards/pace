@@ -4,6 +4,10 @@ import UIKit
 
 /// Rundes Profilbild: das hochgeladene Foto oder – solange keins da ist – Initialen. Der Farbton der Initialen ergibt
 /// sich stabil aus `seed`, damit dieselbe Person immer gleich aussieht.
+///
+/// Wechselt der Verweis (andere Person in einer wiederverwendeten Zeile, neues Profilbild), erscheint sofort das Bild
+/// aus dem Speicher oder die Initialen – nie das vorherige Foto. Ein verspätet fertiger Download eines früheren
+/// Verweises wird verworfen (``MediaSlot``).
 public struct PaceAvatar: View {
     private let initials: String
     private let seed: String
@@ -12,7 +16,7 @@ public struct PaceAvatar: View {
     private let image: MediaReference?
 
     @Environment(\.paceImageLoader) private var loader
-    @State private var photo: UIImage?
+    @State private var slot = MediaSlot<UIImage>()
 
     /// - Parameters:
     ///   - name: Anzeigename; daraus werden bis zu zwei Initialen gebildet.
@@ -26,11 +30,24 @@ public struct PaceAvatar: View {
         self.image = image
     }
 
+    /// Foto für den aktuellen Verweis: geladen oder – sofort, ohne Warten – aus dem Speicher; sonst Initialen.
+    private var photo: UIImage? {
+        guard let image else { return nil }
+        if slot.reference == image, let value = slot.value { return value }
+        return loader?.cachedImage(for: image, size: pixelSize)
+    }
+
+    /// In Anzeigegröße dekodiert (nicht das ganze hochgeladene Bild).
+    private var pixelSize: PaceImageLoader.Size {
+        PaceImageLoader.Size.avatar(points: size)
+    }
+
     public var body: some View {
         let tone = Self.tones[Self.toneIndex(for: seed)]
+        let shownPhoto = self.photo
         ZStack {
-            if let photo {
-                Image(uiImage: photo)
+            if let shownPhoto {
+                Image(uiImage: shownPhoto)
                     .resizable()
                     .scaledToFill()
                     .frame(width: size, height: size)
@@ -43,21 +60,26 @@ public struct PaceAvatar: View {
                     .background(isHighlighted ? PaceColor.accentStrong : tone.background, in: Circle())
             }
         }
-        .overlay(Circle().strokeBorder(isHighlighted ? PaceColor.accent : PaceColor.border, lineWidth: isHighlighted && photo != nil ? 2 : (isHighlighted ? 0 : 1)))
+        .overlay(Circle().strokeBorder(isHighlighted ? PaceColor.accent : PaceColor.border, lineWidth: isHighlighted && shownPhoto != nil ? 2 : (isHighlighted ? 0 : 1)))
         .accessibilityHidden(true)
-        .task(id: image) {
-            guard let image, let loader else {
-                photo = nil
+        .task(id: LoadKey(image: image, size: pixelSize)) {
+            slot.show(image)
+            guard let image, let loader else { return }
+            let size = pixelSize
+            if let cached = loader.cachedImage(for: image, size: size) {
+                slot.deliver(cached, for: image)
                 return
             }
-            // In Anzeigegröße dekodiert (nicht das ganze hochgeladene Bild).
-            let size = PaceImageLoader.Size.avatar(points: self.size)
-            if let cached = loader.cachedImage(for: image, size: size) {
-                photo = cached
-            } else {
-                photo = await loader.image(for: image, size: size)
-            }
+            let loaded = await loader.image(for: image, size: size)
+            // Inzwischen ein anderer Verweis (Aufgabe abgebrochen): das Ergebnis gehört nicht mehr hierher.
+            guard !Task.isCancelled else { return }
+            slot.deliver(loaded, for: image)
         }
+    }
+
+    private struct LoadKey: Hashable {
+        let image: MediaReference?
+        let size: PaceImageLoader.Size
     }
 
     static func initials(of name: String) -> String {

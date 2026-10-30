@@ -15,6 +15,7 @@ struct ProfileSubpage<Content: View>: View {
             content
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.l)
+                .paceVerticalScrollLock()
         }
         .scrollDismissesKeyboard(.interactively)
         .paceScreenBackground()

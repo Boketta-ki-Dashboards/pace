@@ -101,8 +101,12 @@ struct ChatMediaImage: View {
     let size: PaceImageLoader.Size
 
     @Environment(\.paceImageLoader) private var loader
-    @State private var image: UIImage?
-    @State private var failed = false
+    /// Bild vom Gerät (noch ohne Verweis, z. B. während des Hochladens).
+    @State private var localImage: UIImage?
+    /// Geladenes Bild je Verweis: nie das Bild eines anderen Verweises, verspätete Downloads werden verworfen.
+    @State private var slot = MediaSlot<UIImage>()
+    @State private var localFailed = false
+    @State private var attempt = 0
 
     init(
         reference: MediaReference?,
@@ -118,10 +122,21 @@ struct ChatMediaImage: View {
         self.size = size
     }
 
+    /// Bild des aktuellen Verweises (geladen oder sofort aus dem Speicher) bzw. vom Gerät.
+    private var shown: UIImage? {
+        guard let reference else { return localImage }
+        if slot.reference == reference, let value = slot.value { return value }
+        return loader?.cachedImage(for: reference, size: size)
+    }
+
+    private var failed: Bool {
+        reference == nil ? localFailed : slot.reference == reference && slot.isFailed
+    }
+
     var body: some View {
-        let shown = image ?? reference.flatMap { loader?.cachedImage(for: $0, size: size) }
+        let shownImage = self.shown
         ZStack {
-            if let shown {
+            if let shown = shownImage {
                 if animates, shown.images != nil {
                     ChatAnimatedImage(image: shown, contentMode: contentMode)
                 } else {
@@ -132,50 +147,69 @@ struct ChatMediaImage: View {
             } else {
                 PaceColor.fieldBackground
                 if failed {
-                    VStack(spacing: PaceSpacing.xxs) {
-                        Image(systemName: "photo")
-                            .font(.title3)
-                        Text(ChatUIText.imageUnavailable)
-                            .font(PaceFont.micro)
-                            .multilineTextAlignment(.center)
+                    // Antippen lädt erneut (z. B. nach einem Verbindungsabbruch).
+                    Button {
+                        slot.retry()
+                        attempt += 1
+                    } label: {
+                        VStack(spacing: PaceSpacing.xxs) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.title3)
+                            Text(ChatUIText.imageUnavailable)
+                                .font(PaceFont.micro)
+                                .multilineTextAlignment(.center)
+                        }
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .padding(PaceSpacing.xs)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                     }
-                    .foregroundStyle(PaceColor.textSecondary)
-                    .padding(PaceSpacing.xs)
+                    .buttonStyle(.plain)
+                    .disabled(reference == nil)
                 } else {
                     ProgressView()
                 }
             }
         }
         .clipped()
-        .task(id: reference) {
+        .task(id: LoadKey(reference: reference, attempt: attempt)) {
             await load()
         }
         // Außer Sicht gibt die Blase ihr Bild frei (der begrenzte Bildspeicher behält es, solange Platz ist) – lange
-        // Chats mit vielen GIFs halten so nicht alle Bilder gleichzeitig im Arbeitsspeicher.
+        // Chats mit vielen GIFs halten so nicht alle Bilder gleichzeitig im Arbeitsspeicher. Beim Wiedererscheinen
+        // kommt es ohne Ladeanzeige aus dem Speicher.
         .onDisappear {
-            image = nil
+            localImage = nil
+            slot.show(nil)
         }
     }
 
     private func load() async {
+        slot.show(reference)
         if let reference, let loader {
             if let localData {
                 // Nur die Daten ablegen; dekodiert wird beim Laden, nicht auf dem Main Thread.
                 loader.store(localData, for: reference)
             }
             if let cached = loader.cachedImage(for: reference, size: size) {
-                image = cached
+                slot.deliver(cached, for: reference)
                 return
             }
             let loaded = await loader.image(for: reference, size: size)
-            image = loaded
-            failed = loaded == nil
+            // Blase inzwischen außer Sicht oder anderer Verweis: Ergebnis verwerfen.
+            guard !Task.isCancelled else { return }
+            slot.deliver(loaded, for: reference)
         } else if let localData {
-            image = UIImage(data: localData)
-            failed = image == nil
+            localImage = UIImage(data: localData)
+            localFailed = localImage == nil
         } else {
-            failed = true
+            localFailed = true
         }
+    }
+
+    private struct LoadKey: Hashable {
+        let reference: MediaReference?
+        let attempt: Int
     }
 }
 

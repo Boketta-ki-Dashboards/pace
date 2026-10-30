@@ -332,9 +332,13 @@ public final class MediaRepositoryStub: MediaRepository, Sendable {
         public var uploads: [MediaUploadTarget] = []
         public var deleted: [MediaReference] = []
         public var error: MediaError?
+        /// Downloads je Datei (für „kein doppelter Download“).
+        public var downloads: [MediaReference: Int] = [:]
     }
 
     public let state: Locked<State>
+    /// Downloads warten, solange der Name `data:<Pfad>` geschlossen ist (verspätete Antworten nachstellen).
+    public let gate = CallGate()
 
     public init(configure: (inout State) -> Void = { _ in }) {
         var state = State()
@@ -362,7 +366,9 @@ public final class MediaRepositoryStub: MediaRepository, Sendable {
     }
 
     public func data(for reference: MediaReference) async throws -> Data {
-        try state.withLock { state in
+        state.withLock { $0.downloads[reference, default: 0] += 1 }
+        await gate.pass("data:\(reference.path)")
+        return try state.withLock { state in
             if let error = state.error { throw error }
             guard let data = state.files[reference] else { throw MediaError.notFound }
             return data

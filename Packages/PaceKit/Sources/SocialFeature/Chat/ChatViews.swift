@@ -211,6 +211,7 @@ public struct ChatView: View {
                     .padding(.horizontal, PaceSpacing.m)
                     .padding(.top, PaceSpacing.xxs)
                     .padding(.bottom, PaceSpacing.s)
+                    .paceVerticalScrollLock()
                     .onGeometryChange(for: CGRect.self) { content in
                         content.frame(in: .named(Self.scrollSpace))
                     } action: { frame in

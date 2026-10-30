@@ -16,6 +16,7 @@ struct ChatFavoritesSheet: View {
                     content
                 }
                 .padding(PaceSpacing.m)
+                .paceVerticalScrollLock()
             }
             .scrollIndicators(.hidden)
             .paceScreenBackground()

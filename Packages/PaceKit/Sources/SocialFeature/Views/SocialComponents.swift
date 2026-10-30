@@ -11,6 +11,7 @@ extension View {
             self
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.l)
+                .paceVerticalScrollLock()
         }
         .scrollDismissesKeyboard(.interactively)
         .paceScreenBackground()

@@ -13,6 +13,7 @@ struct HomeNotificationsScreen: View {
             HomeNotificationsContent(viewModel: viewModel, onOpen: onOpen)
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.l)
+                .paceVerticalScrollLock()
         }
         .refreshable { [viewModel] in
             await viewModel.social.load()
