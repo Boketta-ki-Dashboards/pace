@@ -81,6 +81,7 @@ struct FriendsRankingContent: View {
             name: entry.isCurrentUser ? SocialText.you : entry.shownName,
             steps: entry.competitionSteps,
             seed: entry.publicUserID.uuidString,
+            image: entry.avatar,
             isCurrentUser: entry.isCurrentUser,
             showsStepIcon: true,
             showsChevron: !entry.isCurrentUser

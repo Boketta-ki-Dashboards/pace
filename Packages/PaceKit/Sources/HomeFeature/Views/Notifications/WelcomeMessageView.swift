@@ -36,7 +36,8 @@ struct WelcomeMessageContentView: View {
                         .font(PaceFont.headline)
                         .foregroundStyle(PaceColor.textPrimary)
                     if let date = viewModel.systemMessages.message(.welcome)?.createdAt {
-                        Text(date.formatted(date: .abbreviated, time: .shortened))
+                        // Datum in der App-Sprache (nicht der iPhone-Sprache), wie in der Mitteilungsliste.
+                        Text(date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(PaceLocalization.shared.locale)))
                             .font(PaceFont.caption)
                             .foregroundStyle(PaceColor.textSecondary)
                     }
