@@ -556,6 +556,8 @@ public final class ProfileDetailsRepositoryStub: ProfileDetailsRepository, Senda
     }
 
     public let state: Locked<State>
+    /// Hält `ownDetails` („ownDetails“) bzw. `saveOwnDetails` („save“) an, bis der Test sie freigibt.
+    public let gate = CallGate()
 
     public init(configure: (inout State) -> Void = { _ in }) {
         var state = State()
@@ -575,14 +577,16 @@ public final class ProfileDetailsRepositoryStub: ProfileDetailsRepository, Senda
     }
 
     public func ownDetails() async throws -> ProfileDetails {
-        try state.withLock { state in
+        await gate.pass("ownDetails")
+        return try state.withLock { state in
             if let error = state.error { throw error }
             return state.own
         }
     }
 
     public func saveOwnDetails(_ details: ProfileDetails) async throws -> ProfileDetails {
-        try state.withLock { state in
+        await gate.pass("save")
+        return try state.withLock { state in
             if let error = state.error { throw error }
             var stored = details
             stored.bio = details.bio.flatMap(ProfileBioRules.normalized)

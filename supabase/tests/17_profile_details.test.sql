@@ -1,6 +1,6 @@
 -- Pace: Social-Profil 2.0 – Bio, Interessen, Banner, freiwillige Auszeichnungen (Migration 20261030100000).
 begin;
-select plan(32);
+select plan(35);
 
 -- =============================================================================================================
 -- Struktur
@@ -193,6 +193,34 @@ select is(
   public.social_profile_details(pg_temp.pid(1)),
   jsonb_build_object('bio', null, 'interests', '[]'::jsonb, 'banner_path', null, 'achievements', '[]'::jsonb),
   'von mir blockierte Person: keine persönlichen Angaben'
+);
+
+-- =============================================================================================================
+-- Meldungen: Bio, Interessen und Banner im Schnappschuss; gemeldetes Banner bleibt Beweis
+-- =============================================================================================================
+
+set local request.jwt.claims = '{"sub":"a1700000-0000-4000-8000-000000000002","role":"authenticated"}';
+select lives_ok(
+  format('select public.social_report(%L, %L, %L)', 'user', pg_temp.pid(1), 'inappropriate'), 'marco meldet lena'
+);
+
+reset role;
+select is(
+  (select jsonb_build_object('bio', r.target_snapshot -> 'bio', 'interests', r.target_snapshot -> 'interests',
+                             'banner_path', r.target_snapshot -> 'banner_path', 'nickname', r.target_snapshot ? 'nickname')
+     from public.reports r where r.target_type = 'user' and r.target_id = pg_temp.pid(1)),
+  jsonb_build_object(
+    'bio', 'Auf dem Weg zu 100 Tagen.',
+    'interests', jsonb_build_array('walking', 'running', 'hiking', 'fitness', 'cycling'),
+    'banner_path', 'b1700000-0000-4000-8000-000000000001/banner.jpg',
+    'nickname', false
+  ),
+  'Meldung: Schnappschuss mit Bio, Interessen und Banner (ohne Spitznamen)'
+);
+select ok(
+  pace_access.is_report_evidence('avatars', 'b1700000-0000-4000-8000-000000000001/banner.jpg')
+  and not pace_access.is_report_evidence('avatars', 'b1700000-0000-4000-8000-000000000002/fremd.jpg'),
+  'gemeldetes Banner ist bis zur Moderation vor dem Löschen geschützt'
 );
 
 select * from finish();

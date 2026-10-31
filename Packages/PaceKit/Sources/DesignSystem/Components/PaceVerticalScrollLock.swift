@@ -73,8 +73,10 @@ public enum PaceVerticalScrollLockRules {
         pin(scrollView)
     }
 
-    /// Setzt einen waagerechten Versatz zurück (senkrechte Position bleibt).
+    /// Setzt einen waagerechten Versatz zurück (senkrechte Position bleibt). Die Seitenleiste der Haupttabs wird nie
+    /// festgehalten – auch dann nicht, wenn ein Marker sie versehentlich beobachtet (Selbstschutz).
     public static func pin(_ scrollView: UIScrollView) {
+        guard !isPager(scrollView) else { return }
         let x = restingX(scrollView)
         guard abs(scrollView.contentOffset.x - x) > 0.25 else { return }
         scrollView.contentOffset = CGPoint(x: x, y: scrollView.contentOffset.y)
@@ -114,7 +116,11 @@ private struct PaceVerticalScrollLockView: UIViewRepresentable {
             var candidate = superview
             while let view = candidate {
                 if let found = view as? UIScrollView {
-                    guard PaceVerticalScrollLockRules.canLock(found) else { return }
+                    guard PaceVerticalScrollLockRules.canLock(found) else {
+                        // Keine senkrechte Seite (z. B. die Seitenleiste): eine bestehende Beobachtung lösen.
+                        detach()
+                        return
+                    }
                     guard found !== scrollView else {
                         PaceVerticalScrollLockRules.lock(found)
                         return

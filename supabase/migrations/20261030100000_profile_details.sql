@@ -18,6 +18,9 @@
 --   social_public_profile (nicht sichtbar → not_found). Ist eine der beiden Personen blockiert, kommen keine
 --   persönlichen Angaben (Bio, Interessen, Banner, Auszeichnungen) mit.
 -- * Ändern: direkt in der eigenen Zeile (RLS wie bisher: nur die eigene Zeile).
+-- * Meldungen (social_report): Der Schnappschuss einer gemeldeten Person enthält auch Bio, Interessen und Banner;
+--   ein gemeldetes Banner ist wie ein gemeldetes Profilbild bis zur Moderation vor dem Löschen geschützt
+--   (pace_access.is_report_evidence, hier ergänzt).
 -- =============================================================================================================
 
 alter table public.profiles
@@ -196,3 +199,127 @@ revoke all on function public.social_profile_details(uuid) from public, anon;
 grant execute on function public.social_profile_details(uuid) to authenticated;
 comment on function public.social_profile_details(uuid) is
   'Pace: Bio, Interessen, Banner und – nur wenn freigegeben – Auszeichnungen einer Person. not_found wie social_public_profile; bei Blockierung leer. Max. 120 je 10 Minuten.';
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Meldungen: Bio, Interessen und Banner im Schnappschuss; das gemeldete Banner bleibt bis zur Moderation erhalten
+-- ---------------------------------------------------------------------------------------------------------------
+
+-- Ersetzt die Fassung aus 20261023100000_friend_nicknames.sql unverändert bis auf den Schnappschuss einer gemeldeten
+-- Person (zusätzlich bio, interests, banner_path).
+create or replace function public.social_report(p_target_type text, p_target_id uuid, p_reason text, p_details text default null)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_me uuid := private.require_profile();
+  v_details text := nullif(btrim(coalesce(p_details, ''), E' \t\n\r'), '');
+  v_snapshot jsonb;
+  v_target_user uuid;
+  v_message public.chat_messages%rowtype;
+begin
+  if p_target_id is null then
+    raise exception 'not_found';
+  end if;
+
+  case p_target_type
+    when 'user' then
+      -- Jede bekannte Person außer mir selbst (auch nach einer Blockierung, z. B. wegen Belästigung davor).
+      -- Seit Social-Profil 2.0 mit Bio, Interessen und Banner: neuer nutzergenerierter Inhalt, der sich sonst nach
+      -- der Meldung spurlos ändern ließe.
+      select p.id,
+             (private.profile_json(p) - 'nickname')
+               || jsonb_build_object('bio', p.bio, 'interests', to_jsonb(p.interests), 'banner_path', p.banner_path)
+        into v_target_user, v_snapshot
+        from public.profiles p
+       where p.public_id = p_target_id;
+      if v_target_user is null or v_target_user = v_me then
+        raise exception 'not_found';
+      end if;
+    when 'message' then
+      -- Nur Nachrichten anderer in Unterhaltungen, die ich lesen darf.
+      select * into v_message from public.chat_messages m where m.id = p_target_id and m.deleted_at is null;
+      if not found
+         or v_message.sender_id is not distinct from v_me
+         or not private.can_read_conversation(v_message.conversation_id, v_me) then
+        raise exception 'not_found';
+      end if;
+      v_snapshot := jsonb_build_object(
+        'conversation_id', v_message.conversation_id,
+        'kind', v_message.kind,
+        'body', v_message.body,
+        'media_path', v_message.media_path,
+        'sender', (select private.profile_json(s) - 'nickname' from public.profiles s where s.id = v_message.sender_id),
+        'created_at', v_message.created_at
+      );
+    when 'group' then
+      -- Gruppen, in denen ich Mitglied bin oder in die ich eingeladen wurde.
+      if private.group_role(p_target_id, v_me) is null
+         and not exists (
+           select 1 from public.group_invitations i
+            where i.group_id = p_target_id and i.invitee_id = v_me and i.status = 'pending'
+         ) then
+        raise exception 'not_found';
+      end if;
+      select jsonb_build_object('name', g.name, 'description', g.description, 'image_path', g.image_path)
+        into v_snapshot
+        from public.groups g
+       where g.id = p_target_id;
+    else
+      raise exception 'invalid_input';
+  end case;
+
+  if p_reason is null
+     or p_reason not in ('spam', 'harassment', 'inappropriate', 'impersonation', 'other')
+     or (v_details is not null and char_length(v_details) > 1000) then
+    raise exception 'invalid_input';
+  end if;
+
+  -- Erneutes Melden desselben Ziels, solange die Meldung offen ist, ist unschädlich und zählt nicht.
+  if exists (
+    select 1 from public.reports r
+     where r.reporter_id = v_me and r.target_type = p_target_type and r.target_id = p_target_id and r.status = 'open'
+  ) then
+    return;
+  end if;
+  perform private.consume_rate_limit(v_me, 'report', 10, interval '24 hours');
+
+  insert into public.reports (reporter_id, target_type, target_id, reason, details, target_snapshot)
+  values (v_me, p_target_type, p_target_id, p_reason, v_details, coalesce(v_snapshot, '{}'::jsonb))
+  on conflict (reporter_id, target_type, target_id) where status = 'open' do nothing;
+end;
+$$;
+revoke all on function public.social_report(text, uuid, text, text) from public, anon;
+grant execute on function public.social_report(text, uuid, text, text) to authenticated;
+
+-- Prüfung der Storage-Delete-Policies für gemeldete Banner.
+create index reports_banner_evidence_idx on public.reports ((target_snapshot ->> 'banner_path'))
+  where target_type = 'user' and status in ('open', 'reviewing') and target_snapshot ->> 'banner_path' is not null;
+
+-- Ersetzt die Fassung aus 20261019100400_moderation_account.sql: zusätzlich das Banner aus dem Schnappschuss einer
+-- offenen Meldung (Bucket avatars). Die Storage-Delete-Policies und account_own_media nutzen die Funktion unverändert.
+create or replace function pace_access.is_report_evidence(p_bucket text, p_name text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.reports r
+     where r.status in ('open', 'reviewing')
+       and r.evidence_bucket = p_bucket
+       and r.evidence_path = p_name
+  ) or (
+    p_bucket = 'avatars'
+    and exists (
+      select 1 from public.reports r
+       where r.target_type = 'user'
+         and r.status in ('open', 'reviewing')
+         and r.target_snapshot ->> 'banner_path' = p_name
+    )
+  );
+$$;
+revoke all on function pace_access.is_report_evidence(text, text) from public, anon;
+grant execute on function pace_access.is_report_evidence(text, text) to authenticated;

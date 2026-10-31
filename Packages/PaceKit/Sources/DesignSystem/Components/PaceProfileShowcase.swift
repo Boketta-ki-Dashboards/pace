@@ -15,7 +15,10 @@ public struct PaceProfileShowcase<Actions: View>: View {
     private let bioPrompt: (() -> Void)?
     private let actions: Actions
 
-    @ScaledMetric(relativeTo: .title) private var avatarSize: CGFloat = 84
+    @ScaledMetric(relativeTo: .title) private var scaledAvatarSize: CGFloat = 84
+
+    /// Mit großer Schrift wächst das Profilbild mit, aber begrenzt – daneben stehen die Aktionen.
+    private var avatarSize: CGFloat { min(scaledAvatarSize, 104) }
 
     /// - Parameters:
     ///   - username: ohne „@“.
@@ -41,8 +44,12 @@ public struct PaceProfileShowcase<Actions: View>: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Ein gefülltes Bild meldet seine Füllgröße – erst hier auf die Bannerhöhe zuschneiden (sonst ragt es
+            // auf breiten Geräten unter den Bannerrand).
             PaceProfileBanner(reference: details.banner)
+                .frame(maxWidth: .infinity)
                 .frame(height: 112)
+                .clipped()
             VStack(alignment: .leading, spacing: PaceSpacing.s) {
                 HStack(alignment: .bottom, spacing: PaceSpacing.s) {
                     PaceAvatar(name: displayName, seed: seed, size: avatarSize, image: avatar)

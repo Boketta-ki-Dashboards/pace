@@ -14,6 +14,8 @@ struct ProfileEditPage: View {
     @State private var showsPhotoPicker = false
     @State private var pickerItem: PhotosPickerItem?
     @State private var cropImage: BannerCropImage?
+    /// Entwürfe nur beim ersten Öffnen übernehmen – zurück von „Konto & Profil“ bleiben ungespeicherte Eingaben.
+    @State private var didBeginEditing = false
 
     var body: some View {
         ProfileSubpage {
@@ -26,8 +28,9 @@ struct ProfileEditPage: View {
             )
         }
         .task { [details = viewModel.details] in
-            await details.load()
-            details.beginEditing()
+            guard !didBeginEditing else { return }
+            didBeginEditing = true
+            await details.prepareEditing()
         }
         .photosPicker(isPresented: $showsPhotoPicker, selection: $pickerItem, matching: .images)
         .onChange(of: pickerItem) { _, item in
@@ -78,13 +81,35 @@ struct ProfileEditContent: View {
             PaceSubpageHeader(backTitle: backTitle, title: ProfileRoute.editProfile.title)
                 .padding(.bottom, PaceSpacing.xs)
 
-            if details.availability == .unavailable {
+            switch details.availability {
+            case .unknown:
+                // Erstes Laden: Ladeanzeige statt deaktivierter Felder ohne Erklärung.
+                PaceCard {
+                    HStack(spacing: PaceSpacing.s) {
+                        ProgressView()
+                        Text(PaceLocalization.text(de: "Wird geladen …", en: "Loading …", ru: "Загрузка …"))
+                            .font(PaceFont.callout)
+                            .foregroundStyle(PaceColor.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            case .unavailable:
                 PaceCard {
                     ProfileFootnote(text: ProfileDetailsTexts.unavailable)
                 }
+            case .failed(let message):
+                PaceCard {
+                    VStack(alignment: .leading, spacing: PaceSpacing.s) {
+                        ProfileFootnote(text: message, isError: true)
+                        Button(ProfileDetailsTexts.retry) {
+                            Task { await details.prepareEditing() }
+                        }
+                        .buttonStyle(.paceCompact)
+                    }
+                }
+            case .available:
+                bannerCard
             }
-
-            bannerCard
             nameCard
             if details.isAvailable {
                 bioCard
@@ -92,6 +117,10 @@ struct ProfileEditContent: View {
                 achievementsCard
                 if let error = details.errorMessage {
                     ProfileFootnote(text: error, isError: true)
+                } else if details.didSave, !details.hasChanges {
+                    Label(ProfileDetailsTexts.saved, systemImage: "checkmark.circle.fill")
+                        .font(PaceFont.callout.weight(.semibold))
+                        .foregroundStyle(PaceColor.accent)
                 }
                 Button {
                     Task { await details.save() }
@@ -132,7 +161,7 @@ struct ProfileEditContent: View {
                         .buttonStyle(.paceCompact)
                     }
                 }
-                .disabled(!details.isAvailable || details.bannerActivity != .idle)
+                .disabled(!details.isAvailable || details.isBusy)
             }
         }
     }
@@ -217,6 +246,11 @@ struct ProfileEditContent: View {
                         .buttonStyle(.pacePressable)
                         .disabled(!isSelected && !details.canAddInterest)
                         .accessibilityAddTraits(isSelected ? .isSelected : [])
+                        .accessibilityHint(!isSelected && !details.canAddInterest ? PaceLocalization.text(
+                            de: "Höchstens 5 Interessen. Wähle zuerst eines ab.",
+                            en: "At most 5 interests. Deselect one first.",
+                            ru: "Не больше 5 интересов. Сначала сними один."
+                        ) : "")
                     }
                 }
             }

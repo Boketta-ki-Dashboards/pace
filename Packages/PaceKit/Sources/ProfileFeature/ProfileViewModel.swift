@@ -350,6 +350,7 @@ public final class ProfileViewModel {
             regionLoadFailed = true
         }
         await detailsLoaded
+        await details.refreshPublishedAchievements()
     }
 
     public func setRegionalLeaderboardEnabled(_ enabled: Bool) async {
@@ -439,6 +440,8 @@ public final class ProfileViewModel {
     /// Lädt den Verlauf für Serie und Rekord (selten, siehe `ActivityHistoryStore`).
     public func loadActivity() async {
         await streak?.loadIfNeeded()
+        // Veröffentlichte Auszeichnungen um neu erreichte Stufen ergänzen (nur aufwerten, nie entfernen).
+        await details.refreshPublishedAchievements()
     }
 
     /// Ob iOS alternative App-Icons erlaubt.

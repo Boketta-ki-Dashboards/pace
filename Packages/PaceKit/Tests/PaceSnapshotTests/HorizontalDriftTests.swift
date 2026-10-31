@@ -48,6 +48,7 @@ struct HorizontalDriftTests {
         // 1. Home normal.
         let normal = try await screen.stableMeasurement()
         #expect(normal.header != nil && normal.title != nil && normal.content != nil, "Messung ohne Inhalt: \(normal)")
+        screen.expectNoOverflow("normal")
 
         // 2. Anpassen: Wischen zwischen den Tabs ist gesperrt.
         dashboard.beginEditing()
@@ -58,8 +59,11 @@ struct HorizontalDriftTests {
         let editing = try await screen.stableMeasurement()
         #expect(editing.header != nil && editing.title != nil && editing.content != nil, "Messung ohne Inhalt: \(editing)")
         screen.logScrollViews("Anpassen")
+        // Ursache auf dem Gerät: Inhalt minimal breiter als die Seite → waagerecht verschiebbar. Darf nicht sein.
+        screen.expectNoOverflow("Anpassen")
 
-        // 3.–6. Langsam und schnell nach links und rechts (kleine und große Wege).
+        // 3.–6. Langsam und schnell nach links und rechts (kleine und große Wege). Rauchtest: Im Simulator ist dabei
+        // nichts waagerecht beweglich; die Sperre selbst prüft `lockResetsHorizontalOffsetButNeverThePager`.
         for dx in [-40, 40, -device.size.width * 0.8, device.size.width * 0.8] as [CGFloat] {
             try await screen.drag(dx: dx, dy: 0)
             screen.expectNoHorizontalOffset("waagerecht \(Int(dx))")
@@ -74,19 +78,21 @@ struct HorizontalDriftTests {
         try await screen.drag(dx: 60, dy: -160)
         #expect(scrollView.contentOffset.y > startY + 40, "Senkrechtes Scrollen muss weiter gehen")
         screen.expectNoHorizontalOffset("diagonal nach unten")
-        screen.expectSamePosition(editing, "diagonal nach unten", compareRows: false)
+        screen.expectSamePosition(editing, "diagonal nach unten", compareRows: false, compareTrailingEdge: false)
         try await screen.release()
         try await screen.drag(dx: -60, dy: 160)
         screen.expectNoHorizontalOffset("diagonal nach oben")
-        screen.expectSamePosition(editing, "diagonal nach oben", compareRows: false)
+        screen.expectSamePosition(editing, "diagonal nach oben", compareRows: false, compareTrailingEdge: false)
         try await screen.release()
         try await screen.scrollToTop()
 
-        // 9./10. Widget verschieben und ablegen (Umsortieren wie mit dem Griff): Ränder bleiben, wo sie waren.
+        // 9./10. Widget verschieben und ablegen (Umsortieren wie mit dem Griff): Kopfzeile und linker Widget-Rand bleiben,
+        // wo sie waren. Der rechte Rand hängt davon ab, welche Widgets (klein/groß) danach im Bild sind – eine
+        // Verschiebung der Seite bewegt immer auch den linken Rand.
         let first = try #require(dashboard.modules.first?.id)
         dashboard.moveDown(first)
         try await screen.settle()
-        screen.expectSamePosition(editing, "nach dem Verschieben", compareRows: false)
+        screen.expectSamePosition(editing, "nach dem Verschieben", compareRows: true, compareTrailingEdge: false)
         screen.expectNoHorizontalOffset("nach dem Verschieben")
         #expect(abs(pager.contentOffset.x - pagerOffset) < 0.5)
 
@@ -118,6 +124,36 @@ struct HorizontalDriftTests {
         #expect(!pager.isScrollEnabled, "Auch ohne Sperre ist das Tab-Wischen im Anpassen-Modus aus")
     }
 
+    /// Die Sperre selbst, deterministisch ohne Fingerbewegung (Review): Eine senkrechte Scrollansicht, deren Inhalt
+    /// 1 pt breiter ist als sie, wird waagerecht sofort zurückgesetzt – ohne Sperre bleibt der Versatz stehen
+    /// (Gegenprobe, der Test erkennt also eine fehlende Sperre). Ein Marker, der versehentlich direkt in einer Seite der
+    /// Tab-Leiste sitzt, hält die Leiste nie fest.
+    @Test func lockResetsHorizontalOffsetButNeverThePager() async throws {
+        for isEnabled in [true, false] {
+            let screen = DriftScreen(OverflowingPage().environment(\.paceVerticalScrollLockEnabled, isEnabled), device: .small)
+            defer { screen.close() }
+            try await screen.settle()
+            let page = try #require(screen.pageScrollView)
+            page.contentOffset = CGPoint(x: 30, y: page.contentOffset.y)
+            try await screen.settle(150)
+            let offset = page.contentOffset.x - PaceVerticalScrollLockRules.restingX(page)
+            if isEnabled {
+                #expect(abs(offset) < 0.5, "Sperre setzt den waagerechten Versatz zurück (\(offset))")
+                #expect(page.isDirectionalLockEnabled && !page.alwaysBounceHorizontal)
+            } else {
+                #expect(offset > 10, "Gegenprobe: ohne Sperre bleibt der Versatz (\(offset))")
+            }
+        }
+
+        let screen = DriftScreen(PagerWithStrayMarker(), device: .small)
+        defer { screen.close() }
+        try await screen.settle()
+        let pager = try #require(screen.pager)
+        pager.contentOffset = CGPoint(x: pager.bounds.width, y: 0)
+        try await screen.settle(150)
+        #expect(abs(pager.contentOffset.x - pager.bounds.width) < 0.5, "Tab-Leiste wird nicht festgehalten")
+    }
+
     // MARK: Andere Seiten (Teil A, 3)
 
     /// Seiten, die nur senkrecht scrollen: Weder waagerechte noch diagonale Bewegungen verschieben sie seitlich.
@@ -138,6 +174,7 @@ struct HorizontalDriftTests {
         ]
         for (name, page) in pages {
             let screen = DriftScreen(MainScreenHarness(selected: 0, content: page), device: .large)
+            defer { screen.close() }
             try await screen.settle(900)
             let before = try await screen.stableMeasurement()
             for (dx, dy) in [(-120, 0), (120, 0), (70, -150), (-70, 150)] as [(CGFloat, CGFloat)] {
@@ -149,7 +186,6 @@ struct HorizontalDriftTests {
                 }
                 try await screen.release()
             }
-            screen.close()
         }
     }
 }
@@ -171,6 +207,32 @@ private struct EditablePagerHarness: View {
             } else {
                 Color(uiColor: Self.colors[tab])
             }
+        }
+    }
+}
+
+/// Senkrechte Seite, deren Inhalt 1 pt breiter ist als das iPhone SE (375 pt).
+private struct OverflowingPage: View {
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 8) {
+                ForEach(0..<30, id: \.self) { _ in
+                    Color.gray.frame(width: 376, height: 40)
+                }
+            }
+            .paceVerticalScrollLock()
+        }
+    }
+}
+
+/// Tab-Leiste, in deren Seiten ein Marker der Sperre ohne eigene Scrollansicht sitzt (falsch eingebaut).
+private struct PagerWithStrayMarker: View {
+    @State private var selection = 0
+
+    var body: some View {
+        PaceTabPager(tabs: [0, 1, 2], selection: $selection, isPagingEnabled: true, onPositionChange: { _ in }) { tab in
+            Color(uiColor: tab == 0 ? .systemRed : .systemBlue)
+                .paceVerticalScrollLock()
         }
     }
 }
@@ -248,7 +310,7 @@ private final class DriftScreen {
             let frame = scrollView.convert(scrollView.bounds, to: window)
             return frame.width >= device.size.width * 0.9 && frame.height >= device.size.height * 0.4
                 && window.bounds.intersects(frame)
-                // Auf dem iPhone SE ist die Scrollansicht von Home 1 pt breiter als der Bildschirm (Rundung im Pager).
+                // Kleine Toleranz für Rundungen des Rahmens; ein Überlauf des Inhalts prüft `expectNoOverflow`.
                 && frame.minX > -2 && frame.maxX < device.size.width + 2
         }
     }
@@ -261,7 +323,7 @@ private final class DriftScreen {
         for scrollView in scrollViews {
             let frame = scrollView.convert(scrollView.bounds, to: window)
             print("""
-            [Drift] \(label): \(type(of: scrollView)) frame=\(frame.integral) content=\(scrollView.contentSize) \
+            [Drift] \(label): \(type(of: scrollView)) frame=\(frame) bounds=\(scrollView.bounds.size) content=\(scrollView.contentSize) \
             offset=\(scrollView.contentOffset) enabled=\(scrollView.isScrollEnabled) \
             bounceH=\(scrollView.alwaysBounceHorizontal) bounceV=\(scrollView.alwaysBounceVertical) \
             lock=\(scrollView.isDirectionalLockEnabled) pager=\(PaceVerticalScrollLockRules.isPager(scrollView)) \
@@ -275,9 +337,9 @@ private final class DriftScreen {
         guard scrollView.isScrollEnabled, scrollView.isUserInteractionEnabled, scrollView.panGestureRecognizer.isEnabled else { return false }
         let inset = scrollView.adjustedContentInset
         if horizontally {
-            return scrollView.contentSize.width + inset.left + inset.right > scrollView.bounds.width + 0.5 || scrollView.alwaysBounceHorizontal
+            return scrollView.contentSize.width + inset.left + inset.right > scrollView.bounds.width + 0.01 || scrollView.alwaysBounceHorizontal
         }
-        return scrollView.contentSize.height + inset.top + inset.bottom > scrollView.bounds.height + 0.5 || scrollView.alwaysBounceVertical
+        return scrollView.contentSize.height + inset.top + inset.bottom > scrollView.bounds.height + 0.01 || scrollView.alwaysBounceVertical
     }
 
     // MARK: Fingerbewegung
@@ -336,23 +398,43 @@ private final class DriftScreen {
         }
     }
 
+    /// Der Inhalt der senkrechten Seite ist nicht breiter als die Seite (sonst ließe sie sich waagerecht ziehen).
+    func expectNoOverflow(_ label: String, sourceLocation: SourceLocation = #_sourceLocation) {
+        for scrollView in pageScrollViews {
+            let inset = scrollView.adjustedContentInset
+            let width = scrollView.contentSize.width + inset.left + inset.right
+            #expect(
+                width <= scrollView.bounds.width + 0.01,
+                "\(label): Inhalt \(width) pt breiter als die Seite \(scrollView.bounds.width) pt",
+                sourceLocation: sourceLocation
+            )
+        }
+    }
+
     /// Wortmarke, Überschrift, Buttons und Widget-Ränder stehen waagerecht an derselben Stelle (± 3 pt für das
     /// Wackeln und die Schatten im Anpassen-Modus).
+    /// - Parameter compareTrailingEdge: Auch den rechten Widget-Rand vergleichen – nur, wenn dieselben Widgets im Bild
+    ///   sind (nicht nach senkrechtem Scrollen oder Umsortieren). Eine Verschiebung bewegt immer den linken Rand.
     func expectSamePosition(
         _ reference: Measurement,
         _ label: String,
         compareRows: Bool,
         compareContent: Bool = true,
+        compareTrailingEdge: Bool = true,
         sourceLocation: SourceLocation = #_sourceLocation
     ) {
         let now = measure()
-        func check(_ old: Extent?, _ new: Extent?, _ part: String) {
+        func check(_ old: Extent?, _ new: Extent?, _ part: String, trailing: Bool = true) {
             guard let old else { return }
             guard let new else {
                 Issue.record("\(label): \(part) nicht mehr sichtbar", sourceLocation: sourceLocation)
                 return
             }
-            #expect(abs(old.minX - new.minX) <= 3 && abs(old.maxX - new.maxX) <= 3, "\(label): \(part) \(old) → \(new)", sourceLocation: sourceLocation)
+            #expect(
+                abs(old.minX - new.minX) <= 3 && (!trailing || abs(old.maxX - new.maxX) <= 3),
+                "\(label): \(part) \(old) → \(new)",
+                sourceLocation: sourceLocation
+            )
         }
         if compareRows {
             check(reference.header, now.header, "Kopfzeile (Wortmarke, Button)")
@@ -363,7 +445,7 @@ private final class DriftScreen {
             }
         }
         if compareContent {
-            check(reference.content, now.content, "Widget-Ränder")
+            check(reference.content, now.content, "Widget-Ränder", trailing: compareTrailingEdge)
         }
     }
 

@@ -83,7 +83,7 @@ struct PaceBotView: View {
     @FocusState private var isInputFocused: Bool
 
     private static let questionsAnchor = "pace.bot.questions"
-    private static let bottomAnchor = "pace.bot.bottom"
+    private static let supportAnchor = "pace.bot.support"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -96,27 +96,30 @@ struct PaceBotView: View {
                         onAsk: { topic in
                             session.ask(topic)
                             showsSupport = false
-                            scrollToBottom(proxy)
                         },
                         onShowQuestions: {
                             withAnimation { proxy.scrollTo(Self.questionsAnchor, anchor: .top) }
                         },
                         onContactSupport: {
                             showsSupport = true
-                            scrollToBottom(proxy)
+                            scroll(proxy, to: Self.supportAnchor, anchor: .center)
                         },
-                        onOpenFeedback: onOpenFeedback,
+                        // Tastatur schließen, bevor der Profil-Tab „Problem melden“ öffnet (sonst bleibt der Tab gesperrt).
+                        onOpenFeedback: onOpenFeedback.map { open in { isInputFocused = false; open() } },
                         onReset: { showsResetConfirmation = true },
-                        questionsAnchor: Self.questionsAnchor
+                        questionsAnchor: Self.questionsAnchor,
+                        supportAnchor: Self.supportAnchor
                     )
                     .padding(.horizontal, PaceSpacing.m)
                     .padding(.bottom, PaceSpacing.m)
                     .paceVerticalScrollLock()
-                    Color.clear.frame(height: 1).id(Self.bottomAnchor)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .onChange(of: session.messages.count) {
-                    scrollToBottom(proxy)
+                // Neue Frage (angetippt oder getippt): Frage und Antwort oben ins Bild – nicht ans Ende der Fragenliste.
+                // Auf die letzte Nachricht reagieren, nicht auf die Anzahl (bleibt am Verlaufslimit gleich).
+                .onChange(of: session.messages.last?.id) {
+                    guard let question = session.messages.last(where: { $0.role == .user }) else { return }
+                    scroll(proxy, to: question.id, anchor: .top)
                 }
             }
             inputBar
@@ -129,9 +132,9 @@ struct PaceBotView: View {
         }
     }
 
-    private func scrollToBottom(_ proxy: ScrollViewProxy) {
+    private func scroll(_ proxy: ScrollViewProxy, to id: some Hashable & Sendable, anchor: UnitPoint) {
         DispatchQueue.main.async {
-            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomAnchor, anchor: .bottom) }
+            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: anchor) }
         }
     }
 
@@ -185,18 +188,19 @@ struct PaceBotContent: View {
     var onOpenFeedback: (() -> Void)?
     var onReset: () -> Void = {}
     var questionsAnchor = "questions"
+    var supportAnchor = "support"
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
             PaceSubpageHeader(backTitle: SocialText.social, title: PaceHelpBot.name) {
-                Menu {
-                    Button(PaceBotTexts.reset, systemImage: "arrow.counterclockwise", action: onReset)
-                } label: {
-                    Image(systemName: "ellipsis")
+                // Nur eine Aktion: direkt als Knopf (mit Rückfrage), kein Menü.
+                Button(action: onReset) {
+                    Image(systemName: "arrow.counterclockwise")
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
-                .accessibilityLabel(PaceBotTexts.more)
+                .disabled(session.messages.count <= 1)
+                .accessibilityLabel(PaceBotTexts.reset)
             }
             HStack(spacing: PaceSpacing.xs) {
                 PaceBotTag()
@@ -208,6 +212,7 @@ struct PaceBotContent: View {
 
             ForEach(session.messages) { message in
                 PaceBotBubble(message: message)
+                    .id(message.id)
             }
 
             if session.messages.last?.role == .bot, session.messages.count > 1 {
@@ -221,6 +226,7 @@ struct PaceBotContent: View {
 
             if showsSupport {
                 supportCard
+                    .id(supportAnchor)
             }
 
             VStack(alignment: .leading, spacing: PaceSpacing.xs) {
@@ -271,14 +277,14 @@ struct PaceBotContent: View {
                     Button(FeedbackKind.problem.title, systemImage: "exclamationmark.bubble", action: onOpenFeedback)
                         .buttonStyle(.paceSecondary)
                 }
+                // E-Mail nur mit eingerichteter offizieller Adresse – sonst kein Hinweis auf eine Konfiguration.
                 if let mailURL = support.mailURL {
                     Link(destination: mailURL) {
                         Label(PaceBotTexts.emailSupport, systemImage: "envelope")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.paceSecondary)
-                } else {
-                    Text(PaceBotTexts.emailNotConfigured)
+                    Text(PaceBotTexts.emailPrivacy)
                         .font(PaceFont.caption)
                         .foregroundStyle(PaceColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -325,30 +331,29 @@ struct PaceBotBubble: View {
 }
 
 enum PaceBotTexts {
-    static var automated: String { PaceLocalization.text(de: "Automatisch", en: "Automated", ru: "Автоматически") }
-    static var questions: String { PaceLocalization.text(de: "Häufige Fragen", en: "Frequently asked", ru: "Частые вопросы") }
+    static var automated: String { PaceLocalization.text(de: "Automatisch", en: "Automated", ru: "Бот") }
+    static var questions: String { PaceLocalization.text(de: "Häufige Fragen", en: "Frequently asked questions", ru: "Частые вопросы") }
     static var otherQuestion: String { PaceLocalization.text(de: "Weitere Frage", en: "Another question", ru: "Другой вопрос") }
     static var contactSupport: String { PaceLocalization.text(de: "Hilfe kontaktieren", en: "Contact support", ru: "Связаться с поддержкой") }
-    static var supportTitle: String { PaceLocalization.text(de: "Support kontaktieren", en: "Contact support", ru: "Связаться с поддержкой") }
+    static var supportTitle: String { PaceLocalization.text(de: "Hilfe kontaktieren", en: "Contact support", ru: "Связаться с поддержкой") }
     static var supportPrivacy: String {
         PaceLocalization.text(
-            de: "Es wird nur gesendet, was du selbst schreibst – keine Chats, Gesundheitsdaten oder Körperdaten.",
-            en: "Only what you write yourself is sent – no chats, health data or body measurements.",
-            ru: "Отправляется только то, что ты напишешь сам – без чатов, данных о здоровье и параметров тела."
+            de: "Über „Problem melden“ wird deine Nachricht zusammen mit deinem Konto und der App-Version gespeichert – keine Chats, Gesundheits- oder Körperdaten. Eine persönliche Antwort ist derzeit nicht möglich.",
+            en: "With “Report a problem” your message is stored together with your account and the app version – no chats, health or body data. We can't reply personally at the moment.",
+            ru: "Через «Сообщить о проблеме» сообщение сохраняется вместе с твоим аккаунтом и версией приложения – без чатов, данных о здоровье и параметров тела. Лично ответить мы пока не можем."
+        )
+    }
+    static var emailPrivacy: String {
+        PaceLocalization.text(
+            de: "Die E-Mail öffnet sich mit einer Vorlage in deiner Mail-App. Gesendet wird nur, was du dort selbst schreibst und abschickst.",
+            en: "The email opens with a template in your mail app. Only what you write there and send yourself is sent.",
+            ru: "Письмо откроется с шаблоном в почтовом приложении. Отправится только то, что ты сам напишешь и отправишь."
         )
     }
     static var emailSupport: String { PaceLocalization.text(de: "E-Mail an den Support", en: "Email support", ru: "Написать в поддержку") }
-    static var emailNotConfigured: String {
-        PaceLocalization.text(
-            de: "Eine Support-E-Mail-Adresse ist noch nicht eingerichtet. Nutze bitte „Problem melden“.",
-            en: "A support email address isn't set up yet. Please use “Report a problem”.",
-            ru: "Адрес поддержки по электронной почте пока не настроен. Используй «Сообщить о проблеме»."
-        )
-    }
     static var inputPlaceholder: String { PaceLocalization.text(de: "Frage eingeben …", en: "Type a question …", ru: "Введи вопрос …") }
     static var send: String { PaceLocalization.text(de: "Senden", en: "Send", ru: "Отправить") }
     static var reset: String { PaceLocalization.text(de: "Verlauf zurücksetzen", en: "Reset history", ru: "Очистить историю") }
     static var resetTitle: String { PaceLocalization.text(de: "Hilfeverlauf zurücksetzen?", en: "Reset help history?", ru: "Очистить историю помощи?") }
-    static var more: String { PaceLocalization.text(de: "Mehr", en: "More", ru: "Ещё") }
     static var you: String { PaceLocalization.text(de: "Du", en: "You", ru: "Ты") }
 }

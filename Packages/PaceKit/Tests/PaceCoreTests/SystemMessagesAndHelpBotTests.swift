@@ -107,6 +107,36 @@ struct PaceHelpBotTests {
         #expect(PaceHelpBot.match("hi") == nil)
     }
 
+    /// Review: Die eigenen Fragetexte führen in jeder Sprache zu ihrem Thema; Fragen ohne passendes Thema bekommen die
+    /// ehrliche Antwort statt einer falschen („account“ ist nicht „count“, „hello“ nicht „hell“).
+    @Test func ownQuestionsMatchTheirTopicAndUnrelatedInputGetsNoAnswer() {
+        for language in [AppLanguage.german, .english, .russian] {
+            PaceLocalization.$languageOverride.withValue(language) {
+                for topic in PaceHelpTopic.allCases {
+                    #expect(PaceHelpBot.match(topic.question) == topic, "\(topic) \(language): \(topic.question)")
+                }
+            }
+        }
+        for input in ["How do I delete my account?", "hello", "Wie verlasse ich eine Gruppe?", "Wie entferne ich einen Freund?", "schnell", "Wetter morgen?"] {
+            #expect(PaceHelpBot.match(input) == nil, "\(input)")
+        }
+        #expect(PaceHelpBot.match("Fehler melden") == .reportBug)
+        #expect(PaceHelpBot.match("How do I report a bug?") == .reportBug)
+        #expect(PaceHelpBot.match("Где настройки языка?") == .languageDesign)
+        #expect(PaceHelpBot.match("Warum stimmen die Schritte nicht?") == .stepMismatch)
+        #expect(PaceHelpBot.match("огня группы") == .groupFlame)
+    }
+
+    /// Review (hoch): Die Datenschutzantwort nennt alle, die Wettbewerbsschritte sehen – nicht nur Freunde.
+    @Test func privacyAnswerNamesEveryoneWhoSeesSteps() {
+        PaceLocalization.$languageOverride.withValue(.german) {
+            let answer = PaceHelpTopic.privacy.answer
+            #expect(!answer.contains("nur deine Freunde"))
+            #expect(answer.contains("Mitglieder deiner Gruppen"))
+            #expect(answer.contains("Sichtbarkeit in Rankings"))
+        }
+    }
+
     @Test func conversationFlow() {
         let store = InMemoryPaceHelpHistoryStore()
         let session = PaceHelpBotSession(store: store, now: { Date(timeIntervalSince1970: 1) })

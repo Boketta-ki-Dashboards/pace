@@ -193,7 +193,7 @@ public enum WelcomeMessageContent {
                 text: PaceLocalization.text(
                     de: "Lege ein persönliches Tagesziel fest und beobachte deinen Fortschritt auf Home.",
                     en: "Set a personal daily goal and follow your progress on Home.",
-                    ru: "Задай личную дневную цель и следи за прогрессом на главном экране."
+                    ru: "Задай личную дневную цель и следи за прогрессом на вкладке «Главная»."
                 )
             ),
             Section(
@@ -202,7 +202,7 @@ public enum WelcomeMessageContent {
                 text: PaceLocalization.text(
                     de: "Vergleiche dich mit anderen Nutzern in deiner Region oder mit deinen Freunden.",
                     en: "Compare yourself with other users in your region or with your friends.",
-                    ru: "Сравнивай себя с другими пользователями в твоём регионе или с друзьями."
+                    ru: "Сравнивай себя с другими пользователями в своём регионе или с друзьями."
                 )
             ),
             Section(
@@ -234,7 +234,7 @@ public enum WelcomeMessageContent {
             ),
             Section(
                 id: "home", systemImage: "square.grid.2x2.fill",
-                title: PaceLocalization.text(de: "Dein Home", en: "Your Home", ru: "Твой главный экран"),
+                title: PaceLocalization.text(de: "Dein Home", en: "Your Home", ru: "Твоя «Главная»"),
                 text: PaceLocalization.text(
                     de: "Gestalte deine Übersicht mit Widgets nach deinen eigenen Wünschen.",
                     en: "Design your overview with widgets the way you like.",
@@ -246,16 +246,16 @@ public enum WelcomeMessageContent {
                 title: PaceLocalization.text(de: "Brauchst du Hilfe?", en: "Need help?", ru: "Нужна помощь?"),
                 text: PaceLocalization.text(
                     de: "Unser Pace-Bot beantwortet die wichtigsten Fragen rund um die App.",
-                    en: "Our Pace bot answers the most important questions about the app.",
+                    en: "Our Pace Bot answers the most important questions about the app.",
                     ru: "Наш Pace-бот отвечает на главные вопросы о приложении."
                 )
             ),
         ]
     }
 
-    public static var exploreHome: String { PaceLocalization.text(de: "Home entdecken", en: "Explore Home", ru: "Открыть главный экран") }
+    public static var exploreHome: String { PaceLocalization.text(de: "Home entdecken", en: "Explore Home", ru: "Перейти на «Главную»") }
     public static var openRankings: String { PaceLocalization.text(de: "Rankings ansehen", en: "View rankings", ru: "Смотреть рейтинги") }
     public static var addFriends: String { PaceLocalization.text(de: "Freunde hinzufügen", en: "Add friends", ru: "Добавить друзей") }
-    public static var openHelpBot: String { PaceLocalization.text(de: "Pace-Bot öffnen", en: "Open Pace bot", ru: "Открыть Pace-бота") }
+    public static var openHelpBot: String { PaceLocalization.text(de: "Pace-Bot öffnen", en: "Open Pace Bot", ru: "Открыть Pace-бота") }
     public static var delete: String { PaceLocalization.text(de: "Mitteilung löschen", en: "Delete notification", ru: "Удалить уведомление") }
 }

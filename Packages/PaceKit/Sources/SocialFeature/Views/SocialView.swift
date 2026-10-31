@@ -144,12 +144,15 @@ struct SocialContent: View {
             switch viewModel.state {
             case .unavailable(let message):
                 SocialUnavailableCard(message: message)
+                helpBotCard
             case .failed(let message):
                 SocialFailedCard(message: message) {
                     Task { await viewModel.load() }
                 }
+                helpBotCard
             case .idle, .loading:
                 SocialLoadingCard(message: SocialText.loading)
+                helpBotCard
             case .loaded:
                 if viewModel.isFiltering {
                     searchResults
@@ -158,6 +161,13 @@ struct SocialContent: View {
                     chats
                 }
             }
+        }
+    }
+
+    /// Der Pace-Bot läuft nur auf dem Gerät: erreichbar auch ohne Verbindung, bei Serverfehlern und während des Ladens.
+    private var helpBotCard: some View {
+        PaceCard {
+            PaceBotChatRow { onOpen(.helpBot) }
         }
     }
 

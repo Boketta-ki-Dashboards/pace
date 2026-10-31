@@ -95,8 +95,7 @@ struct AppearanceSelector: View {
                     onSelect(appearance)
                 } label: {
                     VStack(spacing: 4) {
-                        Image(systemName: Self.systemImage(for: appearance, isSelected: isSelected))
-                            .font(.system(size: showsTitles ? 22 : 19, weight: .semibold))
+                        AppearanceSymbol(appearance: appearance, isSelected: isSelected, size: showsTitles ? 22 : 19)
                             .symbolRenderingMode(.hierarchical)
                             .frame(height: 26)
                             .accessibilityHidden(true)
@@ -130,9 +129,33 @@ struct AppearanceSelector: View {
 
     static func systemImage(for appearance: AppearancePreference, isSelected: Bool) -> String {
         switch appearance {
-        case .automatic: "circle.lefthalf.filled"
-        case .light: isSelected ? "sun.max.fill" : "sun.max"
+        case .automatic, .light: isSelected ? "sun.max.fill" : "sun.max"
         case .dark: isSelected ? "moon.fill" : "moon"
+        }
+    }
+}
+
+/// Symbol einer Darstellung: „Automatisch“ zeigt Sonne und Mond zusammen, Hell die Sonne, Dunkel den Mond.
+private struct AppearanceSymbol: View {
+    let appearance: AppearancePreference
+    let isSelected: Bool
+    let size: CGFloat
+
+    var body: some View {
+        switch appearance {
+        case .automatic:
+            ZStack {
+                Image(systemName: AppearanceSelector.systemImage(for: .light, isSelected: isSelected))
+                    .font(.system(size: size * 0.74, weight: .semibold))
+                    .offset(x: -size * 0.22, y: -size * 0.14)
+                Image(systemName: AppearanceSelector.systemImage(for: .dark, isSelected: isSelected))
+                    .font(.system(size: size * 0.58, weight: .semibold))
+                    .offset(x: size * 0.26, y: size * 0.2)
+            }
+            .frame(width: size * 1.5, height: size)
+        case .light, .dark:
+            Image(systemName: AppearanceSelector.systemImage(for: appearance, isSelected: isSelected))
+                .font(.system(size: size, weight: .semibold))
         }
     }
 }

@@ -156,6 +156,11 @@ struct Auftrag6SnapshotTests {
         answered.start()
         answered.ask(.groupFlame)
         try Snapshot.render(page(PaceBotContent(session: answered, support: none)), name: "a6-bot-answer", languages: languages)
+        // So sieht man es auf dem iPhone: Frage und Antwort oben im Bild, darunter die Eingabe.
+        try await Snapshot.renderInWindow(
+            NavigationStack { PaceBotView(session: answered, support: none, onOpenFeedback: {}) },
+            name: "a6-bot-answer-screen"
+        )
 
         let unknown = PaceHelpBotSession()
         unknown.start()
@@ -346,5 +351,10 @@ enum A6Fixtures {
         collect(view)
         guard let page = candidates.max(by: { $0.contentSize.height < $1.contentSize.height }) else { return }
         page.contentOffset = CGPoint(x: page.contentOffset.x - offset, y: page.contentOffset.y)
+        // Ein kleiner senkrechter Schritt hin und zurück, damit SwiftUI den sichtbaren Bereich neu bestimmt (sonst
+        // fehlen im Bild Teile der Seite, die beim Versatz außerhalb lagen).
+        page.contentOffset.y += 1
+        page.contentOffset.y -= 1
+        page.layoutIfNeeded()
     }
 }

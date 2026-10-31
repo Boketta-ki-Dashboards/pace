@@ -123,6 +123,15 @@ public struct PaceTabPager<Tab: Hashable, Page: View>: View {
         // noch nicht eingerastete Leiste würde die Seite sonst um einen Rest versetzt zeigen.
         .onChange(of: isPagingEnabled) { _, isEnabled in
             guard !isEnabled else { return }
+            if let pendingTarget, pendingTarget.tab == selection, Date().timeIntervalSince(pendingTarget.since) < 1 {
+                // Ein Gleiten zur gewählten Seite läuft (Sprung in einen Tab, der dabei eine Unterseite öffnet): nicht
+                // abbrechen, erst danach prüfen, ob die Leiste genau steht.
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(450))
+                    if pagerView.value?.isScrollEnabled == false { snapToSelection() }
+                }
+                return
+            }
             snapToSelection()
         }
         .onChange(of: selection) { _, tab in

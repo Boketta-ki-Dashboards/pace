@@ -220,9 +220,9 @@ public enum ProfileAchievement: String, CaseIterable, Codable, Sendable, Identif
         case .streak30: PaceLocalization.text(de: "30 Tage in Folge", en: "30 days in a row", ru: "30 дней подряд")
         case .streak100: PaceLocalization.text(de: "100 Tage in Folge", en: "100 days in a row", ru: "100 дней подряд")
         case .streak365: PaceLocalization.text(de: "365 Tage in Folge", en: "365 days in a row", ru: "365 дней подряд")
-        case .bestDay10k: PaceLocalization.text(de: "Tag mit über 10.000 Schritten", en: "A day over 10,000 steps", ru: "День больше 10 000 шагов")
-        case .bestDay20k: PaceLocalization.text(de: "Tag mit über 20.000 Schritten", en: "A day over 20,000 steps", ru: "День больше 20 000 шагов")
-        case .bestDay30k: PaceLocalization.text(de: "Tag mit über 30.000 Schritten", en: "A day over 30,000 steps", ru: "День больше 30 000 шагов")
+        case .bestDay10k: PaceLocalization.text(de: "Tag mit 10.000+ Schritten", en: "10,000+ steps in a day", ru: "10 000+ шагов за день")
+        case .bestDay20k: PaceLocalization.text(de: "Tag mit 20.000+ Schritten", en: "20,000+ steps in a day", ru: "20 000+ шагов за день")
+        case .bestDay30k: PaceLocalization.text(de: "Tag mit 30.000+ Schritten", en: "30,000+ steps in a day", ru: "30 000+ шагов за день")
         }
     }
 
@@ -250,6 +250,18 @@ public enum ProfileAchievement: String, CaseIterable, Codable, Sendable, Identif
         default: nil
         }
         return [streak, bestDay].compactMap { $0 }
+    }
+
+    /// Je Art (Serie, bester Tag) die höhere Stufe aus beiden Listen – zum Nachtragen veröffentlichter Auszeichnungen.
+    /// Entfernt nie eine Stufe: Serie und Bestwert wachsen nur, und ein Bestwert außerhalb des geladenen Verlaufs
+    /// (älter als etwa ein Jahr) bleibt so erhalten.
+    public static func upgraded(_ published: [ProfileAchievement], with earned: [ProfileAchievement]) -> [ProfileAchievement] {
+        let all = published + earned
+        let order = allCases
+        func highest(_ kind: [ProfileAchievement]) -> ProfileAchievement? {
+            all.filter(kind.contains).max { order.firstIndex(of: $0)! < order.firstIndex(of: $1)! }
+        }
+        return [highest([.streak7, .streak30, .streak100, .streak365]), highest([.bestDay10k, .bestDay20k, .bestDay30k])].compactMap { $0 }
     }
 
     /// Unbekannte IDs fallen weg, Doppelte auch.

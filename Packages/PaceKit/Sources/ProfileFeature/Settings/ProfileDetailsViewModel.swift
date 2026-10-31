@@ -32,6 +32,8 @@ public final class ProfileDetailsViewModel {
     public private(set) var isSaving = false
     public private(set) var bannerActivity: BannerActivity = .idle
     public private(set) var errorMessage: String?
+    /// Nach erfolgreichem Speichern bis zur nächsten Änderung: „Gespeichert“.
+    public private(set) var didSave = false
 
     // Entwurf beim Bearbeiten
     public var draftBio = ""
@@ -62,9 +64,15 @@ public final class ProfileDetailsViewModel {
         details.bio != nil || !details.interests.isEmpty || details.bannerPath != nil || !details.visibleAchievements.isEmpty
     }
 
-    /// Auszeichnungen, die beim Einschalten veröffentlicht würden.
+    /// Auszeichnungen, die beim Einschalten veröffentlicht würden: erreichte Stufen, ohne schon veröffentlichte höhere
+    /// zu verlieren (``ProfileAchievement/upgraded(_:with:)``).
     public var earned: [ProfileAchievement] {
-        earnedAchievements()
+        ProfileAchievement.upgraded(details.achievements, with: earnedAchievements())
+    }
+
+    /// Speichern oder Banner-Änderung läuft – weitere Schreibvorgänge warten (sonst überschreiben sich die Anfragen).
+    public var isBusy: Bool {
+        isSaving || bannerActivity != .idle
     }
 
     public func load() async {
@@ -92,6 +100,27 @@ public final class ProfileDetailsViewModel {
         draftInterests = details.interests
         draftShowsAchievements = details.showsAchievements
         errorMessage = nil
+        didSave = false
+    }
+
+    /// „Profil bearbeiten“ öffnen: Entwurf sofort aus dem bekannten Stand (die Felder sind nie leer, „Speichern“ ist
+    /// ohne Änderung aus), danach frisch laden. Der Serverstand ersetzt den Entwurf nur, solange noch nichts geändert
+    /// wurde – Eingaben während des Ladens bleiben.
+    public func prepareEditing() async {
+        beginEditing()
+        let untouched = draft
+        await load()
+        if draft == untouched { beginEditing() }
+    }
+
+    private struct Draft: Equatable {
+        let bio: String
+        let interests: [ProfileInterest]
+        let showsAchievements: Bool
+    }
+
+    private var draft: Draft {
+        Draft(bio: draftBio, interests: draftInterests, showsAchievements: draftShowsAchievements)
     }
 
     /// Zeichen der Bio wie auf dem Server gezählt (nach dem Normalisieren).
@@ -107,11 +136,11 @@ public final class ProfileDetailsViewModel {
         ProfileBioRules.normalized(draftBio) != details.bio
             || draftInterests != details.interests
             || draftShowsAchievements != details.showsAchievements
-            || (draftShowsAchievements && earnedAchievements() != details.achievements)
+            || (draftShowsAchievements && earned != details.achievements)
     }
 
     public var canSave: Bool {
-        isAvailable && bioProblem == nil && hasChanges && !isSaving
+        isAvailable && bioProblem == nil && hasChanges && !isBusy
     }
 
     public func isSelected(_ interest: ProfileInterest) -> Bool {
@@ -151,9 +180,10 @@ public final class ProfileDetailsViewModel {
         updated.bio = ProfileBioRules.normalized(draftBio)
         updated.interests = draftInterests
         updated.showsAchievements = draftShowsAchievements
-        updated.achievements = draftShowsAchievements ? earnedAchievements() : []
+        updated.achievements = draftShowsAchievements ? earned : []
         do {
             details = try await repository.saveOwnDetails(updated)
+            didSave = true
             return true
         } catch {
             errorMessage = Self.message(for: error)
@@ -161,10 +191,11 @@ public final class ProfileDetailsViewModel {
         }
     }
 
-    /// Bei eingeschalteten Auszeichnungen: neu erreichte nachtragen (z. B. eine längere Serie), ohne Rückfrage.
+    /// Bei eingeschalteten Auszeichnungen: neu erreichte Stufen nachtragen (z. B. eine längere Serie), ohne Rückfrage.
+    /// Nur aufwerten, nie automatisch entfernen.
     public func refreshPublishedAchievements() async {
-        guard let repository, isAvailable, details.showsAchievements, !isSaving else { return }
-        let earned = earnedAchievements()
+        guard let repository, isAvailable, details.showsAchievements, !isBusy else { return }
+        let earned = earned
         guard earned != details.achievements else { return }
         var updated = details
         updated.achievements = earned
@@ -179,7 +210,7 @@ public final class ProfileDetailsViewModel {
     /// löscht danach das alte Banner.
     @discardableResult
     public func uploadBanner(jpegData: Data) async -> MediaReference? {
-        guard let repository, let media, isAvailable, bannerActivity == .idle else { return nil }
+        guard let repository, let media, isAvailable, !isBusy else { return nil }
         guard jpegData.count <= MediaRules.maximumBytes(for: .avatar) else {
             errorMessage = Self.message(for: MediaError.tooLarge)
             return nil
@@ -201,12 +232,19 @@ public final class ProfileDetailsViewModel {
         do {
             details = try await repository.saveOwnDetails(updated)
         } catch {
-            // Das neue Bild wird nicht verwendet – nicht als verwaiste Datei liegen lassen.
-            try? await media.delete(uploaded)
-            errorMessage = Self.message(for: error)
-            return nil
+            // Antwort verloren (Netz)? Dann nachsehen, ob der Server das neue Banner doch schon übernommen hat.
+            if case .network = error as? ProfileDetailsError, let current = try? await repository.ownDetails(),
+               current.bannerPath == uploaded.path {
+                details = current
+            } else {
+                // Das neue Bild wird nicht verwendet – nicht als verwaiste Datei liegen lassen.
+                try? await media.delete(uploaded)
+                errorMessage = Self.message(for: error)
+                return nil
+            }
         }
-        if let previous, previous != uploaded {
+        // Das alte Banner erst löschen, wenn der Server das neue bestätigt hat.
+        if let previous, previous != uploaded, details.bannerPath == uploaded.path {
             try? await media.delete(previous)
         }
         return uploaded
@@ -214,7 +252,7 @@ public final class ProfileDetailsViewModel {
 
     /// Entfernt das Banner (danach erscheint der neutrale Pace-Hintergrund) und löscht die Datei.
     public func removeBanner() async {
-        guard let repository, let previous = details.banner, bannerActivity == .idle else { return }
+        guard let repository, let previous = details.banner, !isBusy else { return }
         bannerActivity = .removing
         errorMessage = nil
         defer { bannerActivity = .idle }
@@ -282,6 +320,19 @@ public enum ProfileDetailsTexts {
         PaceLocalization.text(de: "Profil bearbeiten", en: "Edit profile", ru: "Редактировать профиль")
     }
 
+    /// Kurze Beschriftung des Knopfs neben dem Profilbild (VoiceOver: ``editProfile``).
+    public static var edit: String {
+        PaceLocalization.text(de: "Bearbeiten", en: "Edit", ru: "Изменить")
+    }
+
+    public static var saved: String {
+        PaceLocalization.text(de: "Gespeichert", en: "Saved", ru: "Сохранено")
+    }
+
+    public static var retry: String {
+        PaceLocalization.text(de: "Erneut versuchen", en: "Try again", ru: "Повторить")
+    }
+
     public static var bio: String {
         PaceLocalization.text(de: "Bio", en: "Bio", ru: "О себе")
     }
@@ -340,25 +391,25 @@ public enum ProfileDetailsTexts {
 
     public static var achievementsNote: String {
         PaceLocalization.text(
-            de: "Freiwillig und standardmäßig aus. Andere sehen nur die Stufen (z. B. „30 Tage in Folge“), nie deine genauen Schritte. Ermittelt aus deiner Serie und deinem besten Tag.",
-            en: "Optional and off by default. Others only see the levels (e.g. “30 days in a row”), never your exact steps. Based on your streak and your best day.",
-            ru: "По желанию, по умолчанию выключено. Другие видят только уровни (например, «30 дней подряд»), но не точное число шагов. Основано на твоей серии и лучшем дне."
+            de: "Freiwillig und standardmäßig aus. Sichtbar für alle, die dein Profil sehen können – nur die Stufen (z. B. „30 Tage in Folge“), nie deine genauen Schritte. Ermittelt aus deiner Serie und deinem besten Tag.",
+            en: "Optional and off by default. Visible to everyone who can see your profile – only the levels (e.g. “30 days in a row”), never your exact steps. Based on your streak and your best day.",
+            ru: "По желанию, по умолчанию выключено. Видно всем, кто может открыть твой профиль, – только уровни (например, «30 дней подряд»), без точного числа шагов. Основано на твоей серии и лучшем дне."
         )
     }
 
     public static var noAchievementsYet: String {
         PaceLocalization.text(
-            de: "Noch keine Auszeichnung – z. B. ab 7 Tagen in Folge.",
-            en: "No achievement yet – e.g. from 7 days in a row.",
-            ru: "Пока нет наград – например, с 7 дней подряд."
+            de: "Noch keine Auszeichnung – die erste gibt es ab 7 Tagen in Folge.",
+            en: "No achievements yet – the first one comes at 7 days in a row.",
+            ru: "Наград пока нет – первая будет за 7 дней подряд."
         )
     }
 
     public static var unavailable: String {
         PaceLocalization.text(
-            de: "Bio, Interessen und Banner sind auf dem Server noch nicht eingerichtet. Dein Profil funktioniert wie bisher.",
-            en: "Bio, interests and banner aren't set up on the server yet. Your profile works as before.",
-            ru: "Описание, интересы и обложка пока не настроены на сервере. Профиль работает как раньше."
+            de: "Bio, Interessen und Banner stehen bald zur Verfügung. Bis dahin funktioniert dein Profil wie gewohnt.",
+            en: "Bio, interests and banner are coming soon. Until then your profile works as usual.",
+            ru: "Описание, интересы и обложка скоро появятся. А пока профиль работает как обычно."
         )
     }
 

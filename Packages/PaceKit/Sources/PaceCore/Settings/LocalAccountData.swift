@@ -38,6 +38,7 @@ public struct UserDefaultsLocalAccountData: LocalAccountDataStoring {
         "pace.streak.record": "streakRecord",
         "pace.home.preferences": "homeLayout",
         "pace.bodyMetrics.v1": "bodyMetrics",
+        "pace.helpBot.history": "helpBotHistory",
     ]
 
     private let suiteName: String?
@@ -70,6 +71,7 @@ public struct UserDefaultsLocalAccountData: LocalAccountDataStoring {
     static func sectionName(for key: String) -> String {
         if let name = sectionNames[key] { return name }
         if key.hasPrefix("pace.profile.") { return "profileCache" }
+        if key.hasPrefix("pace.systemMessages.") { return "systemMessages" }
         return key
     }
 

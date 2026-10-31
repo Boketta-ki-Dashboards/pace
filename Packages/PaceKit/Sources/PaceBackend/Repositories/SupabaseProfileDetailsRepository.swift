@@ -58,6 +58,8 @@ struct SupabaseProfileDetailsRepository: ProfileDetailsRepository {
         do {
             return try await operation()
         } catch {
+            // Abbruch (Seite verlassen) ist kein Netzfehler – sonst zeigt das Profil „Keine Verbindung“.
+            if BackendFailure.isCancellation(error) { throw CancellationError() }
             throw BackendErrorMapping.profileDetailsError(error)
         }
     }

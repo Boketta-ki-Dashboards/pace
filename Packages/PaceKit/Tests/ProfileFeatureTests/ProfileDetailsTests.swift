@@ -149,6 +149,79 @@ struct ProfileDetailsViewModelTests {
         #expect(media.state.withLock { $0.deleted } == [first, second])
     }
 
+    /// Review: „Profil bearbeiten“ zeigt sofort den bekannten Stand (nie leer, ohne Änderung kein Speichern); was während
+    /// des erneuten Ladens getippt wird, bleibt. Ohne Eingabe übernimmt der Entwurf den neuen Serverstand.
+    @Test func editingStartsFromKnownStateAndKeepsTypingDuringReload() async {
+        let repository = ProfileDetailsRepositoryStub { $0.own = ProfileDetails(bio: "Alt", interests: [.walking]) }
+        let viewModel = makeViewModel(repository)
+        await viewModel.load()
+        repository.state.withLock { $0.own = ProfileDetails(bio: "Neu", interests: [.walking, .running]) }
+
+        repository.gate.close("ownDetails")
+        let typing = Task { await viewModel.prepareEditing() }
+        while repository.gate.waitingCount("ownDetails") == 0 { await Task.yield() }
+        #expect(viewModel.draftBio == "Alt")
+        #expect(!viewModel.canSave)
+        viewModel.draftBio = "Getippt"
+        repository.gate.open("ownDetails")
+        await typing.value
+        #expect(viewModel.draftBio == "Getippt", "Eingabe während des Ladens bleibt")
+        #expect(viewModel.details.bio == "Neu")
+
+        let untouched = makeViewModel(repository)
+        await untouched.prepareEditing()
+        #expect(untouched.draftBio == "Neu")
+        #expect(untouched.draftInterests == [.walking, .running])
+    }
+
+    /// Review: Speichern und Banner-Änderungen laufen nacheinander – keine Anfrage überschreibt die andere, das Banner
+    /// bleibt beim Speichern der Bio erhalten. Nach dem Speichern erscheint „Gespeichert“.
+    @Test func writesRunOneAfterAnother() async {
+        let repository = ProfileDetailsRepositoryStub()
+        let media = MediaRepositoryStub()
+        let viewModel = makeViewModel(repository, media: media)
+        await viewModel.load()
+        viewModel.beginEditing()
+        viewModel.draftBio = "Neu"
+
+        repository.gate.close("save")
+        let upload = Task { await viewModel.uploadBanner(jpegData: Data([1])) }
+        while repository.gate.waitingCount("save") == 0 { await Task.yield() }
+        #expect(viewModel.isBusy)
+        #expect(!viewModel.canSave, "Speichern wartet, solange das Banner gespeichert wird")
+        let savedWhileBusy = await viewModel.save()
+        #expect(!savedWhileBusy)
+        await viewModel.removeBanner()
+        repository.gate.open("save")
+        let uploaded = await upload.value
+        #expect(uploaded != nil)
+        #expect(media.state.withLock { $0.deleted.isEmpty }, "nichts gelöscht, solange nichts ersetzt wurde")
+
+        let saved = await viewModel.save()
+        #expect(saved)
+        #expect(viewModel.didSave)
+        #expect(viewModel.details.bio == "Neu")
+        #expect(viewModel.details.bannerPath == uploaded?.path)
+        viewModel.draftBio = "Noch neuer"
+        #expect(viewModel.hasChanges)
+    }
+
+    /// Review: Veröffentlichte Auszeichnungen werden nur aufgewertet – ein Bestwert außerhalb des geladenen Verlaufs
+    /// geht nicht verloren, ohne neue Stufe wird nichts gespeichert.
+    @Test func publishedAchievementsAreOnlyUpgraded() async {
+        #expect(ProfileAchievement.upgraded([.streak100], with: [.streak30, .bestDay10k]) == [.streak100, .bestDay10k])
+        let repository = ProfileDetailsRepositoryStub { $0.own = ProfileDetails(showsAchievements: true, achievements: [.streak7, .bestDay20k]) }
+        let viewModel = makeViewModel(repository, earned: [.streak30])
+        await viewModel.load()
+        await viewModel.refreshPublishedAchievements()
+        #expect(viewModel.details.achievements == [.streak30, .bestDay20k])
+        viewModel.beginEditing()
+        #expect(!viewModel.hasChanges)
+        let savesBefore = repository.state.withLock { $0.saved.count }
+        await viewModel.refreshPublishedAchievements()
+        #expect(repository.state.withLock { $0.saved.count } == savesBefore, "ohne neue Stufe nichts speichern")
+    }
+
     @Test func failedSaveDeletesTheUploadedBanner() async {
         let repository = ProfileDetailsRepositoryStub()
         let media = MediaRepositoryStub()

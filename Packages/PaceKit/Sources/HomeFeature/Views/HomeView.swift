@@ -35,6 +35,9 @@ public struct HomeView: View {
                 )
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.l)
+                // Genau so breit wie die Scrollansicht: Ein einzelnes zu breites Element (im Anpassen-Modus auf dem
+                // iPhone SE gemessen: 375,5 statt 375 pt) macht die Seite sonst waagerecht verschiebbar.
+                .containerRelativeFrame(.horizontal)
                 .paceTabRoot(isAtRoot: path.isEmpty) { path = [] }
                 // Bezugssystem für das Umsortieren: Rahmen der Widgets im Inhalt, Inhaltsoberkante global.
                 .coordinateSpace(.named(HomeReorderController.contentSpace))
@@ -86,8 +89,10 @@ public struct HomeView: View {
                             viewModel.open(notification)
                         }
                     }
-                case .systemMessage:
-                    WelcomeMessageScreen(viewModel: viewModel) { path = [] }
+                case .systemMessage(let kind):
+                    switch kind {
+                    case .welcome: WelcomeMessageScreen(viewModel: viewModel) { path = [] }
+                    }
                 case .streak:
                     StreakDetailView(viewModel: viewModel.streakDetail(), backTitle: HomeTexts.home)
                 }

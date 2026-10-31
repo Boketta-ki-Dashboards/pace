@@ -38,7 +38,7 @@ public enum PaceHelpTopic: String, CaseIterable, Codable, Sendable, Identifiable
         case .groupFlame: PaceLocalization.text(de: "Wie funktioniert eine Gruppenflamme?", en: "How does a group flame work?", ru: "Как работает огонь группы?")
         case .addFriends: PaceLocalization.text(de: "Wie füge ich Freunde hinzu?", en: "How do I add friends?", ru: "Как добавить друзей?")
         case .createGroup: PaceLocalization.text(de: "Wie erstelle ich eine Gruppe?", en: "How do I create a group?", ru: "Как создать группу?")
-        case .customizeHome: PaceLocalization.text(de: "Wie passe ich meinen Homescreen an?", en: "How do I customize my Home screen?", ru: "Как настроить главный экран?")
+        case .customizeHome: PaceLocalization.text(de: "Wie passe ich Home an?", en: "How do I customize Home?", ru: "Как настроить «Главную»?")
         case .dailyGoal: PaceLocalization.text(de: "Wie ändere ich mein Tagesziel?", en: "How do I change my daily goal?", ru: "Как изменить дневную цель?")
         case .editProfile: PaceLocalization.text(de: "Wie ändere ich mein Profil?", en: "How do I edit my profile?", ru: "Как изменить профиль?")
         case .privacy: PaceLocalization.text(de: "Wie ändere ich Datenschutz-Einstellungen?", en: "How do I change privacy settings?", ru: "Как изменить настройки конфиденциальности?")
@@ -54,7 +54,7 @@ public enum PaceHelpTopic: String, CaseIterable, Codable, Sendable, Identifiable
             PaceLocalization.text(
                 de: "Pace zählt deine Schritte automatisch über Apple Health – du musst nichts eintragen. Auf Home siehst du deinen Fortschritt zum persönlichen Tagesziel. In den Rankings vergleichst du dich mit deiner Region oder deinen Freunden. Mit Freunden und in Gruppen bleibt ihr über Chats in Kontakt. Erreichst du dein Tagesziel mehrere Tage hintereinander, wächst deine Flamme; Gruppen haben eine gemeinsame Gruppenflamme.",
                 en: "Pace counts your steps automatically through Apple Health – you don't have to enter anything. On Home you see your progress towards your personal daily goal. In the rankings you compare yourself with your region or your friends. With friends and in groups you stay in touch through chats. Reach your daily goal several days in a row and your flame grows; groups have a shared group flame.",
-                ru: "Pace автоматически считает шаги через Apple Health – ничего вводить не нужно. На главном экране видно, как ты продвигаешься к своей дневной цели. В рейтингах ты сравниваешь себя с регионом или друзьями. С друзьями и в группах вы общаетесь в чатах. Если достигать цели несколько дней подряд, растёт твой огонь; у групп есть общий огонь группы."
+                ru: "Pace автоматически считает шаги через Apple Health – ничего вводить не нужно. На вкладке «Главная» видно, как ты продвигаешься к своей дневной цели. В рейтингах ты сравниваешь себя с регионом или друзьями. С друзьями и в группах вы общаетесь в чатах. Если ты достигаешь цели несколько дней подряд, твой огонь растёт; у групп есть общий огонь группы."
             )
         case .stepCounting:
             PaceLocalization.text(
@@ -66,101 +66,113 @@ public enum PaceHelpTopic: String, CaseIterable, Codable, Sendable, Identifiable
             PaceLocalization.text(
                 de: "Apple Health und der Bewegungssensor aktualisieren nicht immer gleichzeitig. Die Live-Anzeige ist deshalb vorläufig: Bestätigt Apple Health weniger Schritte, übernimmt Pace etwa 20 Minuten nach deinem letzten Schritt den Wert aus Apple Health. Rankings können sich etwas verzögern. Prüfe außerdem, ob Pace Zugriff auf deine Schritte (Health-App) und auf „Bewegung & Fitness“ hat.",
                 en: "Apple Health and the motion sensor don't always update at the same time. The live display is therefore preliminary: if Apple Health confirms fewer steps, Pace adopts the Apple Health value about 20 minutes after your last step. Rankings can be slightly delayed. Also check that Pace has access to your steps (Health app) and to “Motion & Fitness”.",
-                ru: "Apple Health и датчик движения обновляются не всегда одновременно. Поэтому значение в реальном времени предварительное: если Apple Health подтверждает меньше шагов, примерно через 20 минут после последнего шага Pace берёт значение из Apple Health. Рейтинги могут обновляться с небольшой задержкой. Также проверь, есть ли у Pace доступ к шагам (приложение «Здоровье») и к «Движению и фитнесу»."
+                ru: "Apple Health и датчик движения обновляются не всегда одновременно. Поэтому значение в реальном времени предварительное: если Apple Health подтверждает меньше шагов, примерно через 20 минут после последнего шага Pace берёт значение из Apple Health. Рейтинги могут обновляться с небольшой задержкой. Также проверь, есть ли у Pace доступ к шагам (приложение «Здоровье») и к разделу «Движение и фитнес»."
             )
         case .rankings:
             PaceLocalization.text(
-                de: "Es gibt regionale Rankings für deine Stadt, deinen Landkreis, dein Bundesland und dein Land sowie ein Ranking mit deinen Freunden. Gezählt werden bestätigte Wettbewerbsschritte aus Apple Health. In den regionalen Rankings erscheinst du nur, wenn du das unter Profil → Ranking-Sichtbarkeit eingeschaltet hast.",
-                en: "There are regional rankings for your city, district, state and country, plus a ranking with your friends. Confirmed competition steps from Apple Health count. You only appear in regional rankings if you've switched that on under Profile → ranking visibility.",
-                ru: "Есть региональные рейтинги по городу, району, земле и стране, а также рейтинг среди друзей. Учитываются подтверждённые соревновательные шаги из Apple Health. В региональных рейтингах ты появляешься, только если включил это в профиле в разделе видимости в рейтингах."
+                de: "Es gibt regionale Rankings für deine Stadt, deinen Landkreis, dein Bundesland und dein Land sowie ein Ranking mit deinen Freunden. Gezählt werden bestätigte Wettbewerbsschritte aus Apple Health. In den regionalen Rankings erscheinst du nur, wenn du das unter Profil → „Sichtbarkeit in Rankings“ eingeschaltet hast.",
+                en: "There are regional rankings for your city, district, state and country, plus a ranking with your friends. Confirmed competition steps from Apple Health count. You only appear in regional rankings if you've switched that on under Profile → “Visibility in rankings”.",
+                ru: "Есть региональные рейтинги по городу, району, земле и стране, а также рейтинг среди друзей. Учитываются подтверждённые соревновательные шаги из Apple Health. В региональных рейтингах ты появляешься, только если это включено в «Профиль» → «Видимость в рейтингах»."
             )
         case .flame:
             PaceLocalization.text(
                 de: "Jeder Tag, an dem du dein Tagesziel erreichst, zählt für deine Serie. Mehrere erfolgreiche Tage hintereinander lassen deine Flamme wachsen. Im Flammenkalender (über das Serien-Widget auf Home) siehst du, an welchen Tagen du dein Ziel erreicht hast – jeweils mit dem damals gültigen Ziel.",
                 en: "Every day you reach your daily goal counts towards your streak. Several successful days in a row make your flame grow. The flame calendar (via the streak widget on Home) shows on which days you reached your goal – each with the goal that applied then.",
-                ru: "Каждый день, когда ты достигаешь дневной цели, засчитывается в серию. Несколько успешных дней подряд делают твой огонь больше. В календаре огня (через виджет серии на главном экране) видно, в какие дни цель была достигнута – с той целью, что действовала тогда."
+                ru: "Каждый день, когда ты достигаешь дневной цели, засчитывается в серию. Несколько успешных дней подряд делают твой огонь больше. В календаре огня (через виджет серии на вкладке «Главная») видно, в какие дни цель была достигнута – с той целью, что действовала тогда."
             )
         case .groupFlame:
             PaceLocalization.text(
                 de: "Eine Gruppenflamme bleibt an einem Tag erhalten, wenn mindestens ein Drittel der Mitglieder (aufgerundet) das Tagesziel der Gruppe erreicht – bei 12 Mitgliedern also 4. Es müssen nicht alle ihr Ziel schaffen. In der Gruppe siehst du, wie viele es heute schon geschafft haben.",
                 en: "A group flame continues on a day when at least one third of the members (rounded up) reach the group's daily goal – with 12 members that's 4. Not everyone has to make it. In the group you can see how many have already made it today.",
-                ru: "Огонь группы сохраняется в этот день, если хотя бы треть участников (с округлением вверх) достигла дневной цели группы – при 12 участниках это 4. Не всем нужно выполнить цель. В группе видно, сколько участников уже справились сегодня."
+                ru: "Огонь группы сохраняется в этот день, если хотя бы треть участников (с округлением вверх) достигла дневной цели группы – при 12 участниках это 4. Выполнять цель всем не обязательно. В группе видно, сколько участников уже справились сегодня."
             )
         case .addFriends:
             PaceLocalization.text(
-                de: "Öffne Social und tippe auf „Freund hinzufügen“. Suche nach dem Benutzernamen und sende eine Anfrage. Sobald die andere Person sie unter „Anfragen“ annimmt, seid ihr befreundet und könnt euch vergleichen und schreiben.",
-                en: "Open Social and tap “Add friend”. Search for the username and send a request. Once the other person accepts it under “Requests”, you're friends and can compare and message each other.",
-                ru: "Открой вкладку «Друзья» и нажми «Добавить друга». Найди имя пользователя и отправь запрос. Когда другой человек примет его в разделе «Запросы», вы станете друзьями и сможете сравнивать шаги и переписываться."
+                de: "Öffne Social und tippe auf „Freund hinzufügen“. Suche nach dem Benutzernamen und sende eine Anfrage. Sobald die andere Person sie unter „Freundschaftsanfragen“ (Briefumschlag oben rechts) annimmt, seid ihr befreundet und könnt euch vergleichen und schreiben.",
+                en: "Open Social and tap “Add friend”. Search for the username and send a request. Once the other person accepts it under “Friend requests” (envelope at the top right), you're friends and can compare and message each other.",
+                ru: "Открой вкладку «Друзья» и нажми «Добавить друга». Найди имя пользователя и отправь заявку. Когда другой человек примет её в разделе «Заявки в друзья» (значок конверта вверху справа), вы станете друзьями и сможете сравнивать шаги и переписываться."
             )
         case .createGroup:
             PaceLocalization.text(
-                de: "Öffne Social → Gruppen → „Gruppe erstellen“. Gib einen Gruppennamen ein, wähle das Tagesziel der Gruppe und lade danach Freunde ein oder teile den Beitrittscode.",
-                en: "Open Social → Groups → “Create group”. Enter a group name, choose the group's daily goal and then invite friends or share the join code.",
-                ru: "Открой «Друзья» → «Группы» → «Создать группу». Введи название, выбери дневную цель группы, затем пригласи друзей или поделись кодом для вступления."
+                de: "Öffne Social und tippe auf „Gruppe erstellen“. Gib einen Gruppennamen ein, wähle das Tagesziel der Gruppe und lade Freunde ein – oder teile später den Einladungscode.",
+                en: "Open Social and tap “Create group”. Enter a group name, choose the group's daily goal and invite friends – or share the invite code later.",
+                ru: "Открой вкладку «Друзья» и нажми «Создать группу». Введи название, выбери дневную цель группы и пригласи друзей – или позже поделись кодом приглашения."
             )
         case .customizeHome:
             PaceLocalization.text(
                 de: "Tippe auf Home auf „Anpassen“. Mit „+ Widget hinzufügen“ kommen neue Widgets dazu, über „Größe auswählen“ änderst du die Größe, am Griff mit den sechs Punkten verschiebst du ein Widget, mit dem X entfernst du es. Zum Schluss auf „Fertig“ tippen.",
                 en: "Tap “Customize” on Home. “+ Add widget” adds new widgets, “Choose size” changes the size, the handle with six dots moves a widget and the X removes it. Tap “Done” when you're finished.",
-                ru: "На главном экране нажми «Настроить». «+ Добавить виджет» добавляет виджеты, «Выбрать размер» меняет размер, за ручку с шестью точками виджет перемещается, крестик удаляет его. В конце нажми «Готово»."
+                ru: "На вкладке «Главная» нажми «Настроить». «+ Добавить виджет» добавляет виджеты, «Выбрать размер» меняет размер, виджет можно перетащить за ручку с шестью точками, крестик удаляет его. В конце нажми «Готово»."
             )
         case .dailyGoal:
             PaceLocalization.text(
                 de: "Tippe im Schritte-Widget auf Home auf „Tagesziel ändern“ oder öffne Profil → Deine Aktivität → Tagesziel. Das neue Ziel gilt ab heute; frühere Tage behalten ihr damaliges Ziel.",
                 en: "Tap “Change daily goal” in the steps widget on Home or open Profile → Your activity → Daily goal. The new goal applies from today; earlier days keep the goal they had.",
-                ru: "Нажми «Изменить дневную цель» в виджете шагов на главном экране или открой «Профиль» → «Твоя активность» → «Дневная цель». Новая цель действует с сегодняшнего дня; прошлые дни сохраняют свою цель."
+                ru: "Нажми «Изменить цель» в виджете шагов на вкладке «Главная» или открой «Профиль» → «Твоя активность» → «Дневная цель». Новая цель действует с сегодняшнего дня; прошлые дни сохраняют свою цель."
             )
         case .editProfile:
             PaceLocalization.text(
-                de: "Öffne Profil und tippe auf „Profil bearbeiten“. Dort kannst du ein Banner, eine kurze Bio, bis zu fünf Interessen und – freiwillig – sichtbare Auszeichnungen festlegen. Profilbild und Namen änderst du unter Profil → Konto & Profil.",
-                en: "Open Profile and tap “Edit profile”. There you can set a banner, a short bio, up to five interests and – optionally – visible achievements. Change your photo and names under Profile → Account & profile.",
-                ru: "Открой профиль и нажми «Редактировать профиль». Там можно задать обложку, короткое описание, до пяти интересов и – по желанию – видимые награды. Фото и имена меняются в разделе «Профиль» → «Аккаунт и профиль»."
+                de: "Öffne Profil und tippe neben deinem Profilbild auf „Bearbeiten“. Dort kannst du ein Banner, eine kurze Bio, bis zu fünf Interessen und – freiwillig – sichtbare Auszeichnungen festlegen. Profilbild und Namen änderst du unter Profil → Konto & Profil.",
+                en: "Open Profile and tap “Edit” next to your photo. There you can set a banner, a short bio, up to five interests and – optionally – visible achievements. Change your photo and names under Profile → Account & profile.",
+                ru: "Открой профиль и нажми «Изменить» рядом с фото. Там можно задать обложку, короткое описание, до пяти интересов и – по желанию – видимые награды. Фото и имена меняются в разделе «Профиль» → «Аккаунт и профиль»."
             )
         case .privacy:
             PaceLocalization.text(
-                de: "Unter Profil → Privatsphäre & Sicherheit legst du fest, ob andere dich in der Suche finden, und verwaltest blockierte Personen. Ob du in regionalen Rankings erscheinst, stellst du unter Profil → Ranking-Sichtbarkeit ein. Deine Schritte sehen nur deine Freunde.",
-                en: "Under Profile → Privacy & security you decide whether others can find you in search and manage blocked people. Whether you appear in regional rankings is set under Profile → ranking visibility. Only your friends see your steps.",
-                ru: "В разделе «Профиль» → «Конфиденциальность и безопасность» можно решить, находят ли тебя другие в поиске, и управлять заблокированными. Появляешься ли ты в региональных рейтингах, настраивается в профиле в разделе видимости в рейтингах. Твои шаги видят только друзья."
+                de: "Unter Profil → Privatsphäre & Sicherheit legst du fest, ob andere dich in der Suche finden, und verwaltest blockierte Personen. Ob du in regionalen Rankings erscheinst, stellst du unter Profil → „Sichtbarkeit in Rankings“ ein. Deine Wettbewerbsschritte sehen deine Freunde, die Mitglieder deiner Gruppen und – nur wenn eingeschaltet – andere in den Rankings deiner Regionen.",
+                en: "Under Profile → Privacy & security you decide whether others can find you in search and manage blocked people. Whether you appear in regional rankings is set under Profile → “Visibility in rankings”. Your competition steps are visible to your friends, the members of your groups and – only if switched on – others in your regional rankings.",
+                ru: "В разделе «Профиль» → «Конфиденциальность и безопасность» можно решить, находят ли тебя другие в поиске, и управлять заблокированными пользователями. Показывать ли тебя в региональных рейтингах, настраивается в «Профиль» → «Видимость в рейтингах». Твои шаги для соревнований видят друзья, участники твоих групп и – только если это включено – другие пользователи в рейтингах твоих регионов."
             )
         case .languageDesign:
             PaceLocalization.text(
                 de: "Öffne Profil → Darstellung & Sprache. Dort wählst du Automatisch, Hell oder Dunkel, das App-Icon und die Sprache (Deutsch, Englisch, Russisch oder wie dein iPhone).",
                 en: "Open Profile → Appearance & language. There you choose Automatic, Light or Dark, the app icon and the language (German, English, Russian or like your iPhone).",
-                ru: "Открой «Профиль» → «Оформление и язык». Там можно выбрать «Автоматически», светлое или тёмное оформление, значок приложения и язык (немецкий, английский, русский или как на iPhone)."
+                ru: "Открой «Профиль» → «Оформление и язык». Там можно выбрать «Автоматически», «Светлая» или «Тёмная», значок приложения и язык (немецкий, английский, русский или как на iPhone)."
             )
         case .reportUser:
             PaceLocalization.text(
-                de: "Öffne das Profil der Person und wähle „Melden“. Dort kannst du auch blockieren. Gruppen meldest du in der Gruppe, einzelne Nachrichten über langes Drücken im Chat.",
-                en: "Open the person's profile and choose “Report”. You can also block them there. Report groups in the group, single messages by long-pressing them in the chat.",
-                ru: "Открой профиль человека и выбери «Пожаловаться». Там же можно заблокировать. На группы жалуются в самой группе, на отдельные сообщения – долгим нажатием в чате."
+                de: "Öffne das Profil der Person und wähle „Nutzer melden“. Dort kannst du sie auch blockieren. Eine Gruppe meldest du in den Gruppeneinstellungen („Gruppe melden“), eine einzelne Nachricht durch langes Drücken im Chat („Nachricht melden“).",
+                en: "Open the person's profile and choose “Report user”. You can also block them there. Report a group in the group settings (“Report group”) and a single message by long-pressing it in the chat (“Report message”).",
+                ru: "Открой профиль человека и выбери «Пожаловаться на пользователя». Там же можно заблокировать. На группу жалуются в настройках группы («Пожаловаться на группу»), на отдельное сообщение – долгим нажатием в чате («Пожаловаться на сообщение»)."
             )
         case .reportBug:
             PaceLocalization.text(
-                de: "Am besten über Profil → Hilfe & Feedback → „Problem melden“. Beschreibe kurz, was passiert ist – die App-Version wird mitgeschickt, deine Gesundheitsdaten und Chats nicht.",
-                en: "Best via Profile → Help & feedback → “Report a problem”. Briefly describe what happened – the app version is included, your health data and chats are not.",
-                ru: "Лучше всего через «Профиль» → «Помощь и отзывы» → «Сообщить о проблеме». Коротко опиши, что произошло – версия приложения отправится вместе с сообщением, данные о здоровье и чаты – нет."
+                de: "Am besten über Profil → Daten, Hilfe & Rechtliches → Hilfe & Feedback → „Problem melden“. Beschreibe kurz, was passiert ist. Gespeichert wird deine Nachricht mit deinem Konto und der App-Version – keine Gesundheitsdaten und keine Chats.",
+                en: "Best via Profile → Data, help & legal → Help & feedback → “Report a problem”. Briefly describe what happened. Your message is stored with your account and the app version – no health data and no chats.",
+                ru: "Лучше всего через «Профиль» → «Данные, помощь и правовая информация» → «Помощь и отзывы» → «Сообщить о проблеме». Коротко опиши, что произошло. Сообщение сохраняется вместе с твоим аккаунтом и версией приложения – без данных о здоровье и чатов."
             )
         }
     }
 
-    /// Stichwörter (klein, Wortanfänge) in allen drei Sprachen für die freie Eingabe.
+    /// Stichwörter für die freie Eingabe (klein, „ё“ als „е“): Ein Stichwort trifft, wenn ein Wort der Eingabe damit
+    /// **beginnt** („count“ trifft „counted“, aber nicht „account“); mehrere Wörter müssen aufeinander folgen; ein
+    /// abschließendes `$` verlangt das ganze Wort („hell$“ trifft nicht „hello“).
     var keywords: [String] {
         switch self {
         case .howItWorks: ["wie funktioniert pace", "how does pace", "как работает pace", "was ist pace", "what is pace", "что такое pace"]
-        case .stepCounting: ["schritt", "zähl", "gezählt", "step", "count", "шаг", "считa", "считаю", "счит"]
-        case .stepMismatch: ["stimm", "falsch", "unterschied", "verzöger", "abweich", "mismatch", "wrong", "differ", "delay", "не совпад", "разниц", "задерж", "неправил"]
+        case .stepCounting: ["schritt", "zähl", "gezählt", "step", "count", "шаг", "счит", "подсч"]
+        case .stepMismatch: ["stimm", "überein", "falsch", "unterschied", "verzöger", "abweich", "mismatch", "match", "wrong", "differ", "delay", "совпад", "разниц", "задерж", "неправил", "отлича"]
         case .rankings: ["ranking", "rangliste", "platzierung", "leaderboard", "рейтинг", "мест"]
-        case .flame: ["flamme", "serie", "streak", "flame", "огон", "сери"]
+        case .flame: ["flamme", "serie", "streak", "flame", "огон", "огн", "сери"]
         case .groupFlame: ["gruppenflamme", "group flame", "огонь групп", "огня групп"]
-        case .addFriends: ["freund", "friend", "друз", "друг"]
+        case .addFriends: ["freund", "friend", "друз", "друга", "друг$"]
         case .createGroup: ["gruppe", "group", "групп"]
-        case .customizeHome: ["widget", "homescreen", "anpass", "customiz", "home screen", "виджет", "главн", "настро"]
+        case .customizeHome: ["widget", "homescreen", "home$", "home screen", "anpass", "customiz", "виджет", "главн"]
         case .dailyGoal: ["tagesziel", "ziel", "goal", "цел"]
-        case .editProfile: ["profil", "profile", "bio", "banner", "interess", "профил", "обложк", "описани"]
+        case .editProfile: ["profil", "profile", "bio$", "banner", "interess", "interest", "профил", "обложк", "описани", "интерес"]
         case .privacy: ["datenschutz", "privatsph", "sichtbar", "privacy", "visib", "конфиденц", "видим", "приватн"]
-        case .languageDesign: ["sprache", "design", "dunkel", "hell", "language", "dark", "light", "appearance", "язык", "тёмн", "темн", "светл", "оформлен"]
-        case .reportUser: ["nutzer melden", "melden", "blockier", "report user", "report", "block", "пожалов", "заблок", "жалоб"]
-        case .reportBug: ["fehler", "bug", "absturz", "support", "problem", "crash", "error", "ошибк", "поддержк", "сбой", "проблем"]
+        case .languageDesign: ["sprache", "design", "dunkel", "hell$", "helle$", "darstellung", "language", "dark", "light$", "appearance", "язык", "темн", "светл", "оформлен"]
+        case .reportUser: ["nutzer melden", "melde", "blockier", "report user", "report a user", "block", "пожалов", "заблок", "жалоб"]
+        case .reportBug: ["fehler", "bug", "absturz", "abgestürzt", "technisch", "support", "problem", "crash", "error", "technical", "ошибк", "поддержк", "сбой", "проблем", "техническ", "вылет"]
+        }
+    }
+
+    /// Wörter, bei denen das Thema **nicht** passt (keine Antwort statt einer falschen): Freunde entfernen und Gruppen
+    /// verlassen oder ändern deckt der Katalog nicht ab.
+    var exclusions: [String] {
+        switch self {
+        case .addFriends: ["entfern", "lösch", "remove", "delete", "unfriend", "удал"]
+        case .createGroup: ["verlass", "austret", "leave", "покин", "выйти", "выход", "entfern", "lösch", "remove", "delete", "удал", "änder", "change", "измен"]
+        default: []
         }
     }
 }
@@ -212,7 +224,7 @@ public struct PaceHelpMessage: Codable, Equatable, Sendable, Identifiable {
 }
 
 public enum PaceHelpBot {
-    public static var name: String { "Pace-Bot" }
+    public static var name: String { PaceLocalization.text(de: "Pace-Bot", en: "Pace Bot", ru: "Pace-бот") }
 
     public static var subtitle: String {
         PaceLocalization.text(de: "Fragen rund um Pace? Ich helfe dir.", en: "Questions about Pace? I can help.", ru: "Вопросы о Pace? Я помогу.")
@@ -230,7 +242,7 @@ public enum PaceHelpBot {
     public static var greeting: String {
         PaceLocalization.text(
             de: "Hey! 👋 Ich bin der Pace-Bot.\n\nIch helfe dir bei den wichtigsten Fragen rund um Pace.\n\nWobei brauchst du Hilfe?",
-            en: "Hey! 👋 I'm the Pace bot.\n\nI help you with the most important questions about Pace.\n\nWhat do you need help with?",
+            en: "Hey! 👋 I'm Pace Bot.\n\nI help you with the most important questions about Pace.\n\nWhat do you need help with?",
             ru: "Привет! 👋 Я Pace-бот.\n\nЯ помогу с главными вопросами о Pace.\n\nС чем тебе помочь?"
         )
     }
@@ -249,20 +261,41 @@ public enum PaceHelpBot {
     /// Ordnet eine freie Eingabe einem Thema zu – nur, wenn das eindeutig ist; sonst `nil` (ehrliche Antwort statt
     /// erfundener).
     public static func match(_ input: String) -> PaceHelpTopic? {
-        let text = input.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        guard text.count >= 3 else { return nil }
+        let tokens = Self.words(in: input)
+        guard tokens.joined().count >= 3 else { return nil }
         var scores: [PaceHelpTopic: Int] = [:]
-        for topic in PaceHelpTopic.allCases {
-            let hits = topic.keywords.filter { text.contains($0) }
-            guard !hits.isEmpty else { continue }
+        for topic in PaceHelpTopic.allCases where !topic.exclusions.contains(where: { Self.contains(tokens, $0) }) {
             // Längere, genauere Stichwörter wiegen mehr („gruppenflamme“ vor „flamme“).
-            scores[topic] = hits.reduce(0) { $0 + $1.count }
+            let score = topic.keywords.filter { Self.contains(tokens, $0) }.reduce(0) { $0 + $1.filter(\.isLetter).count }
+            if score > 0 { scores[topic] = score }
         }
-        guard let best = scores.max(by: { $0.value < $1.value }) else { return nil }
-        // Gruppenflamme schlägt Flamme und Gruppe, wenn beides vorkommt.
-        if scores[.flame] != nil, scores[.createGroup] != nil { return .groupFlame }
-        let ties = scores.filter { $0.value == best.value }
-        return ties.count == 1 ? best.key : nil
+        // Feste Vorränge bei Themen, die sich überschneiden.
+        if scores[.groupFlame] != nil || (scores[.flame] != nil && scores[.createGroup] != nil) { return .groupFlame }
+        if scores[.stepMismatch] != nil { scores[.stepCounting] = nil }
+        if scores[.reportBug] != nil { scores[.reportUser] = nil }
+        guard let best = scores.values.max() else { return nil }
+        let leaders = scores.filter { $0.value == best }
+        return leaders.count == 1 ? leaders.first?.key : nil
+    }
+
+    /// Wörter der Eingabe: klein, ohne Satzzeichen und Anführungszeichen, „ё“ als „е“.
+    static func words(in input: String) -> [String] {
+        input.lowercased()
+            .replacingOccurrences(of: "ё", with: "е")
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .map(String.init)
+    }
+
+    /// Ob die Wortfolge des Stichworts in der Eingabe vorkommt (jedes Wort als Wortanfang, mit `$` als ganzes Wort).
+    static func contains(_ words: [String], _ keyword: String) -> Bool {
+        let parts = keyword.split(separator: " ").map(String.init)
+        guard !parts.isEmpty, words.count >= parts.count else { return false }
+        return (0...(words.count - parts.count)).contains { start in
+            parts.indices.allSatisfy { offset in
+                let word = words[start + offset], part = parts[offset]
+                return part.hasSuffix("$") ? word == String(part.dropLast()) : word.hasPrefix(part)
+            }
+        }
     }
 }
 

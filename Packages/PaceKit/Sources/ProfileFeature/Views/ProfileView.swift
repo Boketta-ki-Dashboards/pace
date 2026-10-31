@@ -145,10 +145,13 @@ struct ProfileContent: View {
                 Button {
                     onOpen(.editProfile)
                 } label: {
-                    Label(ProfileDetailsTexts.editProfile, systemImage: "pencil")
+                    // Kurze Beschriftung: „Profil bearbeiten“ passt neben Profilbild und Teilen nicht (SE, Russisch).
+                    Label(ProfileDetailsTexts.edit, systemImage: "pencil")
                         .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
                 .buttonStyle(.paceCompact)
+                .accessibilityLabel(ProfileDetailsTexts.editProfile)
                 .accessibilityHint(PaceLocalization.text(
                     de: "Banner, Bio, Interessen und Auszeichnungen",
                     en: "Banner, bio, interests and achievements",
