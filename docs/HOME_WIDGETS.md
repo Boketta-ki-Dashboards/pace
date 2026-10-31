@@ -226,6 +226,14 @@ Standard seiner Größe (Tabelle oben); eine Auswahl, die dem Standard entsprich
 - Mehrfach erlaubt: regionale Rankings (verschiedene Ebenen), Umfeld, Freunde (eigene Auswahl/Name), Gruppen
   (verschiedene Gruppen), Aktivität (verschiedene Kennzahlen). Einmalig: Schritte heute, Woche, Streak, Kalender.
 
+## Willkommensmitteilung (Auftrag 6)
+
+Im Mitteilungscenter (Glocke auf Home) steht nach dem Einstieg einmal je Profil „Willkommen bei Pace! 👋“ von „Pace
+Team“ – auch für bestehende Nutzer einmalig nach dem Update. Rein lokal (`SystemMessageCenter`, UserDefaults
+`pace.systemMessages.<public_id>`), keine Push-Nachricht, kein Server. Öffnen markiert sie als gelesen (Zähler an der
+Glocke sinkt); gelöscht kommt sie nicht wieder. Die Detailseite erklärt Schritte, Ziele, Rankings, Freunde, Gruppen,
+Flamme, Home und den Pace-Bot; die Buttons führen zurück zu Home, zu Rankings, zu „Freund hinzufügen“ und zum Pace-Bot.
+
 ## Sprache
 
 Alle Texte des HomeFeature in Deutsch, Englisch und Russisch über `PaceLocalization` (`HomeTexts`, Modelle mit

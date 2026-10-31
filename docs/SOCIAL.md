@@ -313,6 +313,34 @@ Person, die sie vergeben hat (`nickname` in allen Profilausgaben, Rankings und E
 - App: `SocialRepository.groupCalendar(groupID:from:to:)` → `GroupCalendar`; Monatsansicht mit Montag als
   Wochenbeginn über `GroupCalendarRules.monthGrid(containing:calendar:)` (4–6 Wochen, passt in einen Abruf).
 
+### Social-Profil 2.0 (Migration 20261030100000, Auftrag 6)
+
+Optionale Angaben im eigenen Profil (alle freiwillig, ältere Profile zeigen einfach nichts davon):
+
+| Angabe | Regeln | Wo geprüft |
+|---|---|---|
+| Banner | Querformat 3:1 (Zuschnitt in der App), JPEG ≤ 5 MB, längste Kante ≤ 1500 px, Ordner `<public_id>/` im Bucket `avatars`; ohne Banner ein neutraler Pace-Verlauf | App (`BannerImageProcessing`), Trigger `private.validate_profile_banner`, Lese-Policy über `pace_access.can_read_avatar` |
+| Bio | 1–160 Zeichen, höchstens 4 Zeilen, Emojis erlaubt, keine Steuer-/unsichtbaren Zeichen, kein HTML (Anzeige als reiner Text) | App (`ProfileBioRules`, Zähler), Prüfregel `profiles_bio_valid` |
+| Interessen | bis zu 5 aus einem festen Katalog mit stabilen IDs (`walking`, `running`, `hiking`, `fitness`, `cycling`, `football`, `outdoor`, `everyday_movement`, `challenges`, `wellbeing`), Titel DE/EN/RU | App (`ProfileInterest`), Prüfregel + Trigger |
+| Auszeichnungen | nur auf Wunsch (Schalter, Standard aus); nur echte Werte aus Serie und Bestwert (`streak_7/30/100/365`, `best_day_10k/20k/30k`, je Art die höchste Stufe) – keine genauen Schrittzahlen | App (`ProfileAchievement.earned`), Prüfregel + Trigger |
+
+`social_profile_details(p_public_id)` liefert diese Angaben mit derselben Sichtbarkeit wie `social_public_profile`
+(`not_found`). Bei Blockierung (beide Richtungen) bleiben sie leer, Auszeichnungen fremder Profile kommen nur bei
+Freigabe. Gespeichert wird per `update` auf die fünf Spalten des eigenen Profils (Spaltenrecht). Ohne Migration zeigt
+die App „noch nicht eingerichtet“ und Profile wie bisher. Alle Aktionen auf fremden Profilen (Anfrage, Annehmen,
+Nachricht, Spitzname, Teilen, Blockieren, Melden) bleiben unverändert.
+
+### Pace-Bot (Auftrag 6)
+
+Fester Eintrag oben in der Chatliste. **Keine KI, kein Server, keine Kosten:** 15 vorgefertigte Fragen und Antworten
+(DE/EN/RU, `PaceHelpTopic`), optional einfache Stichwortsuche; ist sie nicht eindeutig, antwortet der Bot ehrlich
+„Dazu habe ich leider noch keine passende Antwort …“ und bietet Hilfe an. Der Verlauf liegt nur auf dem Gerät
+(UserDefaults `pace.helpBot.history`, höchstens 60 Nachrichten, zurücksetzbar) – keine Supabase-Tabelle, kein
+Realtime, keine Ungelesen-Zähler. „Hilfe kontaktieren“ öffnet die bestehende Rückmeldung „Problem melden“; eine
+Support-E-Mail erscheint nur, wenn `PACE_SUPPORT_EMAIL` in der lokalen `Config/Pace.xcconfig` gesetzt ist (es gibt
+keine offizielle Adresse im Repository, es wird keine erfunden). Die Mail-Vorlage enthält keine Kennungen oder
+Gesundheitsdaten und wird nie automatisch gesendet.
+
 ## Fehler
 
 Fehler sind stabile Tokens als Meldung; die App prüft `message.contains(token)`. errcode ist `P0001`, nur

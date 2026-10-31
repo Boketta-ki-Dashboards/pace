@@ -424,11 +424,11 @@ struct HelpBotAndProfileDetailsTests {
         #expect(social.requestedRoute == nil)
     }
 
-    @Test func foreignProfileShowsDetailsAndOldServersStayAsBefore() async {
+    @Test func foreignProfileShowsDetailsAndOldServersStayAsBefore() async throws {
         let mia = SocialProfile(publicID: UUID(), username: "mia", displayName: "Mia")
         let repository = SocialRepositoryStub { state in
             state.searchableProfiles = [mia]
-            state.relationships[mia.publicID] = .none
+            state.relationships[mia.publicID] = SocialRelationship.none
         }
         let social = SocialViewModel(repository: repository, calendar: Fixtures.activityCalendar)
         social.profileDetails = ProfileDetailsRepositoryStub { state in
@@ -440,17 +440,17 @@ struct HelpBotAndProfileDetailsTests {
                 achievements: [.streak30]
             )
         }
-        let model = try? #require(social.userProfile(for: mia))
-        await model?.load()
-        #expect(model?.details.bio == "Jeden Tag ein bisschen aktiver.")
-        #expect(model?.details.interests == [.walking, .hiking])
-        #expect(model?.details.visibleAchievements.isEmpty == true, "Nicht freigegeben: keine Auszeichnungen")
+        let model = try #require(social.userProfile(for: mia))
+        await model.load()
+        #expect(model.details.bio == "Jeden Tag ein bisschen aktiver.")
+        #expect(model.details.interests == [.walking, .hiking])
+        #expect(model.details.visibleAchievements.isEmpty, "Nicht freigegeben: keine Auszeichnungen")
 
         // Server ohne Migration: Profil wie bisher, ohne Angaben und ohne Fehler.
         social.profileDetails = ProfileDetailsRepositoryStub { $0.error = .unavailable }
-        let old = try? #require(social.userProfile(for: mia))
-        await old?.load()
-        #expect(old?.details == .empty)
-        if case .loaded = old?.state {} else { Issue.record("Profil muss trotzdem laden") }
+        let old = try #require(social.userProfile(for: mia))
+        await old.load()
+        #expect(old.details == .empty)
+        if case .loaded = old.state {} else { Issue.record("Profil muss trotzdem laden") }
     }
 }

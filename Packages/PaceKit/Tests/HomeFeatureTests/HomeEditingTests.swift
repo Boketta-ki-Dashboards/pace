@@ -829,8 +829,11 @@ struct WelcomeNotificationTests {
             #expect(welcome.first?.message.hasPrefix("Entdecke deine Schritte") == true)
         }
         // Öffnen: gelesen, Zähler aktualisiert, kein Wechsel in den Social-Tab.
-        let item = try? #require(welcome.first)
-        if let item { dashboard.open(item) }
+        guard let item = welcome.first else {
+            Issue.record("Willkommensmitteilung fehlt")
+            return
+        }
+        dashboard.open(item)
         #expect(dashboard.notificationCount == 0)
         #expect(harness.log.socialOpened == 0)
         #expect(dashboard.notifications.count == 1, "Bleibt im Verlauf")

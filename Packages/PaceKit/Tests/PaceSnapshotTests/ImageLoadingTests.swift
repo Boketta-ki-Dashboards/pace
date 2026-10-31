@@ -196,7 +196,9 @@ private final class ImageHost {
         controller.view.layoutIfNeeded()
     }
 
-    func wait(timeout: Duration = .seconds(6), until condition: () -> Bool) async throws {
+    /// Wartet, bis die Bedingung gilt. Großzügige Frist: Die anderen Snapshot-Suiten laufen parallel auf dem Main
+    /// Actor, in der CI dauert ein Bildwechsel dann mehrere Sekunden (bei Erfolg endet das Warten sofort).
+    func wait(timeout: Duration = .seconds(30), until condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now + timeout
         controller.view.layoutIfNeeded()
         while !condition(), ContinuousClock.now < deadline {

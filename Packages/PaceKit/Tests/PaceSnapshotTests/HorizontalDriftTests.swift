@@ -414,6 +414,13 @@ private final class DriftScreen {
             let index = (y * width + x) * 4
             return abs(Int(data[index]) - red) > 10 || abs(Int(data[index + 1]) - green) > 10 || abs(Int(data[index + 2]) - blue) > 10
         }
+        // Weiße Karten liegen nur wenige Stufen über dem fast weißen Hintergrund (#FFFFFF auf #F8F9F7): Für die
+        // Widget-Ränder zählen hellere Flächen mit, Schatten (dunkler) nicht.
+        func isCardOrContent(_ x: Int, _ y: Int) -> Bool {
+            let index = (y * width + x) * 4
+            let isBrighter = Int(data[index]) - red >= 4 && Int(data[index + 1]) - green >= 4 && Int(data[index + 2]) - blue >= 4
+            return isBrighter || isContent(x, y)
+        }
         // Median der Zeilenränder statt Extremwert: Einzelne Elemente am Rand (z. B. das X zum Entfernen eines Widgets)
         // verfälschen die Messung nicht; eine echte Verschiebung bewegt alle Zeilen.
         func extent(rows: Range<Int>) -> Extent? {
@@ -427,6 +434,21 @@ private final class DriftScreen {
             }
             guard !minima.isEmpty else { return nil }
             return Extent(minX: minima.sorted()[minima.count / 2], maxX: maxima.sorted()[maxima.count / 2])
+        }
+        // Widget-Ränder als Spaltenprofil: Eine Spalte gehört dazu, wenn in mindestens einem Viertel der Zeilen eine
+        // Karte liegt. Der Inhalt der Widgets, welche Widgets gerade sichtbar sind, das X zum Entfernen und Schatten
+        // ändern die Ränder nicht – eine echte Verschiebung der Seite bewegt sie.
+        func cardExtent(rows: Range<Int>) -> Extent? {
+            let rows = rows.clamped(to: 0..<height)
+            guard !rows.isEmpty else { return nil }
+            var counts = [Int](repeating: 0, count: width)
+            for y in rows {
+                for x in 0..<width where isCardOrContent(x, y) { counts[x] += 1 }
+            }
+            let needed = max(1, rows.count / 4)
+            guard let first = counts.firstIndex(where: { $0 >= needed }),
+                  let last = counts.lastIndex(where: { $0 >= needed }) else { return nil }
+            return Extent(minX: first, maxX: last)
         }
         // Zusammenhängende Inhaltszeilen unterhalb der Statusleiste.
         let top = Int(device.safeArea.top)
@@ -446,7 +468,7 @@ private final class DriftScreen {
         return Measurement(
             header: runs.first.flatMap { extent(rows: $0) },
             title: runs.count > 1 ? extent(rows: runs[1]) : nil,
-            content: contentTop < contentBottom ? extent(rows: contentTop..<contentBottom) : nil,
+            content: contentTop < contentBottom ? cardExtent(rows: contentTop..<contentBottom) : nil,
             titleHeight: runs.count > 1 ? runs[1].count : 0
         )
     }

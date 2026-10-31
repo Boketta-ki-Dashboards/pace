@@ -237,3 +237,98 @@ Gruppenkalender öffnen.
 Vorwärts korrigieren (neue Migration mit `create or replace function …`). Ältere App-Versionen nutzen die neuen
 Funktionen nicht; die aktuelle App zeigt bei fehlenden Funktionen „noch nicht eingerichtet“ (`PGRST202` →
 `.unavailable`). Ein vollständiges Zurück geht nur über die Sicherung (Daten seit dem Rollout gehen verloren).
+
+---
+
+# Auftrag 6: eine neue Migration (Social-Profil 2.0)
+
+> **Status: NICHT ausgeführt – Freigabe durch den Nutzer nötig.** Die Migration ist nur lokal bzw. in der CI
+> (Job „Backend“: Docker-Supabase, pgTAP inkl. `17_profile_details.test.sql` mit 32 Prüfungen, `db lint`) gelaufen.
+> Ziel ist ausschließlich das Pace-Projekt `bnkrenfvfiaapsbkeejq`. Alle bisherigen Migrationen bleiben unverändert und
+> werden nicht erneut ausgeführt. Kein `db reset`, keine Daten werden gelöscht.
+
+## A. Was eingespielt wird
+
+| # | Migration | Inhalt | Voraussetzung |
+|---|---|---|---|
+| 10 | `20261030100000_profile_details.sql` | Spalten `bio`, `interests`, `banner_path`, `shows_achievements`, `achievements` in `profiles` (mit Prüfregeln und Validierungs-Trigger); Spaltenrecht `update` darauf für `authenticated`; `pace_access.can_read_avatar` liest zusätzlich das aktuelle Banner; neue RPC `social_profile_details(uuid)` | 1–9 produktiv |
+
+**Additiv und rückwärtskompatibel:**
+
+- `bio` und `banner_path` sind nullable ohne Standardwert; `interests`, `achievements` (`'{}'`) und
+  `shows_achievements` (`false`) haben konstante Standardwerte – PostgreSQL legt sie ohne Umschreiben der Tabelle an.
+- Die vier Prüfregeln (`profiles_bio_valid`, `profiles_interests_valid`, `profiles_banner_path_format`,
+  `profiles_achievements_valid`) prüfen beim Anlegen die bestehenden Zeilen: Dort stehen nur `null` bzw. die
+  Standardwerte, die Regeln sind erfüllt. Bei der aktuellen Datenmenge ist die kurze Sperre unkritisch.
+- Bio: 1–160 Zeichen, ohne führende/folgende Leerzeichen, höchstens 4 Zeilen, keine Steuer- oder unsichtbaren
+  Zeichen (Emoji mit Zero-Width-Joiner bleiben erlaubt). Kein HTML – die App zeigt die Bio als reinen Text.
+- Interessen (≤ 5) und Auszeichnungen (≤ 7) nur aus festen Katalogen mit stabilen IDs, ohne Doppelte (Trigger
+  `private.validate_profile_details`).
+- Banner: nur ein Pfad im eigenen Ordner des Buckets `avatars` (`<public_id>/<datei>`), geprüft vom Trigger
+  `private.validate_profile_banner` – wie beim Profilbild. Keine neue Bucket-Konfiguration, keine neue
+  Storage-Policy: Die bestehende Lese-Policy ruft `pace_access.can_read_avatar` auf; die Funktion wird mit gleicher
+  Signatur ersetzt (Blockierung wird wie beim Profilbild beachtet).
+- `social_profile_details` liefert nichts an `anon`, hat dieselbe Sichtbarkeit wie `social_public_profile`
+  (`not_found`), gibt bei Blockierung (beide Richtungen) leere Angaben zurück und Auszeichnungen fremder Profile nur,
+  wenn die Person sie freigegeben hat. Rate Limit: 120 Aufrufe je 10 Minuten.
+- Ältere App-Versionen lesen die neuen Spalten nicht und rufen die RPC nicht auf. Die neue App zeigt ohne Migration
+  „noch nicht eingerichtet“ auf „Profil bearbeiten“ und Profile ohne Bio/Interessen/Banner (`PGRST202`/`42703` →
+  `.unavailable`) – sonst unverändert.
+
+## B. Vorbereitung
+
+1. Sicherung wie in Abschnitt 3 oben (Backup-Zeitpunkt notieren bzw. `supabase db dump --linked …`).
+2. *Storage → Settings:* keine Änderung nötig. Banner werden als JPEG ≤ 5 MB in den bestehenden Bucket `avatars`
+   hochgeladen (Grenze und MIME-Typen des Buckets bleiben).
+
+## C. Probelauf (durch den Nutzer)
+
+```sh
+supabase migration list --linked     # erwartet: alles bis 20261023100200 „remote“, nur 20261030100000 „local“
+supabase db push --dry-run           # muss genau 20261030100000 nennen
+```
+
+Abbrechen, wenn andere oder zusätzliche Migrationen erscheinen oder die Projekt-Ref nicht stimmt.
+
+## D. Einspielen (nur nach ausdrücklicher Freigabe)
+
+```sh
+supabase db push                     # NIE mit --include-seed
+```
+
+Die Migration läuft in einer Transaktion; bei einem Fehler wird sie vollständig zurückgerollt.
+
+## E. Prüfung danach (SQL Editor, nur lesend)
+
+```sql
+-- Neue Spalten mit Standardwerten
+select column_name, data_type, is_nullable, column_default from information_schema.columns
+ where table_schema = 'public' and table_name = 'profiles'
+   and column_name in ('bio', 'interests', 'banner_path', 'shows_achievements', 'achievements');
+-- erwartet: 5 Zeilen
+
+-- Prüfregeln vorhanden und gültig
+select conname, convalidated from pg_constraint
+ where conrelid = 'public.profiles'::regclass
+   and conname in ('profiles_bio_valid', 'profiles_interests_valid', 'profiles_achievements_valid', 'profiles_banner_path_format');
+-- erwartet: profiles_bio_valid, profiles_interests_valid, profiles_achievements_valid, profiles_banner_path_format – convalidated = true
+
+-- RPC nur für authenticated
+select has_function_privilege('anon', 'public.social_profile_details(uuid)', 'execute') as anon,
+       has_function_privilege('authenticated', 'public.social_profile_details(uuid)', 'execute') as authenticated;
+-- erwartet: anon = false, authenticated = true
+
+-- Bestehende Profile unverändert
+select count(*) from public.profiles where bio is not null or banner_path is not null or interests <> '{}';
+-- direkt danach: 0
+```
+
+Danach *Database → Advisors* (keine neuen Warnungen) und mit zwei Konten in der App: Bio, Interessen und Banner
+setzen, Auszeichnungen ein- und ausschalten; beim anderen Konto das fremde Profil öffnen (Banner lädt, Auszeichnungen
+nur bei Freigabe); nach Blockieren keine Bio/kein Banner mehr.
+
+## F. Rücknahme
+
+Vorwärts korrigieren (neue Migration). Die Spalten können bleiben – ältere App-Versionen ignorieren sie. Die vorige
+Fassung von `pace_access.can_read_avatar` steht in `20261019100300_storage_realtime_access.sql` (nur ohne
+`banner_path`). Ein vollständiges Zurück geht nur über die Sicherung.

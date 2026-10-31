@@ -9,7 +9,8 @@ import PaceTestSupport
 /// Beispieldaten für die Snapshot-Bilder (nur für Bilder, nie in der App).
 @MainActor
 enum SnapshotFixtures {
-    static func makeDashboard() async throws -> (HomeDashboardViewModel, ProfileStore) {
+    /// - Parameter socialOverride: Eigene Social-Daten (z. B. mit Profilbildern); sonst die Standard-Beispieldaten.
+    static func makeDashboard(social socialOverride: SocialViewModel? = nil) async throws -> (HomeDashboardViewModel, ProfileStore) {
         let profile = Fixtures.profile(displayName: "Niklas", regionalLeaderboardEnabled: true)
         let profiles = ProfileRepositoryStub { $0.profiles[profile.id] = profile }
         let store = ProfileStore(profile: profile, profiles: profiles, regions: RegionRepositoryStub(), cache: InMemoryProfileCache())
@@ -56,13 +57,18 @@ enum SnapshotFixtures {
         standings.neighborhoodRadii = [.municipality: 2, .district: 4]
         await standings.load()
 
-        let social = SocialViewModel(
-            repository: Self.socialRepository(),
-            ownUsername: { "niklas" },
-            calendar: calendar,
-            now: now
-        )
-        await social.load()
+        let social: SocialViewModel
+        if let socialOverride {
+            social = socialOverride
+        } else {
+            social = SocialViewModel(
+                repository: Self.socialRepository(),
+                ownUsername: { "niklas" },
+                calendar: calendar,
+                now: now
+            )
+            await social.load()
+        }
         let streak = StepStreakTracker(
             history: ActivityHistoryStore(activityData: health, live: activity, calendar: calendar, now: now),
             goals: StepGoalSettings(store: InMemoryStepGoalStore(), calendar: calendar, now: now),
