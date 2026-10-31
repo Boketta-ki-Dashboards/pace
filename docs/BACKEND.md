@@ -423,6 +423,7 @@ sechs Parameter) funktionieren unverändert. Neue Felder in den Antworten ignori
 | `20261023100000_friend_nicknames.sql` | `friend_nicknames`, `social_set_friend_nickname`, `nickname` in `profile_json`, Rankings (Freunde, Gruppe, Region) und Einladungen; `account_export` mit eigenen Spitznamen; `social_report` ohne Spitznamen im Schnappschuss |
 | `20261023100100_chat_message_actions.sql` | `chat_messages.reply_to_id`/`edited_at`/`media_duration_ms`, Art `voice`; `chat_send` (Antwort, Sprachnachricht), `chat_edit_message`, `chat_set_favorite`/`chat_favorites`, `chat_set_pinned`/`chat_pins`; `chat_message_favorites`, `chat_message_pins`; Bucket `chat-media` mit AAC-Audio; Echtzeit `message_updated`, `pins_changed` |
 | `20261023100200_group_calendar.sql` | `social_group_calendar` |
+| `20261030100000_profile_details.sql` | Social-Profil 2.0: `bio`, `interests`, `banner_path`, `shows_achievements`, `achievements` in `profiles` (Prüfregeln, Trigger, Spaltenrecht `update`), `social_profile_details`, Banner in `can_read_avatar`; `social_report` mit Bio/Interessen/Banner im Schnappschuss, gemeldetes Banner in `is_report_evidence` – **nicht ausgeführt**, siehe [SUPABASE_ROLLOUT.md](SUPABASE_ROLLOUT.md) |
 
 ### Tabellen und Spalten
 

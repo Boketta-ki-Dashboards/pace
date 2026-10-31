@@ -196,9 +196,8 @@ struct PaceBotContent: View {
                 // Nur eine Aktion: direkt als Knopf (mit Rückfrage), kein Menü.
                 Button(action: onReset) {
                     Image(systemName: "arrow.counterclockwise")
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.paceIcon)
                 .disabled(session.messages.count <= 1)
                 .accessibilityLabel(PaceBotTexts.reset)
             }

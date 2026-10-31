@@ -328,18 +328,23 @@ Optionale Angaben im eigenen Profil (alle freiwillig, ältere Profile zeigen ein
 (`not_found`). Bei Blockierung (beide Richtungen) bleiben sie leer, Auszeichnungen fremder Profile kommen nur bei
 Freigabe. Gespeichert wird per `update` auf die fünf Spalten des eigenen Profils (Spaltenrecht). Ohne Migration zeigt
 die App „noch nicht eingerichtet“ und Profile wie bisher. Alle Aktionen auf fremden Profilen (Anfrage, Annehmen,
-Nachricht, Spitzname, Teilen, Blockieren, Melden) bleiben unverändert.
+Nachricht, Spitzname, Teilen, Blockieren, Melden) bleiben unverändert. Eine Meldung einer Person sichert Bio,
+Interessen und Banner im Schnappschuss; das gemeldete Banner bleibt bis zur Moderation erhalten. Auszeichnungen werden
+nur aufgewertet (je Art die höhere Stufe) und beim Öffnen des Profils automatisch nachgetragen, nie still entfernt.
 
 ### Pace-Bot (Auftrag 6)
 
-Fester Eintrag oben in der Chatliste. **Keine KI, kein Server, keine Kosten:** 15 vorgefertigte Fragen und Antworten
-(DE/EN/RU, `PaceHelpTopic`), optional einfache Stichwortsuche; ist sie nicht eindeutig, antwortet der Bot ehrlich
+Fester Eintrag oben in der Chatliste – und als eigene Karte, solange Social lädt, offline ist oder einen Fehler zeigt
+(der Bot läuft nur auf dem Gerät). **Keine KI, kein Server, keine Kosten:** 15 vorgefertigte Fragen und Antworten
+(DE/EN/RU, `PaceHelpTopic`), optional einfache Stichwortsuche (Stichwort = Wortanfang, feste Vorränge, Ausschlüsse
+wie „Freund entfernen“); ist sie nicht eindeutig, antwortet der Bot ehrlich
 „Dazu habe ich leider noch keine passende Antwort …“ und bietet Hilfe an. Der Verlauf liegt nur auf dem Gerät
 (UserDefaults `pace.helpBot.history`, höchstens 60 Nachrichten, zurücksetzbar) – keine Supabase-Tabelle, kein
 Realtime, keine Ungelesen-Zähler. „Hilfe kontaktieren“ öffnet die bestehende Rückmeldung „Problem melden“; eine
 Support-E-Mail erscheint nur, wenn `PACE_SUPPORT_EMAIL` in der lokalen `Config/Pace.xcconfig` gesetzt ist (es gibt
-keine offizielle Adresse im Repository, es wird keine erfunden). Die Mail-Vorlage enthält keine Kennungen oder
-Gesundheitsdaten und wird nie automatisch gesendet.
+keine offizielle Adresse im Repository, es wird keine erfunden; ohne Adresse gibt es auch keinen Hinweis darauf). Die
+Karte sagt ehrlich, dass „Problem melden“ die Nachricht mit Konto und App-Version speichert und keine persönliche
+Antwort möglich ist. Die Mail-Vorlage enthält keine Kennungen oder Gesundheitsdaten und wird nie automatisch gesendet.
 
 ## Fehler
 

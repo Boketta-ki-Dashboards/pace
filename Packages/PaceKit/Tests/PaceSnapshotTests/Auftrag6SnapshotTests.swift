@@ -351,10 +351,12 @@ enum A6Fixtures {
         collect(view)
         guard let page = candidates.max(by: { $0.contentSize.height < $1.contentSize.height }) else { return }
         page.contentOffset = CGPoint(x: page.contentOffset.x - offset, y: page.contentOffset.y)
-        // Ein kleiner senkrechter Schritt hin und zurück, damit SwiftUI den sichtbaren Bereich neu bestimmt (sonst
-        // fehlen im Bild Teile der Seite, die beim Versatz außerhalb lagen).
-        page.contentOffset.y += 1
-        page.contentOffset.y -= 1
+        // Senkrecht hin und zurück, damit SwiftUI den sichtbaren Bereich neu bestimmt (sonst fehlen im Bild Teile der
+        // Seite – ein Darstellungsfehler der Nachstellung, nicht der App).
+        let y = page.contentOffset.y
+        page.contentOffset.y = y + 300
+        page.layoutIfNeeded()
+        page.contentOffset.y = y
         page.layoutIfNeeded()
     }
 }

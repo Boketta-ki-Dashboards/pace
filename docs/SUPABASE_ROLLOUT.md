@@ -243,7 +243,8 @@ Funktionen nicht; die aktuelle App zeigt bei fehlenden Funktionen „noch nicht 
 # Auftrag 6: eine neue Migration (Social-Profil 2.0)
 
 > **Status: NICHT ausgeführt – Freigabe durch den Nutzer nötig.** Die Migration ist nur lokal bzw. in der CI
-> (Job „Backend“: Docker-Supabase, pgTAP inkl. `17_profile_details.test.sql` mit 32 Prüfungen, `db lint`) gelaufen.
+> (Job „Backend“: Docker-Supabase, pgTAP inkl. `17_profile_details.test.sql` mit 35 Prüfungen, `db lint`, Advisors)
+> gelaufen.
 > Ziel ist ausschließlich das Pace-Projekt `bnkrenfvfiaapsbkeejq`. Alle bisherigen Migrationen bleiben unverändert und
 > werden nicht erneut ausgeführt. Kein `db reset`, keine Daten werden gelöscht.
 
@@ -251,7 +252,7 @@ Funktionen nicht; die aktuelle App zeigt bei fehlenden Funktionen „noch nicht 
 
 | # | Migration | Inhalt | Voraussetzung |
 |---|---|---|---|
-| 10 | `20261030100000_profile_details.sql` | Spalten `bio`, `interests`, `banner_path`, `shows_achievements`, `achievements` in `profiles` (mit Prüfregeln und Validierungs-Trigger); Spaltenrecht `update` darauf für `authenticated`; `pace_access.can_read_avatar` liest zusätzlich das aktuelle Banner; neue RPC `social_profile_details(uuid)` | 1–9 produktiv |
+| 10 | `20261030100000_profile_details.sql` | Spalten `bio`, `interests`, `banner_path`, `shows_achievements`, `achievements` in `profiles` (mit Prüfregeln und Validierungs-Trigger); Spaltenrecht `update` darauf für `authenticated`; `pace_access.can_read_avatar` liest zusätzlich das aktuelle Banner; neue RPC `social_profile_details(uuid)`; `social_report` sichert bei Personen zusätzlich Bio, Interessen und Banner; `pace_access.is_report_evidence` schützt ein gemeldetes Banner (Index `reports_banner_evidence_idx`) | 1–9 produktiv |
 
 **Additiv und rückwärtskompatibel:**
 
@@ -271,6 +272,12 @@ Funktionen nicht; die aktuelle App zeigt bei fehlenden Funktionen „noch nicht 
 - `social_profile_details` liefert nichts an `anon`, hat dieselbe Sichtbarkeit wie `social_public_profile`
   (`not_found`), gibt bei Blockierung (beide Richtungen) leere Angaben zurück und Auszeichnungen fremder Profile nur,
   wenn die Person sie freigegeben hat. Rate Limit: 120 Aufrufe je 10 Minuten.
+- Meldungen: `social_report` (gleiche Signatur, per `create or replace`) nimmt bei gemeldeten Personen zusätzlich
+  `bio`, `interests` und `banner_path` in den Schnappschuss auf – sonst ließe sich ein beleidigender Text oder ein
+  anstößiges Banner nach der Meldung spurlos ändern. `pace_access.is_report_evidence` (gleiche Signatur) sperrt
+  zusätzlich das Banner aus dem Schnappschuss einer offenen Meldung gegen Löschen; die Storage-Delete-Policies und
+  `account_own_media` nutzen die Funktion unverändert. Neuer Teilindex `reports_banner_evidence_idx` auf
+  `target_snapshot ->> 'banner_path'`.
 - Ältere App-Versionen lesen die neuen Spalten nicht und rufen die RPC nicht auf. Die neue App zeigt ohne Migration
   „noch nicht eingerichtet“ auf „Profil bearbeiten“ und Profile ohne Bio/Interessen/Banner (`PGRST202`/`42703` →
   `.unavailable`) – sonst unverändert.
@@ -321,6 +328,12 @@ select has_function_privilege('anon', 'public.social_profile_details(uuid)', 'ex
 -- Bestehende Profile unverändert
 select count(*) from public.profiles where bio is not null or banner_path is not null or interests <> '{}';
 -- direkt danach: 0
+
+-- Meldeschutz für Banner: Funktion und Index vorhanden
+select pg_get_functiondef('pace_access.is_report_evidence(text, text)'::regprocedure) like '%banner_path%';
+-- erwartet: true
+select indexname from pg_indexes where schemaname = 'public' and indexname = 'reports_banner_evidence_idx';
+-- erwartet: 1 Zeile
 ```
 
 Danach *Database → Advisors* (keine neuen Warnungen) und mit zwei Konten in der App: Bio, Interessen und Banner
@@ -329,6 +342,7 @@ nur bei Freigabe); nach Blockieren keine Bio/kein Banner mehr.
 
 ## F. Rücknahme
 
-Vorwärts korrigieren (neue Migration). Die Spalten können bleiben – ältere App-Versionen ignorieren sie. Die vorige
-Fassung von `pace_access.can_read_avatar` steht in `20261019100300_storage_realtime_access.sql` (nur ohne
-`banner_path`). Ein vollständiges Zurück geht nur über die Sicherung.
+Vorwärts korrigieren (neue Migration). Die Spalten können bleiben – ältere App-Versionen ignorieren sie. Die vorigen
+Fassungen stehen in `20261019100300_storage_realtime_access.sql` (`pace_access.can_read_avatar`, ohne `banner_path`),
+`20261023100000_friend_nicknames.sql` (`social_report`) und `20261019100400_moderation_account.sql`
+(`pace_access.is_report_evidence`). Ein vollständiges Zurück geht nur über die Sicherung.
