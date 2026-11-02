@@ -82,8 +82,10 @@ enum Snapshot {
         for scheme in [ColorScheme.light, .dark] {
             let controller = UIHostingController(rootView: content.environment(\.colorScheme, scheme))
             controller.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
+            // Auch das Fenster: sonst folgen UIKit-Teile wie die Navigationsleiste dem Simulator-Erscheinungsbild.
             controller.additionalSafeAreaInsets = safeArea
             let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+            window.overrideUserInterfaceStyle = controller.overrideUserInterfaceStyle
             window.rootViewController = controller
             window.isHidden = false
             controller.view.frame = window.bounds

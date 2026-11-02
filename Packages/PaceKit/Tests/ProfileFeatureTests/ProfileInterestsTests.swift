@@ -97,6 +97,14 @@ struct ProfileInterestRulesTests {
         #expect(SpokenLanguageCatalog.search("").count == SpokenLanguageCatalog.codes.count)
         // Suche nach Code findet immer etwas, auch ohne Systemnamen.
         #expect(SpokenLanguageCatalog.search("sr").contains("sr"))
+        // Wortanfang statt beliebiger Teil: „Serb“ findet Serbisch, nicht Aserbaidschanisch.
+        PaceLocalization.$languageOverride.withValue(.german) {
+            #expect(!SpokenLanguageCatalog.search("Serb").contains("az"))
+            #expect(!ProfileCountryCatalog.search("Ge").contains("NE"))
+        }
+        #expect(PaceSearchMatching.wordStarts(in: "Bosnien und Herzegowina", with: "bos her"))
+        #expect(PaceSearchMatching.wordStarts(in: "Côte d’Ivoire", with: "cote"))
+        #expect(!PaceSearchMatching.wordStarts(in: "Aserbaidschanisch", with: "serb"))
         #expect(!SpokenLanguageCatalog.name(for: "de").isEmpty)
 
         #expect(Set(ProfileCountryCatalog.codes).count == ProfileCountryCatalog.codes.count)

@@ -696,8 +696,9 @@ public enum ProfileDetailsTexts {
         )
     }
 
+    /// Kurz: steht in der Navigationsleiste zwischen „Abbrechen“ und „Verwenden“ (längere Titel würden abgeschnitten).
     public static var bannerCropTitle: String {
-        PaceLocalization.text(de: "Ausschnitt wählen", en: "Choose the crop", ru: "Выбери фрагмент")
+        PaceLocalization.text(de: "Ausschnitt", en: "Crop", ru: "Кадр")
     }
 
     public static var bannerCropHint: String {
@@ -749,7 +750,7 @@ public enum ProfileDetailsTexts {
     }
 
     public static var avatarCropTitle: String {
-        PaceLocalization.text(de: "Ausschnitt wählen", en: "Choose the crop", ru: "Выбери фрагмент")
+        PaceLocalization.text(de: "Ausschnitt", en: "Crop", ru: "Кадр")
     }
 
     public static var avatarCropHintHorizontal: String {

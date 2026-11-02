@@ -484,16 +484,16 @@ public enum SpokenLanguageCatalog {
         return capitalized(locale.localizedString(forLanguageCode: code), locale: locale)
     }
 
-    /// Codes, deren Name (App-Sprache, Englisch oder die Sprache selbst) oder Code die Suche enthält.
+    /// Codes, bei denen ein Wort des Namens (App-Sprache, Englisch oder die Sprache selbst) mit der Suche beginnt
+    /// („Serb“ → Serbisch, nicht Aserbaidschanisch) oder deren Code die Suche ist.
     public static func search(_ query: String) -> [String] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return codes }
         let english = Locale(identifier: "en")
         return codes.filter { code in
-            let names = [name(for: code), nativeName(for: code), english.localizedString(forLanguageCode: code), code]
-            return names.contains { name in
-                name.map { $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil } ?? false
-            }
+            code.caseInsensitiveCompare(query) == .orderedSame
+                || [name(for: code), nativeName(for: code), english.localizedString(forLanguageCode: code)]
+                    .contains { $0.map { PaceSearchMatching.wordStarts(in: $0, with: query) } ?? false }
         }
     }
 
@@ -547,16 +547,18 @@ public enum ProfileCountryCatalog {
         return String(String.UnicodeScalarView(scalars))
     }
 
-    /// Codes, deren Name (App-Sprache oder Englisch) oder Code die Suche enthält – alphabetisch nach Namen.
+    /// Codes, bei denen ein Wort des Namens (App-Sprache oder Englisch) mit der Suche beginnt oder deren Code die Suche
+    /// ist – alphabetisch nach Namen.
     public static func search(_ query: String) -> [String] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let english = Locale(identifier: "en")
         // Namen einmal bestimmen (nicht bei jedem Vergleich im Sortieren).
         let names = Dictionary(uniqueKeysWithValues: codes.map { ($0, name(for: $0)) })
+        // Wortanfang („Ge“ → Georgien, Germany; nicht Niger oder Algerien) oder genau der Code.
         let matches = query.isEmpty ? codes : codes.filter { code in
-            [names[code], english.localizedString(forRegionCode: code), code].contains { name in
-                name.map { $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil } ?? false
-            }
+            code.caseInsensitiveCompare(query) == .orderedSame
+                || [names[code], english.localizedString(forRegionCode: code)]
+                    .contains { $0.map { PaceSearchMatching.wordStarts(in: $0, with: query) } ?? false }
         }
         let locale = PaceLocalization.shared.locale
         return matches.sorted { (names[$0] ?? $0).compare(names[$1] ?? $1, locale: locale) == .orderedAscending }
@@ -570,5 +572,27 @@ public enum ProfileCountryCatalog {
     /// Gültiger Code wie auf dem Server: zwei Großbuchstaben.
     public static func isValid(_ code: String) -> Bool {
         code.count == 2 && code.allSatisfy { ("A"..."Z").contains($0) }
+    }
+}
+
+// MARK: - Suche
+
+/// Suche am Wortanfang, ohne Rücksicht auf Groß-/Kleinschreibung und Akzente.
+public enum PaceSearchMatching {
+    /// Ob ein Wort in `text` mit `query` beginnt; mehrere Suchwörter müssen der Reihe nach auf Wörter passen
+    /// („bos her“ → „Bosnien und Herzegowina“).
+    public static func wordStarts(in text: String, with query: String) -> Bool {
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive, .anchored]
+        let words = text.split { !$0.isLetter && !$0.isNumber }.map(String.init)
+        let parts = query.split { !$0.isLetter && !$0.isNumber }.map(String.init)
+        guard !parts.isEmpty else { return false }
+        var index = words.startIndex
+        for part in parts {
+            guard let found = words[index...].firstIndex(where: { $0.range(of: part, options: options) != nil }) else {
+                return false
+            }
+            index = words.index(after: found)
+        }
+        return true
     }
 }

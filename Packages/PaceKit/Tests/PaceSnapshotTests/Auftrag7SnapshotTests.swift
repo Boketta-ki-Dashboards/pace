@@ -139,10 +139,18 @@ struct Auftrag7SnapshotTests {
                 page(StatisticsSnapshotHost(viewModel: statistics).environment(\.pacePeriodSwipePreviewOffset, 110)),
                 name: "a7-statistics-\(name)-swipe"
             )
-            // Nach dem Einrasten (vorheriger Zeitraum geladen, kein Versatz).
-            statistics.showPrevious()
-            await statistics.loadIfNeeded()
-            await statistics.loadHourly()
+            // Nach dem Einrasten, kein Versatz. Tag: viermal zurück (13. Oktober, ein Tag mit Stundenwerten in den
+            // Beispieldaten); Woche: eine zurück; Monat: zurück und wieder vor (die Beispieldaten haben nur Oktober).
+            let steps: [Bool] = switch period {
+            case .day: [false, false, false, false]
+            case .week: [false]
+            case .month: [false, true]
+            }
+            for forward in steps {
+                if forward { statistics.showNext() } else { statistics.showPrevious() }
+                await statistics.loadIfNeeded()
+                await statistics.loadHourly()
+            }
             try Snapshot.render(page(StatisticsSnapshotHost(viewModel: statistics)), name: "a7-statistics-\(name)-settled", languages: period == .day ? languages : [.german])
         }
     }
@@ -156,9 +164,10 @@ struct Auftrag7SnapshotTests {
             name: "a7-profile-edit"
         )
         let photo = try #require(UIImage(data: A6Fixtures.image([.systemIndigo, .systemTeal], symbol: "figure.hiking", size: CGSize(width: 900, height: 1_200))))
-        try await Snapshot.renderInWindow(AvatarCropSheet(image: photo, onUse: { _ in }, onCancel: {}), name: "a7-avatar-editor")
+        // Akzentfarbe wie in der App (RootView setzt sie für alle Seiten und Sheets).
+        try await Snapshot.renderInWindow(AvatarCropSheet(image: photo, onUse: { _ in }, onCancel: {}).tint(PaceColor.accent), name: "a7-avatar-editor")
         let landscape = try #require(UIImage(data: A6Fixtures.image([UIColor(red: 0.05, green: 0.35, blue: 0.25, alpha: 1), .systemMint], symbol: "mountain.2", size: CGSize(width: 1_600, height: 1_000))))
-        try await Snapshot.renderInWindow(BannerCropSheet(image: landscape, onUse: { _ in }, onCancel: {}), name: "a7-banner-editor")
+        try await Snapshot.renderInWindow(BannerCropSheet(image: landscape, onUse: { _ in }, onCancel: {}).tint(PaceColor.accent), name: "a7-banner-editor")
     }
 
     // MARK: 11–15 Interessen, Sprachen, Land
@@ -197,7 +206,7 @@ struct Auftrag7SnapshotTests {
             name: "a7-interest-custom"
         )
         custom.addCustomInterest()
-        custom.customInterestInput = "rap"
+        custom.customInterestInput = "basketball"
         try await Snapshot.renderInWindow(
             scrollPage(ProfileInterestsCard(details: custom, initiallyExpanded: [.creative], showsCustomFieldInitially: true)),
             name: "a7-interest-suggestion"
@@ -219,9 +228,9 @@ struct Auftrag7SnapshotTests {
             name: "a7-languages-country-cards",
             languages: languages
         )
-        try await Snapshot.renderInWindow(ProfileLanguagePicker(details: background), name: "a7-languages-picker")
-        try await Snapshot.renderInWindow(ProfileLanguagePicker(details: background, query: "Serb"), name: "a7-languages-search")
-        try await Snapshot.renderInWindow(ProfileCountryPicker(details: background, query: "Ge"), name: "a7-country-picker")
+        try await Snapshot.renderInWindow(ProfileLanguagePicker(details: background).tint(PaceColor.accent), name: "a7-languages-picker")
+        try await Snapshot.renderInWindow(ProfileLanguagePicker(details: background, query: "Serb").tint(PaceColor.accent), name: "a7-languages-search")
+        try await Snapshot.renderInWindow(ProfileCountryPicker(details: background, query: "Ge").tint(PaceColor.accent), name: "a7-country-picker")
     }
 
     @Test func profilesWithManyInterests() async throws {
