@@ -110,7 +110,8 @@ einmal in Dunkel prüfen, dazu einmal mit größerer Schrift (Einstellungen → 
 
 1. Profil → **Bearbeiten**: Oben steht eine Vorschau mit Banner und Profilbild (kleine Stift-Symbole).
 2. Profilbild antippen → (bei vorhandenem Bild „Foto ändern“) → Foto wählen → Ausschnitt verschieben → „Verwenden“:
-   Das neue Bild erscheint sofort, auch auf der Profilseite und in Social.
+   Das neue Bild erscheint sofort, auch auf der Profilseite und in Social. Oben im Zuschnitt steht gut lesbar
+   „Ausschnitt“ zwischen „Abbrechen“ und „Verwenden“ (auch in Hell – im Simulator-Bild war der Titel dort unsichtbar).
 3. Banner antippen → Foto wählen → Ausschnitt (3:1) verschieben → „Verwenden“.
 4. Bild und Banner jeweils über „Entfernen“ löschen: Platzhalter bzw. neutraler Pace-Hintergrund erscheint.
 5. Während ein Bild hochlädt, sind die anderen Bild-Knöpfe gesperrt (Ladeanzeige).
@@ -123,7 +124,8 @@ einmal in Dunkel prüfen, dazu einmal mit größerer Schrift (Einstellungen → 
 3. „rap“ eingeben: Pace schlägt den Katalogeintrag „Rap“ vor; „Hinzufügen“ wählt ihn aus. Dasselbe in anderer
    Schreibweise noch einmal → „Schon ausgewählt.“
 4. Ein eigenes Interesse auf Russisch und eines mit Emoji anlegen; ein sehr langes (über 30 Zeichen) wird abgelehnt.
-5. Gesprochene Sprachen → „Sprachen auswählen“ → suchen (z. B. „Serb“), mehrere wählen → „Fertig“.
+5. Gesprochene Sprachen → „Sprachen auswählen“ → suchen (z. B. „Serb“ findet Serbisch, nicht Aserbaidschanisch),
+   mehrere wählen → „Fertig“. Der Titel oben ist in Hell und Dunkel lesbar.
 6. Land & Kultur → „Land auswählen“ → suchen, wählen; danach „Land entfernen“ testen.
 7. Speichern. Profilseite: alle Interessen, darunter Sprachen und Land.
 8. Mit einem zweiten Konto dein Profil öffnen: zunächst sechs Interessen und „Alle Interessen ansehen“; Sprachen und
