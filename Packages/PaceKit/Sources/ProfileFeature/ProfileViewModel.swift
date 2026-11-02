@@ -226,6 +226,36 @@ public final class ProfileViewModel {
         path = [route]
     }
 
+    // MARK: Tabwechsel
+
+    /// Erhöht sich, wenn die Startseite beim nächsten Erscheinen oben beginnen soll.
+    public private(set) var scrollToTopRequest = 0
+    /// Unterseiten mit ungespeicherten Eingaben, die sich selbst melden (z. B. eine angefangene Rückmeldung).
+    @ObservationIgnored private var draftRoutes: Set<ProfileRoute> = []
+
+    /// Meldet ungespeicherte Eingaben einer Unterseite (bzw. dass sie gesendet oder geleert wurden).
+    public func setDraft(_ hasDraft: Bool, for route: ProfileRoute) {
+        if hasDraft { draftRoutes.insert(route) } else { draftRoutes.remove(route) }
+    }
+
+    /// Eine offene Unterseite hat ungespeicherte Eingaben: „Profil bearbeiten“ mit Änderungen oder eine angefangene
+    /// Rückmeldung.
+    public var hasUnsavedChanges: Bool {
+        (path.contains(.editProfile) && details.hasChanges) || path.contains(where: draftRoutes.contains)
+    }
+
+    /// Wechsel in einen anderen Haupttab (Auftrag 7, Teil E): Beim nächsten Besuch erscheint die Profil-Startseite,
+    /// oben. Unterseiten mit ungespeicherten Eingaben bleiben offen – nichts wird stillschweigend verworfen. Kein
+    /// Neuladen, kein neues ViewModel.
+    /// - Returns: Ob auf die Startseite zurückgesetzt wurde.
+    @discardableResult
+    public func didLeaveTab() -> Bool {
+        guard !hasUnsavedChanges else { return false }
+        if !path.isEmpty { path = [] }
+        scrollToTopRequest += 1
+        return true
+    }
+
     /// Öffnet eine weitere Unterseite über der aktuellen – oder geht zu ihr zurück, wenn sie schon offen ist (keine
     /// Einstellungs-Schleifen, kein doppeltes Auflegen durch zweimaliges Tippen).
     public func open(_ route: ProfileRoute) {

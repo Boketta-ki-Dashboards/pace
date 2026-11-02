@@ -167,7 +167,7 @@ struct SocialContent: View {
     /// Der Pace-Bot läuft nur auf dem Gerät: erreichbar auch ohne Verbindung, bei Serverfehlern und während des Ladens.
     private var helpBotCard: some View {
         PaceCard {
-            PaceBotChatRow { onOpen(.helpBot) }
+            PaceBotListRow(session: viewModel.helpBot) { onOpen(.helpBot) }
         }
     }
 
@@ -302,7 +302,7 @@ struct SocialContent: View {
             .buttonStyle(.plain)
             .accessibilityValue(groupsAccessibilityValue)
         }
-        ChatListSection(viewModel: viewModel.chats, onOpen: onOpenChat, onOpenHelpBot: { onOpen(.helpBot) })
+        ChatListSection(viewModel: viewModel.chats, helpBot: viewModel.helpBot, onOpen: onOpenChat, onOpenHelpBot: { onOpen(.helpBot) })
     }
 
     private var groupsAccessibilityValue: String {
@@ -317,7 +317,8 @@ struct SocialContent: View {
     private var searchResults: some View {
         let friends = viewModel.matchingFriends
         let conversations = viewModel.matchingConversations
-        if friends.isEmpty && conversations.isEmpty {
+        let showsHelpBot = PaceHelpBot.matchesSearch(viewModel.filterText)
+        if friends.isEmpty && conversations.isEmpty && !showsHelpBot {
             PaceCard {
                 Text(SocialText.noMatches(viewModel.normalizedFilter))
                     .font(PaceFont.callout)
@@ -339,11 +340,17 @@ struct SocialContent: View {
                 }
             }
         }
-        if !conversations.isEmpty {
+        if !conversations.isEmpty || showsHelpBot {
             SocialSectionTitle(SocialText.chats)
             ForEach(conversations) { conversation in
                 ConversationMatchRow(conversation: conversation) {
                     onOpenChat(.conversation(id: conversation.id, kind: conversation.kind, title: conversation.shownTitle))
+                }
+            }
+            if showsHelpBot {
+                // Auch über die Suche auffindbar („Pace-Bot“, „Bot“, „Hilfe“ …).
+                PaceCard {
+                    PaceBotListRow(session: viewModel.helpBot) { onOpen(.helpBot) }
                 }
             }
         }

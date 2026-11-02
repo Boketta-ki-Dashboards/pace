@@ -149,6 +149,42 @@ public final class ChatListViewModel {
         conversations.filter(filter.includes)
     }
 
+    /// Eine Zeile der Chatliste: eine Unterhaltung oder der Pace-Bot (lokal, kein Server-Chat).
+    public enum ListEntry: Identifiable, Equatable {
+        case conversation(ConversationSummary)
+        case helpBot
+
+        public var id: String {
+            switch self {
+            case .conversation(let conversation): conversation.id.uuidString
+            case .helpBot: "pace.helpBot"
+            }
+        }
+    }
+
+    /// Zeilen des gewählten Filters, nach letzter Aktivität: Der Pace-Bot ist ein gewöhnlicher Eintrag (nur unter
+    /// „Alle“) und steht nach dem Zeitpunkt der letzten eigenen Frage – nie benutzt ganz unten. Eine neuere Nachricht
+    /// in einem anderen Chat steht wieder darüber; bei gleichem Zeitpunkt zuerst der Chat.
+    /// - Parameter helpBotActivity: ``PaceHelpBotSession/lastUserActivity``; `showsHelpBot`: Bot verdrahtet.
+    public func entries(showsHelpBot: Bool, helpBotActivity: Date?) -> [ListEntry] {
+        var entries = filteredConversations.map(ListEntry.conversation)
+        guard showsHelpBot, filter == .all else { return entries }
+        let index = helpBotActivity.flatMap { activity in
+            entries.firstIndex { entry in
+                // Wie die Sortierung der Liste: `updatedAt` (neue Nachricht, neues Mitglied …).
+                if case .conversation(let conversation) = entry { return conversation.updatedAt < activity }
+                return false
+            }
+        } ?? entries.count
+        entries.insert(.helpBot, at: index)
+        return entries
+    }
+
+    /// Zeit für eine Zeile ohne Unterhaltung (Pace-Bot): heute Uhrzeit, gestern, Wochentag, Datum.
+    public func timestamp(for date: Date) -> String {
+        ChatFormatting.listTimestamp(date, now: now(), calendar: calendar)
+    }
+
     /// Lokale Suche (Suchfeld der Social-Hauptseite): Name des Chats bzw. Benutzername des Freundes, ohne Rücksicht
     /// auf Groß-/Kleinschreibung und Akzente. Leere Suche liefert alle.
     public func conversations(matching query: String) -> [ConversationSummary] {

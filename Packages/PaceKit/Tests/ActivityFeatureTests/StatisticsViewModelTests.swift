@@ -130,6 +130,61 @@ struct StatisticsViewModelTests {
         #expect(viewModel.anchor == Fixtures.day(2025, 10, 16))
     }
 
+    /// Auftrag 7, Teil C: Schnelles Wischen – zehnmal zurück, zehnmal vor, Richtungswechsel, alle Kennzahlen und
+    /// Zeiträume. Jeder Wechsel liefert sofort einen vollständigen, eigenen Bericht (neues Diagramm, keine Übernahme alter
+    /// Balken), die Y-Achse passt immer zu den Werten, und es bleibt nichts zwischen zwei Zeiträumen hängen.
+    @Test func rapidPeriodChangesAlwaysShowACompleteConsistentReport() async throws {
+        let health = HealthServiceStub { configuration in
+            for offset in -60 ... 0 {
+                // Tage ohne Daten, normale Tage und Tage mit sehr vielen Schritten im Wechsel.
+                let steps = offset % 7 == 0 ? 0 : (offset % 5 == 0 ? 48_000 : 6_000 + offset * -40)
+                configuration.setSteps(steps, on: calendar.adding(offset, to: today))
+                configuration.set(.walkingRunningDistance, Double(steps) * 0.7, on: calendar.adding(offset, to: today))
+                configuration.set(.activeEnergy, Double(steps) * 0.04, on: calendar.adding(offset, to: today))
+            }
+        }
+        let (viewModel, _) = makeViewModel(route: StatisticsRoute(period: .day), health: health)
+        await viewModel.loadIfNeeded()
+
+        func report() throws -> StatisticsReport {
+            guard case .report(let report) = viewModel.content else { throw UnexpectedStateError() }
+            return report
+        }
+        func checkConsistent(_ report: StatisticsReport, _ label: String) {
+            let highest = report.bars.compactMap(\.value).max() ?? 0
+            #expect(report.chartMaximum >= highest, "\(label): Achse \(report.chartMaximum) < Balken \(highest)")
+            #expect(report.chartMaximum > 0, "\(label): Achse ohne Bereich")
+            #expect(report.anchor == viewModel.anchor, "\(label): Bericht zeigt einen anderen Zeitraum")
+        }
+
+        for metric in StatisticsMetric.allCases {
+            viewModel.select(metric)
+            for period in StatisticsPeriod.allCases {
+                viewModel.select(period)
+                let start = viewModel.anchor
+                var identities: Set<String> = [try report().chartIdentity]
+                for step in 1 ... 10 {
+                    viewModel.showPrevious()
+                    let current = try report()
+                    checkConsistent(current, "\(metric) \(period) zurück \(step)")
+                    identities.insert(current.chartIdentity)
+                }
+                #expect(identities.count == 11, "\(metric) \(period): jeder Zeitraum mit eigenem Diagramm")
+                // Richtungswechsel mitten im Wischen.
+                viewModel.showNext()
+                viewModel.showPrevious()
+                viewModel.showNext()
+                checkConsistent(try report(), "\(metric) \(period) Richtungswechsel")
+                for step in 1 ... 10 {
+                    viewModel.showNext()
+                    checkConsistent(try report(), "\(metric) \(period) vor \(step)")
+                }
+                #expect(viewModel.anchor == start, "\(metric) \(period): nach zehnmal zurück und vor wieder am Start")
+                #expect(!(try report()).canShowNext, "\(metric) \(period): keine Zukunft")
+            }
+        }
+    }
+
     @Test func returningToTheCurrentPeriodShowsToday() async {
         let (viewModel, _) = makeViewModel(route: StatisticsRoute(period: .month, day: Fixtures.day(2026, 10, 10)), health: healthWithHistory())
         await viewModel.loadIfNeeded()

@@ -36,6 +36,9 @@ public final class ProfileDetailsViewModel {
     public private(set) var didSave = false
 
     // Entwurf beim Bearbeiten
+    /// Ein Entwurf wurde begonnen (bleibt nach dem Verlassen von „Profil bearbeiten“ erhalten, bis er gespeichert oder
+    /// verworfen wird).
+    @ObservationIgnored private var hasDraftSession = false
     public var draftBio = ""
     public private(set) var draftInterests: [ProfileInterest] = []
     public var draftShowsAchievements = false
@@ -96,6 +99,7 @@ public final class ProfileDetailsViewModel {
 
     /// Entwurf aus den gespeicherten Angaben.
     public func beginEditing() {
+        hasDraftSession = true
         draftBio = details.bio ?? ""
         draftInterests = details.interests
         draftShowsAchievements = details.showsAchievements
@@ -107,10 +111,17 @@ public final class ProfileDetailsViewModel {
     /// ohne Änderung aus), danach frisch laden. Der Serverstand ersetzt den Entwurf nur, solange noch nichts geändert
     /// wurde – Eingaben während des Ladens bleiben.
     public func prepareEditing() async {
-        beginEditing()
+        // Ungespeicherte Änderungen aus einem früheren Besuch bleiben (Speichern oder ausdrücklich verwerfen).
+        let keepsDraft = hasDraftSession && hasChanges
+        if !keepsDraft { beginEditing() }
         let untouched = draft
         await load()
-        if draft == untouched { beginEditing() }
+        if !keepsDraft, draft == untouched { beginEditing() }
+    }
+
+    /// Verwirft ungespeicherte Änderungen (zurück zum gespeicherten Stand).
+    public func discardChanges() {
+        beginEditing()
     }
 
     private struct Draft: Equatable {
@@ -435,5 +446,65 @@ public enum ProfileDetailsTexts {
 
     public static var save: String {
         PaceLocalization.text(de: "Speichern", en: "Save", ru: "Сохранить")
+    }
+
+    public static var profilePicture: String {
+        PaceLocalization.text(de: "Profilbild", en: "Profile picture", ru: "Фото профиля")
+    }
+
+    public static var tapToEdit: String {
+        PaceLocalization.text(de: "Antippen zum Ändern", en: "Tap to change", ru: "Нажми, чтобы изменить")
+    }
+
+    public static var picturesHint: String {
+        PaceLocalization.text(
+            de: "Profilbild oder Banner antippen, um sie zu ändern.",
+            en: "Tap your photo or banner to change it.",
+            ru: "Нажми на фото или обложку, чтобы изменить их."
+        )
+    }
+
+    public static var editPicture: String {
+        PaceLocalization.text(de: "Bild bearbeiten", en: "Edit picture", ru: "Изменить изображение")
+    }
+
+    public static var changePhoto: String {
+        PaceLocalization.text(de: "Foto ändern", en: "Change photo", ru: "Изменить фото")
+    }
+
+    public static var removePhoto: String {
+        PaceLocalization.text(de: "Foto entfernen", en: "Remove photo", ru: "Удалить фото")
+    }
+
+    public static var avatarCropTitle: String {
+        PaceLocalization.text(de: "Ausschnitt wählen", en: "Choose the crop", ru: "Выбери фрагмент")
+    }
+
+    public static var avatarCropHintHorizontal: String {
+        PaceLocalization.text(
+            de: "Verschiebe das Foto nach links oder rechts.",
+            en: "Move the photo left or right.",
+            ru: "Сдвинь фото влево или вправо."
+        )
+    }
+
+    public static var avatarCropHintVertical: String {
+        PaceLocalization.text(
+            de: "Verschiebe das Foto nach oben oder unten.",
+            en: "Move the photo up or down.",
+            ru: "Сдвинь фото вверх или вниз."
+        )
+    }
+
+    public static var discard: String {
+        PaceLocalization.text(de: "Änderungen verwerfen", en: "Discard changes", ru: "Отменить изменения")
+    }
+
+    public static var unsavedHint: String {
+        PaceLocalization.text(
+            de: "Ungespeicherte Änderungen – speichern oder verwerfen.",
+            en: "Unsaved changes – save or discard them.",
+            ru: "Есть несохранённые изменения – сохрани или отмени их."
+        )
     }
 }

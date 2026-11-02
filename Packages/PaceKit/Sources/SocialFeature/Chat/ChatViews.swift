@@ -13,17 +13,26 @@ import UIKit
 public struct ChatListSection: View {
     private let viewModel: ChatListViewModel
     private let onOpen: (ChatTarget) -> Void
+    private let helpBot: PaceHelpBotSession?
     private let onOpenHelpBot: (() -> Void)?
 
-    /// - Parameter onOpenHelpBot: Fester Eintrag „Pace-Bot“ oben in der Liste (ohne Angabe nicht gezeigt).
-    public init(viewModel: ChatListViewModel, onOpen: @escaping (ChatTarget) -> Void, onOpenHelpBot: (() -> Void)? = nil) {
+    /// - Parameters:
+    ///   - helpBot: Pace-Bot als gewöhnlicher Eintrag der Liste, sortiert nach der letzten eigenen Frage (ohne Angabe
+    ///     nicht gezeigt).
+    public init(
+        viewModel: ChatListViewModel,
+        helpBot: PaceHelpBotSession? = nil,
+        onOpen: @escaping (ChatTarget) -> Void,
+        onOpenHelpBot: (() -> Void)? = nil
+    ) {
         self.viewModel = viewModel
+        self.helpBot = helpBot
         self.onOpen = onOpen
         self.onOpenHelpBot = onOpenHelpBot
     }
 
     public var body: some View {
-        ChatListContent(viewModel: viewModel, onOpen: onOpen, onOpenHelpBot: onOpenHelpBot)
+        ChatListContent(viewModel: viewModel, onOpen: onOpen, helpBot: helpBot, onOpenHelpBot: onOpenHelpBot)
     }
 }
 

@@ -37,11 +37,15 @@ private struct PacePeriodSwipeModifier: ViewModifier {
     @State private var gestureStart: (location: CGPoint, isHorizontal: Bool)?
     /// Rest-Verschiebung nach dem Loslassen (Zurückgleiten oder Hereingleiten des neuen Zeitraums).
     @State private var settleOffset: CGFloat = 0
+    /// Zählt Wischvorgänge: Ein Einrasten aus einem früheren Wisch startet nicht mehr, wenn schon neu gewischt wurde.
+    @State private var settleGeneration = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.pacePeriodSwipePreviewOffset) private var previewOffset
 
     func body(content: Content) -> some View {
         content
-            .offset(x: dragOffset + settleOffset)
+            // Bewegt wird nur der ganze Inhalt; was darin steht (Diagramm, Werte), ändert sich ohne eigene Animation.
+            .offset(x: dragOffset + settleOffset + previewOffset)
             .simultaneousGesture(
                 // Global gemessen, damit der Rand-Streifen der Zurück-Geste erkannt wird.
                 DragGesture(minimumDistance: PaceSwipeNavigation.minimumDistance, coordinateSpace: .global)
@@ -83,10 +87,16 @@ private struct PacePeriodSwipeModifier: ViewModifier {
             canShowPrevious: canShowPrevious,
             canShowNext: canShowNext
         )
-        switch step {
-        case .previous: onPrevious()
-        case .next: onNext()
-        case nil: break
+        // Neuer Zeitraum ohne Animation darin: Auch implizite Animationen (`.animation(_:value:)`) im Inhalt dürfen den
+        // Wechsel nicht animieren – sonst laufen Balken, Achsen und Linien mit eigenem Timing gegen die Karte.
+        var instant = Transaction(animation: nil)
+        instant.disablesAnimations = true
+        withTransaction(instant) {
+            switch step {
+            case .previous: onPrevious()
+            case .next: onNext()
+            case nil: break
+            }
         }
         guard !reduceMotion else { return }
         // Die Fingerbewegung fällt ohne Animation weg; dieselbe Stelle übernimmt die Rest-Verschiebung und gleitet
@@ -97,15 +107,23 @@ private struct PacePeriodSwipeModifier: ViewModifier {
             canShowNext: canShowNext
         )
         guard start != 0 else { return }
-        withTransaction(Transaction(animation: nil)) {
+        settleGeneration += 1
+        let generation = settleGeneration
+        withTransaction(instant) {
             settleOffset = start
         }
-        // Ein Bild später (nach dem Zeichnen an der Startstelle) gleiten.
+        // Ein Bild später (nach dem Zeichnen an der Startstelle) gleiten – nur, wenn inzwischen nicht neu gewischt wurde.
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(20))
+            guard generation == settleGeneration else { return }
             withAnimation(.snappy(duration: 0.28)) {
                 settleOffset = 0
             }
         }
     }
+}
+
+public extension EnvironmentValues {
+    /// Nur für Vorschaubilder in Tests: zeigt den Inhalt um so viele Punkte verschoben wie mitten in einer Wischbewegung.
+    @Entry var pacePeriodSwipePreviewOffset: CGFloat = 0
 }

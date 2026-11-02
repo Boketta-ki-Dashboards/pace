@@ -77,6 +77,31 @@ struct AppRouterSettingsTests {
 
     // MARK: Deep Links
 
+    /// Auftrag 7, Teil E: Profil → Einstellungen → anderer Tab → Profil zeigt die Profil-Startseite. Die anderen Tabs
+    /// behalten ihren Stand; Wechsel in den Profil-Tab (auch per Link) setzen nichts zurück.
+    @Test func leavingTheProfileTabReturnsToItsMainPage() async throws {
+        let (router, _) = makeRouter()
+        await router.start()
+        let main = try mainApp(router)
+
+        main.selectedTab = .profile
+        main.profile.open(.dataHelpLegal)
+        main.profile.open(.appearance)
+        let requests = main.profile.scrollToTopRequest
+        main.didSwitchTab(from: .profile, to: .social)
+        #expect(main.profile.path.isEmpty, "Startseite beim nächsten Besuch")
+        #expect(main.profile.scrollToTopRequest == requests + 1, "oben beginnen")
+
+        // In den Profil-Tab (z. B. „Problem melden“ aus dem Pace-Bot): Die Unterseite bleibt offen.
+        main.openProfileSettings(.feedback(.problem))
+        main.didSwitchTab(from: .social, to: .profile)
+        #expect(main.profile.path == [.feedback(.problem)])
+
+        // Wechsel zwischen anderen Tabs ändert das Profil nicht.
+        main.didSwitchTab(from: .home, to: .rankings)
+        #expect(main.profile.path == [.feedback(.problem)])
+    }
+
     @Test func profileLinkOpensTheSocialTabWhileRunning() async throws {
         let (router, _) = makeRouter()
         await router.start()

@@ -73,6 +73,14 @@ public final class MainViewModel {
         profile.show(route)
     }
 
+    /// Nach dem Wechsel von einem Haupttab in einen anderen (Tippen oder Wischen): Das Profil beginnt beim nächsten
+    /// Besuch wieder auf seiner Startseite (die anderen Tabs behalten ihren Stand – Chats, Gruppen, Home-Anpassen).
+    public func didSwitchTab(from previous: Tab, to tab: Tab) {
+        if previous == .profile, tab != .profile {
+            profile.didLeaveTab()
+        }
+    }
+
     /// Beim Wechsel in einen Tab: veraltete Inhalte nachladen (die Tabs bleiben im Speicher und erscheinen dabei nicht
     /// neu, deshalb löst das nicht `.task` aus).
     public func didSelect(_ tab: Tab) async {

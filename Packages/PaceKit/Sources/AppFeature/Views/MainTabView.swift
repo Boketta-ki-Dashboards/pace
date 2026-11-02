@@ -61,7 +61,8 @@ struct MainTabView: View {
         .onChange(of: viewModel.selectedTab, initial: true) { _, tab in
             openedTabs.insert(tab)
         }
-        .onChange(of: viewModel.selectedTab) { _, tab in
+        .onChange(of: viewModel.selectedTab) { previous, tab in
+            viewModel.didSwitchTab(from: previous, to: tab)
             Task { await viewModel.didSelect(tab) }
         }
         // Ist das Tagesziel erreicht, entfallen die Erinnerungen von heute.

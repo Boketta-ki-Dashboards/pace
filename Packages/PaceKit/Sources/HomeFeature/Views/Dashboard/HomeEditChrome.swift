@@ -225,17 +225,37 @@ struct HomeSizeGlyph: View {
 }
 
 /// Mint Pille für „Fertig“ und „+ Widget hinzufügen“ im Anpassen-Modus.
+///
+/// Sichtbar 36 pt hoch mit knappem Polster, die Tippfläche bleibt 44 pt hoch: Zwei Pillen in übereinanderliegenden
+/// Zeilen (Fertig neben der Wortmarke, „+ Widget hinzufügen“ darunter) berühren sich so nicht.
 struct HomePillButtonStyle: ButtonStyle {
+    static let visibleHeight: CGFloat = 36
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .labelStyle(HomePillLabelStyle())
             .font(.system(.headline, weight: .semibold))
             .foregroundStyle(PaceColor.onSelection)
             .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .padding(.horizontal, PaceSpacing.m)
-            .frame(minHeight: 44)
+            .minimumScaleFactor(0.85)
+            .padding(.horizontal, PaceSpacing.s)
+            .padding(.vertical, 6)
+            .frame(minHeight: Self.visibleHeight)
             .background(PaceColor.selectionFill, in: Capsule())
+            .frame(minHeight: PaceRootHeader<EmptyView, EmptyView>.rowHeight)
+            .contentShape(Rectangle())
             .opacity(configuration.isPressed ? 0.8 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+/// Symbol und Text der Pille dicht beieinander (statt des großzügigen Standardabstands).
+private struct HomePillLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: PaceSpacing.xxs) {
+            configuration.icon
+                .font(.system(.subheadline, weight: .bold))
+            configuration.title
+        }
     }
 }

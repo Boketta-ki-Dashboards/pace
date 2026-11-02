@@ -258,6 +258,15 @@ public enum PaceHelpBot {
     /// Höchstens so viele Zeichen je freier Eingabe.
     public static let maximumInputLength = 200
 
+    /// Ob die Suche der Social-Seite den Pace-Bot zeigen soll („Pace-Bot“, „Bot“, „Hilfe“, „FAQ“ …).
+    public static func matchesSearch(_ query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else { return false }
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        let names = ["Pace-Bot", "Pace Bot", "Pace-бот", "Bot", "Бот", "Hilfe", "Help", "Помощь", "FAQ", "Support"]
+        return names.contains { $0.range(of: trimmed, options: options) != nil || trimmed.range(of: $0, options: options) != nil }
+    }
+
     /// Ordnet eine freie Eingabe einem Thema zu – nur, wenn das eindeutig ist; sonst `nil` (ehrliche Antwort statt
     /// erfundener).
     public static func match(_ input: String) -> PaceHelpTopic? {
@@ -391,6 +400,18 @@ public final class PaceHelpBotSession {
     /// Ob die letzte Antwort „keine passende Antwort“ war (dann den Support anbieten).
     public var lastAnswerWasUnknown: Bool {
         messages.last?.content == .unknown
+    }
+
+    /// Zeitpunkt der letzten eigenen Frage – Position in der Chatliste. Begrüßung, Neustart, Sprachwechsel und das
+    /// bloße Öffnen ändern ihn nicht; ohne eigene Frage (oder nach dem Zurücksetzen) `nil`: Der Bot steht unten.
+    public var lastUserActivity: Date? {
+        messages.last { $0.role == .user }?.date
+    }
+
+    /// Vorschau in der Chatliste: die letzte Nachricht nach einer eigenen Frage, sonst der Untertitel.
+    public var listPreview: String {
+        guard lastUserActivity != nil, let last = messages.last else { return PaceHelpBot.subtitle }
+        return last.text
     }
 
     private func append(_ message: PaceHelpMessage) {

@@ -38,6 +38,9 @@ public final class FeedbackViewModel {
 
     public var characterCount: Int { trimmedMessage.count }
 
+    /// Angefangene, noch nicht gesendete Nachricht.
+    public var hasDraft: Bool { !trimmedMessage.isEmpty && state != .sent }
+
     public var isTooLong: Bool { characterCount > FeedbackRules.maximumLength }
 
     public var canSend: Bool {

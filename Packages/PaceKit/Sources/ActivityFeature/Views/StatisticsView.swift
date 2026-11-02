@@ -85,8 +85,6 @@ struct StatisticsContent: View {
     var onOpenDayDetails: ((LocalDate) -> Void)?
     var onRetry: () -> Void = {}
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     private var columns: [GridItem] {
         [
             GridItem(.flexible(), spacing: PaceSpacing.s, alignment: .top),
@@ -258,8 +256,10 @@ struct StatisticsContent: View {
         }
     }
 
-    /// Diagramm oder Platzhalter in immer derselben Höhe. Ein neuer Zeitraum ersetzt das Diagramm (kurzes Einblenden,
-    /// das alte verschwindet sofort) – auch bei schnellem Wischen überlagert sich nichts und nichts verformt sich.
+    /// Diagramm oder Platzhalter in immer derselben Höhe. Ein neuer Zeitraum ersetzt das Diagramm ohne eigene
+    /// Animation: Bewegt wird nur die ganze Karte (Wischen bzw. Hereingleiten des neuen Zeitraums, ``pacePeriodSwipe``).
+    /// Früher blendete das Diagramm zusätzlich mit eigenem Timing ein – zusammen mit dem Hereingleiten der Karte wirkten
+    /// Balken, Achsen und Linien dann gegenläufig oder rasteten nachträglich ein.
     @ViewBuilder
     private func chartArea(_ report: StatisticsReport) -> some View {
         Group {
@@ -276,9 +276,9 @@ struct StatisticsContent: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        // Neues Diagramm je Zeitraum (kein Morphing alter Balken in neue), ausgetauscht ohne Übergang.
         .id(report.chartIdentity)
-        .transition(.asymmetric(insertion: .opacity, removal: .identity))
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: report.chartIdentity)
+        .transition(.identity)
     }
 
     private func chartPlaceholder(_ text: String) -> some View {

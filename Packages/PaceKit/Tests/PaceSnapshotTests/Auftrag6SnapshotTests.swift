@@ -139,7 +139,7 @@ struct Auftrag6SnapshotTests {
     @Test func paceBot() async throws {
         let (social, loader) = await A6Fixtures.social()
         await social.chats.load()
-        try Snapshot.render(page(ChatListContent(viewModel: social.chats, onOpenHelpBot: {}), loader: loader), name: "a6-chatlist-bot", languages: languages)
+        try Snapshot.render(page(ChatListContent(viewModel: social.chats, helpBot: social.helpBot, onOpenHelpBot: {}), loader: loader), name: "a6-chatlist-bot", languages: languages)
 
         let none = PaceSupportContact(email: nil)
         let greeting = PaceHelpBotSession()

@@ -2,9 +2,13 @@ import DesignSystem
 import PaceCore
 import SwiftUI
 
-/// Fester Eintrag „Pace-Bot“ oben in der Chatliste – ein systemeigener Hilfe-Chat, kein Kontakt: keine ungelesenen
-/// Nachrichten, kein Echtzeit-Abo, keine Freundschaft, verdrängt keine anderen Chats.
-struct PaceBotChatRow: View {
+/// Eintrag „Pace-Bot“ in der Chatliste – aufgebaut wie eine Chatzeile, einsortiert nach der letzten eigenen Frage
+/// (nie benutzt: ganz unten). Ein systemeigener Hilfe-Chat, kein Kontakt: keine ungelesenen Nachrichten, kein
+/// Echtzeit-Abo, keine Freundschaft.
+struct PaceBotListRow: View {
+    let session: PaceHelpBotSession
+    /// Zeit der letzten eigenen Frage (wie bei anderen Chats); `nil` = noch nicht benutzt.
+    var timestamp: String?
     let action: () -> Void
 
     var body: some View {
@@ -12,19 +16,27 @@ struct PaceBotChatRow: View {
             HStack(spacing: PaceSpacing.s) {
                 PaceBotAvatar(size: ChatListRow.avatarSize)
                 VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: PaceSpacing.xs) {
+                    HStack(alignment: .firstTextBaseline, spacing: PaceSpacing.xs) {
                         Text(PaceHelpBot.name)
                             .font(PaceFont.headline)
                             .foregroundStyle(PaceColor.textPrimary)
                             .lineLimit(1)
                         PaceBotTag()
+                        Spacer(minLength: PaceSpacing.xs)
+                        if let timestamp {
+                            Text(timestamp)
+                                .font(PaceFont.caption)
+                                .monospacedDigit()
+                                .foregroundStyle(PaceColor.textSecondary)
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
                     }
-                    Text(PaceHelpBot.subtitle)
+                    Text(session.listPreview)
                         .font(.subheadline)
                         .foregroundStyle(PaceColor.textSecondary)
                         .lineLimit(1)
                 }
-                Spacer(minLength: PaceSpacing.xs)
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(PaceColor.textPrimary)
@@ -36,7 +48,7 @@ struct PaceBotChatRow: View {
         }
         .buttonStyle(.pacePressable)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(PaceHelpBot.name), \(PaceBotTexts.automated). \(PaceHelpBot.subtitle)")
+        .accessibilityLabel([PaceHelpBot.name, PaceBotTexts.automated, session.listPreview, timestamp].compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(.isButton)
     }
 }

@@ -13,13 +13,22 @@ public struct ProfileView: View {
         self.viewModel = viewModel
     }
 
+    private static let topAnchor = "pace.profile.top"
+
     public var body: some View {
         NavigationStack(path: $viewModel.path) {
-            ScrollView {
-                ProfileContent(viewModel: viewModel, onOpen: { viewModel.open($0) })
-                    .padding(.horizontal, PaceSpacing.m)
-                    .padding(.bottom, PaceSpacing.l)
-                    .paceTabRoot(isAtRoot: viewModel.path.isEmpty) { viewModel.path.removeAll() }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Color.clear.frame(height: 0).id(Self.topAnchor)
+                    ProfileContent(viewModel: viewModel, onOpen: { viewModel.open($0) })
+                        .padding(.horizontal, PaceSpacing.m)
+                        .padding(.bottom, PaceSpacing.l)
+                        .paceTabRoot(isAtRoot: viewModel.path.isEmpty) { viewModel.path.removeAll() }
+                }
+                // Zurück aus einem anderen Tab: Startseite oben (Wortmarke, Banner, Profilangaben sichtbar).
+                .onChange(of: viewModel.scrollToTopRequest) {
+                    proxy.scrollTo(Self.topAnchor, anchor: .top)
+                }
             }
             .refreshable { [viewModel] in await viewModel.load() }
             .paceScreenBackground()
@@ -62,7 +71,9 @@ public struct ProfileView: View {
         case .help:
             HelpPage(viewModel: viewModel, backTitle: backTitle)
         case .feedback(let kind):
-            FeedbackPage(viewModel: viewModel.makeFeedback(kind), backTitle: backTitle)
+            FeedbackPage(viewModel: viewModel.makeFeedback(kind), backTitle: backTitle) { [viewModel] hasDraft in
+                viewModel.setDraft(hasDraft, for: route)
+            }
         case .legal:
             LegalPage(backTitle: backTitle) { viewModel.open($0) }
         case .legalDocument(let document):

@@ -7,30 +7,43 @@ import SwiftUI
 struct ChatListContent: View {
     @Bindable var viewModel: ChatListViewModel
     var onOpen: (ChatTarget) -> Void = { _ in }
-    /// Pace-Bot oben in der Liste – lokal, deshalb auch ohne Chat-Server erreichbar.
+    /// Pace-Bot als gewöhnlicher Eintrag der Liste (nach letzter eigener Frage sortiert); `nil` = nicht verdrahtet.
+    var helpBot: PaceHelpBotSession?
     var onOpenHelpBot: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
-            if let onOpenHelpBot {
-                PaceBotChatRow(action: onOpenHelpBot)
-                    .padding(.horizontal, PaceSpacing.s)
-                    .background(PaceColor.surface, in: RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous).strokeBorder(PaceColor.border, lineWidth: 1))
-            }
             switch viewModel.state {
             case .unavailable(let message):
                 ChatUnavailableCard(message: message)
+                offlineHelpBot
             case .failed(let message):
                 SocialFailedCard(message: message) { [viewModel] in
                     Task { await viewModel.load() }
                 }
+                offlineHelpBot
             case .idle, .loading:
                 SocialLoadingCard(message: ChatUIText.loadingChats)
+                offlineHelpBot
             case .loaded:
                 loaded
             }
         }
+    }
+
+    /// Ohne geladene Chats: der Bot einmal unter dem Hinweis (er läuft nur auf dem Gerät, auch offline).
+    @ViewBuilder
+    private var offlineHelpBot: some View {
+        if let helpBot, let onOpenHelpBot {
+            PaceBotListRow(session: helpBot, timestamp: helpBotTimestamp, action: onOpenHelpBot)
+                .padding(.horizontal, PaceSpacing.s)
+                .background(PaceColor.surface, in: RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous).strokeBorder(PaceColor.border, lineWidth: 1))
+        }
+    }
+
+    private var helpBotTimestamp: String? {
+        helpBot?.lastUserActivity.map(viewModel.timestamp(for:))
     }
 
     @ViewBuilder
@@ -46,25 +59,33 @@ struct ChatListContent: View {
                 Task { await viewModel.load() }
             }
         }
-        let rows = viewModel.filteredConversations
-        if rows.isEmpty {
+        let rows = viewModel.entries(showsHelpBot: helpBot != nil && onOpenHelpBot != nil, helpBotActivity: helpBot?.lastUserActivity)
+        if viewModel.filteredConversations.isEmpty {
             SocialEmptyCard(
                 systemImage: "bubble.left.and.bubble.right",
                 title: ChatUIText.emptyTitle(viewModel.filter),
                 message: ChatUIText.emptyMessage(viewModel.filter)
             )
-        } else {
+        }
+        if !rows.isEmpty {
             VStack(spacing: 0) {
-                ForEach(rows) { conversation in
-                    ChatListRow(
-                        conversation: conversation,
-                        preview: ChatFormatting.preview(for: conversation),
-                        timestamp: viewModel.timestamp(for: conversation),
-                        accessibilityText: viewModel.accessibilityLabel(for: conversation)
-                    ) {
-                        onOpen(ChatTarget(conversation))
+                ForEach(rows) { entry in
+                    switch entry {
+                    case .conversation(let conversation):
+                        ChatListRow(
+                            conversation: conversation,
+                            preview: ChatFormatting.preview(for: conversation),
+                            timestamp: viewModel.timestamp(for: conversation),
+                            accessibilityText: viewModel.accessibilityLabel(for: conversation)
+                        ) {
+                            onOpen(ChatTarget(conversation))
+                        }
+                    case .helpBot:
+                        if let helpBot, let onOpenHelpBot {
+                            PaceBotListRow(session: helpBot, timestamp: helpBotTimestamp, action: onOpenHelpBot)
+                        }
                     }
-                    if conversation.id != rows.last?.id {
+                    if entry.id != rows.last?.id {
                         Rectangle()
                             .fill(PaceColor.border)
                             .frame(height: 1)

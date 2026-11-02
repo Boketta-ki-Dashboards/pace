@@ -10,14 +10,22 @@ enum AvatarImageProcessing {
 
     /// `nil`, wenn die Daten kein lesbares Bild sind oder es sich nicht klein genug komprimieren lässt.
     static func squareJPEG(from data: Data, maximumBytes: Int = MediaRules.maximumBytes(for: .avatar)) -> Data? {
-        guard let image = UIImage(data: data), image.size.width > 0, image.size.height > 0 else { return nil }
+        guard let image = UIImage(data: data) else { return nil }
+        return squareJPEG(from: image, focus: 0.5, maximumBytes: maximumBytes)
+    }
+
+    /// Quadratischer Ausschnitt am gewählten Punkt entlang der längeren Seite.
+    /// - Parameter focus: 0 = linker bzw. oberer Rand, 0,5 = Mitte, 1 = rechter bzw. unterer Rand.
+    static func squareJPEG(from image: UIImage, focus: CGFloat, maximumBytes: Int = MediaRules.maximumBytes(for: .avatar)) -> Data? {
+        guard image.size.width > 0, image.size.height > 0 else { return nil }
+        let focus = min(max(focus, 0), 1)
         let side = min(image.size.width, image.size.height)
         let targetSide = min(side, maximumDimension).rounded()
         let size = CGSize(width: targetSide, height: targetSide)
         let scale = targetSide / side
-        // Mittiger Ausschnitt: das Bild so zeichnen, dass die kürzere Seite das Quadrat füllt.
+        // Das Bild so zeichnen, dass die kürzere Seite das Quadrat füllt; entlang der längeren am gewählten Punkt.
         let drawSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-        let origin = CGPoint(x: (targetSide - drawSize.width) / 2, y: (targetSide - drawSize.height) / 2)
+        let origin = CGPoint(x: (targetSide - drawSize.width) * focus, y: (targetSide - drawSize.height) * focus)
 
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1

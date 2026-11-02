@@ -36,17 +36,24 @@ struct HomeHeaderView: View {
                 }
             } titleRow: {
                 if viewModel.isEditing {
+                    // Eine Zeile, wenn Begrüßung und Knopf ganz nebeneinander passen; sonst fest zweizeilig: Begrüßung
+                    // links, darunter „+ Widget hinzufügen“ rechts – unter „Fertig“, nie daneben oder darüber.
                     ViewThatFits(in: .horizontal) {
                         HStack(alignment: .center, spacing: PaceSpacing.xs) {
                             greeting.fixedSize()
-                            Spacer(minLength: PaceSpacing.xs)
+                            Spacer(minLength: PaceSpacing.s)
                             addButton.fixedSize()
                         }
-                        VStack(alignment: .leading, spacing: PaceSpacing.xs) {
+                        VStack(alignment: .leading, spacing: 0) {
                             greeting
-                            addButton
+                            HStack {
+                                Spacer(minLength: 0)
+                                addButton
+                            }
                         }
                     }
+                    // Mindestabstand zur Pille „Fertig“ auch bei großer Schrift.
+                    .padding(.top, PaceSpacing.xxs)
                 } else {
                     greetingRow
                 }

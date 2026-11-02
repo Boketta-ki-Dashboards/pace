@@ -4,16 +4,18 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
-/// „Profil bearbeiten“ (Social-Profil 2.0): Banner, Bio, Interessen, Auszeichnungen – Profilbild und Namen bleiben
-/// unter „Konto & Profil“. Alles ist freiwillig.
+/// „Profil bearbeiten“ (Social-Profil 2.0): oben die Vorschau mit Banner und Profilbild – antippen zum Bearbeiten
+/// (Auftrag 7) –, darunter Bio, Interessen, Auszeichnungen. Namen und Konto bleiben unter „Konto & Profil“. Alles ist
+/// freiwillig.
 struct ProfileEditPage: View {
     let viewModel: ProfileViewModel
     let backTitle: String
 
     @Environment(\.paceImageLoader) private var loader
+    @State private var pickerTarget: ProfilePhotoTarget?
     @State private var showsPhotoPicker = false
     @State private var pickerItem: PhotosPickerItem?
-    @State private var cropImage: BannerCropImage?
+    @State private var cropImage: ProfilePhotoCrop?
     /// Entwürfe nur beim ersten Öffnen übernehmen – zurück von „Konto & Profil“ bleiben ungespeicherte Eingaben.
     @State private var didBeginEditing = false
 
@@ -23,7 +25,10 @@ struct ProfileEditPage: View {
                 viewModel: viewModel,
                 details: viewModel.details,
                 backTitle: backTitle,
-                onPickBanner: { showsPhotoPicker = true },
+                onPickPhoto: { target in
+                    pickerTarget = target
+                    showsPhotoPicker = true
+                },
                 onOpen: { viewModel.open($0) }
             )
         }
@@ -34,38 +39,81 @@ struct ProfileEditPage: View {
         }
         .photosPicker(isPresented: $showsPhotoPicker, selection: $pickerItem, matching: .images)
         .onChange(of: pickerItem) { _, item in
-            guard let item else { return }
+            guard let item, let target = pickerTarget else { return }
             Task {
                 defer { pickerItem = nil }
                 guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else {
-                    viewModel.details.reportUnreadablePhoto()
+                    reportUnreadablePhoto(for: target)
                     return
                 }
-                cropImage = BannerCropImage(image: image)
+                cropImage = ProfilePhotoCrop(target: target, image: image)
             }
         }
         .sheet(item: $cropImage) { crop in
-            BannerCropSheet(image: crop.image) { focus in
-                cropImage = nil
-                guard let jpeg = BannerImageProcessing.bannerJPEG(from: crop.image, focusY: focus) else {
-                    viewModel.details.reportUnreadablePhoto()
-                    return
+            switch crop.target {
+            case .banner:
+                BannerCropSheet(image: crop.image) { focus in
+                    cropImage = nil
+                    uploadBanner(BannerImageProcessing.bannerJPEG(from: crop.image, focusY: focus))
+                } onCancel: {
+                    cropImage = nil
                 }
-                Task {
-                    if let reference = await viewModel.details.uploadBanner(jpegData: jpeg) {
-                        loader?.store(jpeg, for: reference)
-                    }
+            case .avatar:
+                AvatarCropSheet(image: crop.image) { focus in
+                    cropImage = nil
+                    uploadAvatar(AvatarImageProcessing.squareJPEG(from: crop.image, focus: focus))
+                } onCancel: {
+                    cropImage = nil
                 }
-            } onCancel: {
-                cropImage = nil
+            }
+        }
+    }
+
+    private func reportUnreadablePhoto(for target: ProfilePhotoTarget) {
+        switch target {
+        case .banner: viewModel.details.reportUnreadablePhoto()
+        case .avatar: viewModel.account.reportUnreadablePhoto()
+        }
+    }
+
+    /// Über die bestehende Bannerfunktion (eigener Ordner, altes Banner erst nach Bestätigung gelöscht).
+    private func uploadBanner(_ jpeg: Data?) {
+        guard let jpeg else {
+            viewModel.details.reportUnreadablePhoto()
+            return
+        }
+        Task {
+            if let reference = await viewModel.details.uploadBanner(jpegData: jpeg) {
+                loader?.store(jpeg, for: reference)
+            }
+        }
+    }
+
+    /// Über den bestehenden Profilbild-Upload von „Konto & Profil“ (kein zweites Upload-System); das neue Bild liegt
+    /// danach sofort im Bildspeicher.
+    private func uploadAvatar(_ jpeg: Data?) {
+        guard let jpeg else {
+            viewModel.account.reportUnreadablePhoto()
+            return
+        }
+        Task {
+            if let reference = await viewModel.account.uploadAvatar(jpegData: jpeg) {
+                loader?.store(jpeg, for: reference)
             }
         }
     }
 }
 
+/// Welches Bild bearbeitet wird.
+enum ProfilePhotoTarget: Hashable {
+    case avatar
+    case banner
+}
+
 /// Ein ausgewähltes Foto, das noch zugeschnitten wird.
-struct BannerCropImage: Identifiable {
+struct ProfilePhotoCrop: Identifiable {
     let id = UUID()
+    let target: ProfilePhotoTarget
     let image: UIImage
 }
 
@@ -73,13 +121,18 @@ struct ProfileEditContent: View {
     let viewModel: ProfileViewModel
     @Bindable var details: ProfileDetailsViewModel
     let backTitle: String
-    var onPickBanner: () -> Void = {}
+    var onPickPhoto: (ProfilePhotoTarget) -> Void = { _ in }
     var onOpen: (ProfileRoute) -> Void = { _ in }
+
+    /// Auswahl „Ändern“ / „Entfernen“ nach dem Antippen eines vorhandenen Bilds.
+    @State private var photoActions: ProfilePhotoTarget?
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
             PaceSubpageHeader(backTitle: backTitle, title: ProfileRoute.editProfile.title)
                 .padding(.bottom, PaceSpacing.xs)
+
+            picturesCard
 
             switch details.availability {
             case .unknown:
@@ -108,7 +161,7 @@ struct ProfileEditContent: View {
                     }
                 }
             case .available:
-                bannerCard
+                EmptyView()
             }
             nameCard
             if details.isAvailable {
@@ -133,40 +186,110 @@ struct ProfileEditContent: View {
                 }
                 .buttonStyle(.pacePrimary)
                 .disabled(!details.canSave)
+                if details.hasChanges {
+                    ProfileFootnote(text: ProfileDetailsTexts.unsavedHint)
+                    Button(ProfileDetailsTexts.discard, role: .destructive) { details.discardChanges() }
+                        .buttonStyle(.paceSecondary)
+                        .disabled(details.isBusy)
+                }
             }
         }
     }
 
-    // MARK: Banner
+    // MARK: Profilbild und Banner (antippen zum Bearbeiten)
 
-    private var bannerCard: some View {
-        PaceCard {
-            VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                PaceCardHeader(ProfileDetailsTexts.banner)
-                PaceProfileBanner(reference: details.details.banner)
-                    .frame(height: 96)
-                    .clipShape(RoundedRectangle(cornerRadius: PaceRadius.tile, style: .continuous))
-                    .overlay {
-                        if details.bannerActivity != .idle {
-                            ProgressView()
+    /// Vorschau wie das Profil: Banner und überlappendes Profilbild. Antippen öffnet die Fotoauswahl mit Zuschnitt
+    /// (vorhandenes Bild: erst „Ändern“ oder „Entfernen“) – höchstens zwei Schritte bis zur Bildauswahl.
+    private var picturesCard: some View {
+        let account = viewModel.account
+        let isBusy = account.isAvatarBusy || details.isBusy
+        return PaceCard(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                Button { tapped(.banner) } label: {
+                    PaceProfileBanner(reference: details.details.banner)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 112)
+                        .clipped()
+                        .overlay {
+                            if details.bannerActivity != .idle { ProfilePhotoBusyOverlay() }
                         }
+                        .overlay(alignment: .topTrailing) {
+                            if details.isAvailable { ProfilePhotoEditBadge().padding(PaceSpacing.s) }
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.pacePressable)
+                .disabled(!details.isAvailable || isBusy)
+                .accessibilityLabel(ProfileDetailsTexts.banner)
+                .accessibilityHint(ProfileDetailsTexts.tapToEdit)
+
+                HStack(alignment: .bottom, spacing: PaceSpacing.s) {
+                    Button { tapped(.avatar) } label: {
+                        PaceAvatar(name: account.displayName, seed: account.avatarSeed, size: 84, image: account.avatar)
+                            .padding(3)
+                            .background(PaceColor.surface, in: Circle())
+                            .overlay {
+                                if account.isAvatarBusy { ProfilePhotoBusyOverlay().clipShape(Circle()) }
+                            }
+                            .overlay(alignment: .bottomTrailing) { ProfilePhotoEditBadge() }
+                            .contentShape(Circle())
                     }
-                HStack(spacing: PaceSpacing.xs) {
-                    Button(details.details.bannerPath == nil ? ProfileDetailsTexts.addBanner : ProfileDetailsTexts.changeBanner, action: onPickBanner)
-                        .buttonStyle(.paceCompact)
-                    if details.details.bannerPath != nil {
-                        Button(ProfileDetailsTexts.removeBanner, role: .destructive) {
-                            Task { await details.removeBanner() }
-                        }
-                        .buttonStyle(.paceCompact)
+                    .buttonStyle(.pacePressable)
+                    .disabled(!account.supportsAvatar || isBusy)
+                    .accessibilityLabel(ProfileDetailsTexts.profilePicture)
+                    .accessibilityHint(ProfileDetailsTexts.tapToEdit)
+                    .offset(y: -30)
+                    .padding(.bottom, -30)
+
+                    Text(ProfileDetailsTexts.picturesHint)
+                        .font(PaceFont.caption)
+                        .foregroundStyle(PaceColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, PaceSpacing.xxs)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, PaceSpacing.m)
+                .padding(.bottom, PaceSpacing.s)
+
+                if let error = account.avatarError {
+                    ProfileFootnote(text: error, isError: true)
+                        .padding(.horizontal, PaceSpacing.m)
+                        .padding(.bottom, PaceSpacing.s)
+                }
+            }
+            // Banner an den runden Ecken der Karte zuschneiden.
+            .clipShape(RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous))
+        }
+        .confirmationDialog(
+            ProfileDetailsTexts.editPicture,
+            isPresented: Binding(get: { photoActions != nil }, set: { if !$0 { photoActions = nil } }),
+            titleVisibility: .hidden,
+            presenting: photoActions
+        ) { target in
+            Button(target == .avatar ? ProfileDetailsTexts.changePhoto : ProfileDetailsTexts.changeBanner) {
+                onPickPhoto(target)
+            }
+            Button(target == .avatar ? ProfileDetailsTexts.removePhoto : ProfileDetailsTexts.removeBanner, role: .destructive) {
+                Task {
+                    switch target {
+                    case .avatar: await account.removeAvatar()
+                    case .banner: await details.removeBanner()
                     }
                 }
-                .disabled(!details.isAvailable || details.isBusy)
             }
         }
     }
 
-    // MARK: Profilbild und Namen (unverändert unter „Konto & Profil“)
+    /// Ohne Bild direkt zur Fotoauswahl, mit Bild erst „Ändern“ oder „Entfernen“.
+    private func tapped(_ target: ProfilePhotoTarget) {
+        let hasImage = switch target {
+        case .avatar: viewModel.account.avatar != nil
+        case .banner: details.details.banner != nil
+        }
+        if hasImage { photoActions = target } else { onPickPhoto(target) }
+    }
+
+    // MARK: Namen und Konto (unverändert unter „Konto & Profil“; das Profilbild auch dort)
 
     private var nameCard: some View {
         Button {
@@ -174,7 +297,7 @@ struct ProfileEditContent: View {
         } label: {
             ActivityRow(
                 systemImage: "person.crop.circle",
-                title: PaceLocalization.text(de: "Profilbild & Namen", en: "Photo & names", ru: "Фото и имена"),
+                title: PaceLocalization.text(de: "Namen & Konto", en: "Names & account", ru: "Имена и аккаунт"),
                 value: viewModel.username,
                 showsChevron: true
             )
@@ -278,6 +401,96 @@ struct ProfileEditContent: View {
                     .opacity(details.draftShowsAchievements ? 1 : 0.5)
                 }
                 ProfileFootnote(text: ProfileDetailsTexts.achievementsNote)
+            }
+        }
+    }
+}
+
+/// Kleiner Stift auf Profilbild und Banner: zeigt, dass sie sich durch Antippen ändern lassen.
+struct ProfilePhotoEditBadge: View {
+    var body: some View {
+        Image(systemName: "pencil")
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(PaceColor.onAccent)
+            .frame(width: 28, height: 28)
+            .background(PaceColor.actionFill, in: Circle())
+            .overlay(Circle().strokeBorder(PaceColor.surface, lineWidth: 2))
+            .accessibilityHidden(true)
+    }
+}
+
+/// Lädt gerade hoch bzw. entfernt (über dem Bild).
+struct ProfilePhotoBusyOverlay: View {
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.35)
+            ProgressView().tint(.white)
+        }
+    }
+}
+
+/// Ausschnitt des Profilbilds wählen: quadratisch mit runder Vorschau, entlang der längeren Seite verschiebbar (Ziehen
+/// oder Regler).
+struct AvatarCropSheet: View {
+    let image: UIImage
+    let onUse: (CGFloat) -> Void
+    let onCancel: () -> Void
+
+    @State private var focus: CGFloat = 0.5
+    @State private var dragStart: CGFloat?
+
+    private var isLandscape: Bool { image.size.width > image.size.height }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: PaceSpacing.m) {
+                GeometryReader { proxy in
+                    let side = min(proxy.size.width, proxy.size.height)
+                    let scale = side / max(min(image.size.width, image.size.height), 1)
+                    let drawn = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+                    let overflow = isLandscape ? drawn.width - side : drawn.height - side
+                    Image(uiImage: image)
+                        .resizable()
+                        .frame(width: drawn.width, height: drawn.height)
+                        .offset(x: isLandscape ? -overflow * focus : 0, y: isLandscape ? 0 : -overflow * focus)
+                        .frame(width: side, height: side, alignment: .topLeading)
+                        .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(PaceColor.border, lineWidth: 1))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let start = dragStart ?? focus
+                                    if dragStart == nil { dragStart = focus }
+                                    guard overflow > 0 else { return }
+                                    let moved = isLandscape ? value.translation.width : value.translation.height
+                                    focus = min(max(start - moved / overflow, 0), 1)
+                                }
+                                .onEnded { _ in dragStart = nil }
+                        )
+                }
+                .aspectRatio(1, contentMode: .fit)
+                .padding(.horizontal, PaceSpacing.l)
+                Text(isLandscape ? ProfileDetailsTexts.avatarCropHintHorizontal : ProfileDetailsTexts.avatarCropHintVertical)
+                    .font(PaceFont.callout)
+                    .foregroundStyle(PaceColor.textSecondary)
+                    .multilineTextAlignment(.center)
+                Slider(value: $focus, in: 0...1)
+                    .tint(PaceColor.actionFill)
+                    .accessibilityLabel(ProfileDetailsTexts.avatarCropTitle)
+                Spacer()
+            }
+            .padding(PaceSpacing.m)
+            .paceScreenBackground()
+            .navigationTitle(ProfileDetailsTexts.avatarCropTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(ProfileDetailsTexts.cancel, action: onCancel)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(ProfileDetailsTexts.use) { onUse(focus) }
+                }
             }
         }
     }

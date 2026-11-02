@@ -147,10 +147,13 @@ private struct FAQRow: View {
 struct FeedbackPage: View {
     @State private var viewModel: FeedbackViewModel
     let backTitle: String
+    /// Meldet eine angefangene, noch nicht gesendete Nachricht (der Profil-Tab bleibt dann beim Tabwechsel offen).
+    var onDraftChange: (Bool) -> Void = { _ in }
 
-    init(viewModel: FeedbackViewModel, backTitle: String) {
+    init(viewModel: FeedbackViewModel, backTitle: String, onDraftChange: @escaping (Bool) -> Void = { _ in }) {
         _viewModel = State(initialValue: viewModel)
         self.backTitle = backTitle
+        self.onDraftChange = onDraftChange
     }
 
     var body: some View {
@@ -158,6 +161,11 @@ struct FeedbackPage: View {
             FeedbackPageContent(viewModel: viewModel, backTitle: backTitle) {
                 FeedbackEditor(viewModel: viewModel)
             }
+        }
+        // Beim Öffnen (neues, leeres Formular) und bei jeder Änderung den Stand melden.
+        .onAppear { onDraftChange(viewModel.hasDraft) }
+        .onChange(of: viewModel.hasDraft) { _, hasDraft in
+            onDraftChange(hasDraft)
         }
     }
 }
