@@ -102,20 +102,31 @@ public final class PaceImageLoader: @unchecked Sendable {
     }
 
     /// Komprimierte Daten: aus dem Speicher oder per (geteiltem) Download.
+    ///
+    /// Der Download legt die Daten selbst in den Speicher, bevor er endet; erst danach wird er aus der Liste der
+    /// laufenden Downloads entfernt. So findet eine spätere Anfrage immer entweder den laufenden Download oder die Daten
+    /// im Speicher – nie eine Lücke, in der ein zweiter Download startet.
     private func data(for reference: MediaReference) async -> Data? {
         let key = Self.dataKey(reference)
         if let cached = downloaded.object(forKey: key) { return cached as Data }
-        let repository = repository
-        let task = lock.withLock {
+        let task: Task<Data?, Never>? = lock.withLock {
             if let running = downloads[key as String] { return running }
-            let task = Task<Data?, Never> { try? await repository.data(for: reference) }
+            // Zwischen der Prüfung oben und hier fertig geworden: aus dem Speicher.
+            if downloaded.object(forKey: key) != nil { return nil }
+            let task = Task<Data?, Never> { [self] in
+                let data = try? await repository.data(for: reference)
+                if let data {
+                    downloaded.setObject(data as NSData, forKey: Self.dataKey(reference), cost: data.count)
+                }
+                return data
+            }
             downloads[key as String] = task
             return task
         }
+        guard let task else { return downloaded.object(forKey: key).map { $0 as Data } }
         let data = await task.value
-        lock.withLock { downloads[key as String] = nil }
-        if let data {
-            downloaded.setObject(data as NSData, forKey: key, cost: data.count)
+        lock.withLock {
+            if downloads[key as String] == task { downloads[key as String] = nil }
         }
         return data
     }
