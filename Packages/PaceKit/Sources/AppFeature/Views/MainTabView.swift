@@ -62,7 +62,13 @@ struct MainTabView: View {
             openedTabs.insert(tab)
         }
         .onChange(of: viewModel.selectedTab) { previous, tab in
-            viewModel.didSwitchTab(from: previous, to: tab)
+            // Ohne Animation: Beim Antippen der Tab-Leiste gleitet Profil noch heraus – das Zurücksetzen soll dabei
+            // nicht sichtbar zurückblättern.
+            var instant = Transaction(animation: nil)
+            instant.disablesAnimations = true
+            withTransaction(instant) {
+                viewModel.didSwitchTab(from: previous, to: tab)
+            }
             Task { await viewModel.didSelect(tab) }
         }
         // Ist das Tagesziel erreicht, entfallen die Erinnerungen von heute.

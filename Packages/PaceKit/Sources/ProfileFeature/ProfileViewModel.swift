@@ -223,7 +223,17 @@ public final class ProfileViewModel {
 
     /// Öffnet eine Unterseite direkt (von außen, z. B. aus den Social-Einstellungen).
     public func show(_ route: ProfileRoute) {
-        path = [route]
+        // Eine offene Unterseite mit ungespeicherten Eingaben (z. B. eine angefangene Rückmeldung) bleibt darunter
+        // liegen; ist die Seite schon offen, geht es zu ihr zurück.
+        guard hasUnsavedChanges else {
+            path = [route]
+            return
+        }
+        if let index = path.firstIndex(of: route) {
+            path = Array(path.prefix(through: index))
+        } else {
+            path.append(route)
+        }
     }
 
     // MARK: Tabwechsel
@@ -241,7 +251,7 @@ public final class ProfileViewModel {
     /// Eine offene Unterseite hat ungespeicherte Eingaben: „Profil bearbeiten“ mit Änderungen oder eine angefangene
     /// Rückmeldung.
     public var hasUnsavedChanges: Bool {
-        (path.contains(.editProfile) && details.hasChanges) || path.contains(where: draftRoutes.contains)
+        (path.contains(.editProfile) && details.hasUserEdits) || path.contains(where: draftRoutes.contains)
     }
 
     /// Wechsel in einen anderen Haupttab (Auftrag 7, Teil E): Beim nächsten Besuch erscheint die Profil-Startseite,

@@ -189,7 +189,7 @@ private struct DayDetailsSnapshotHost: View {
     }
 }
 
-private struct StatisticsSnapshotHost: View {
+struct StatisticsSnapshotHost: View {
     let viewModel: StatisticsViewModel
 
     var body: some View {
@@ -216,7 +216,7 @@ private struct StatisticsSnapshotHost: View {
 
 /// Beispieldaten wie in den Referenzbildern 8 und 9 (nur für Bilder, nie in der App).
 @MainActor
-private struct ActivitySnapshotEnvironment {
+struct ActivitySnapshotEnvironment {
     let health: HealthServiceStub
     let live: HomeViewModel
     let streak: StepStreakTracker

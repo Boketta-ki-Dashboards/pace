@@ -110,8 +110,11 @@ struct ProfileInterestsCard: View {
                 }
                 ProfileFootnote(text: ProfileDetailsTexts.customInterestNote)
             }
-            .onAppear {
-                if showsCustomField { isCustomFieldFocused = true }
+            .task {
+                // Kurz warten, bis das neu eingeblendete Feld im Layout steht – sonst bleibt die Tastatur zu.
+                guard showsCustomField else { return }
+                try? await Task.sleep(for: .milliseconds(150))
+                isCustomFieldFocused = true
             }
         } else {
             Button {
@@ -385,9 +388,14 @@ struct ProfileCountryCard: View {
                         Button(ProfileDetailsTexts.edit) { showsPicker = true }
                             .buttonStyle(.paceCompact)
                     }
-                    Button(ProfileDetailsTexts.removeCountry, role: .destructive) { details.setCountry(nil) }
-                        .font(PaceFont.callout)
-                        .frame(minHeight: 44)
+                    Button(role: .destructive) {
+                        details.setCountry(nil)
+                    } label: {
+                        Text(ProfileDetailsTexts.removeCountry)
+                            .font(PaceFont.callout)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
                 } else {
                     Button {
                         showsPicker = true

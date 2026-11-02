@@ -42,13 +42,14 @@ struct HomeHeaderView: View {
                         HStack(alignment: .center, spacing: PaceSpacing.xs) {
                             greeting.fixedSize()
                             Spacer(minLength: PaceSpacing.s)
-                            addButton.fixedSize()
+                            addButton(allowsWrapping: false).fixedSize()
                         }
                         VStack(alignment: .leading, spacing: 0) {
                             greeting
                             HStack {
                                 Spacer(minLength: 0)
-                                addButton
+                                // Eigene Zeile: bei sehr großer Schrift zweizeilig statt abgeschnitten.
+                                addButton(allowsWrapping: true)
                             }
                         }
                     }
@@ -112,11 +113,11 @@ struct HomeHeaderView: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    private var addButton: some View {
+    private func addButton(allowsWrapping: Bool) -> some View {
         Button(action: onAddWidget) {
             Label(HomeTexts.addWidget, systemImage: "plus")
         }
-        .buttonStyle(HomePillButtonStyle())
+        .buttonStyle(HomePillButtonStyle(allowsWrapping: allowsWrapping))
     }
 }
 

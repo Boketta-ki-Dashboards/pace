@@ -64,6 +64,18 @@ struct ProfileInterestsRepositoryTests {
         #expect(details.spokenLanguages == ["de", "sr"])
         #expect(details.countryCode == "IT")
         #expect(details.allInterests.map(\.id) == ["catalog:rap", "catalog:walking", "custom:musik produzieren", "custom:рэп-баттлы"])
+        // „galaxy“ stammt aus einer neueren App-Version: nicht angezeigt, aber erhalten.
+        #expect(details.preservedInterestIDs == ["galaxy"])
+    }
+
+    @Test func interestsOfANewerAppVersionAreSentBackUnchanged() async throws {
+        let harness = BackendTestHarness()
+        try await harness.signIn()
+        harness.stub("PATCH", "/rest/v1/profiles", .json(Self.extendedJSON))
+        let details = ProfileDetails(interests: [.rap], supportsExtendedProfile: true, preservedInterestIDs: ["galaxy"])
+        _ = try await harness.backend.profileDetails.saveOwnDetails(details)
+        let sent = try body(harness.lastRequest("PATCH", "/rest/v1/profiles"))
+        #expect(sent["interests"] as? [String] == ["rap", "galaxy"])
     }
 
     @Test func extendedSaveSendsTheNewColumnsAndRemovesTheCountryWithNull() async throws {

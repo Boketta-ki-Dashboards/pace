@@ -55,6 +55,14 @@ struct ProfileInterestRulesTests {
         #expect(CustomInterestRules.problem("www.spam.example") == .link)
         #expect(CustomInterestRules.problem("https://pace.example") == .link)
         #expect(CustomInterestRules.problem("@lena") == .link)
+        #expect(CustomInterestRules.problem("t.me/spam") == .link)
+        #expect(CustomInterestRules.problem("onlyfans.com") == .link)
+        #expect(CustomInterestRules.problem("Node.js") == nil)
+        // Leer dargestellte Füllzeichen ergäben leere Chips.
+        #expect(CustomInterestRules.problem("\u{3164}\u{3164}") == .invalidCharacters)
+        #expect(CustomInterestRules.problem("Rap\u{2800}") == .invalidCharacters)
+        // Geschütztes Leerzeichen am Rand fällt beim Normalisieren weg.
+        #expect(CustomInterestRules.normalized("\u{00A0}Rap\u{3000}") == "Rap")
     }
 
     @Test func duplicatesAndCatalogTermsAreRecognized() {
@@ -157,6 +165,10 @@ struct ProfileInterestsViewModelTests {
         viewModel.customInterestInput = "Breakdance"
         #expect(!viewModel.addCustomInterest())
         #expect(viewModel.customInterestProblem == .limitReached)
+        // Solange der nicht hinzufügbare Begriff im Feld steht, speichert „Speichern“ nicht (Hinweis bleibt sichtbar).
+        let blocked = await viewModel.save()
+        #expect(!blocked)
+        viewModel.customInterestInput = ""
         #expect(await viewModel.save())
         #expect(repository.state.withLock { $0.own.customInterests } == ["Musik produzieren", "Рэп-баттлы", "Kaffee ☕"])
         #expect(viewModel.details.allInterests.count == 20)
@@ -227,6 +239,36 @@ struct ProfileInterestsViewModelTests {
         let russian = PaceLocalization.$languageOverride.withValue(.russian) { details.allInterests.map(\.title) }
         #expect(german == ["Rap", "Reisen", "Musik produzieren"])
         #expect(russian == ["Рэп", "Путешествия", "Musik produzieren"])
+    }
+
+    @Test func pendingTermIsAddedOnSaveAndCatalogChoiceReplacesTheSameCustomTerm() async {
+        let (viewModel, repository) = await makeViewModel(ProfileDetails(customInterests: ["Freestyle", "Kaffee ☕"], supportsExtendedProfile: true))
+        // Katalog „Freestyle“ wählen: der gleichnamige eigene Begriff entfällt (nichts doppelt).
+        viewModel.toggleInterest(.freestyle)
+        #expect(viewModel.draftInterests == [.freestyle])
+        #expect(viewModel.draftCustomInterests == ["Kaffee ☕"])
+        // Eingetippt, aber nicht „Hinzufügen“ gedrückt: „Speichern“ übernimmt den Begriff.
+        viewModel.customInterestInput = "Breakdance"
+        #expect(viewModel.hasChanges)
+        #expect(await viewModel.save())
+        #expect(repository.state.withLock { $0.own.customInterests } == ["Kaffee ☕", "Breakdance"])
+        #expect(viewModel.customInterestInput.isEmpty)
+        // Ungültiger eingetippter Begriff: nicht speichern, Hinweis am Feld.
+        viewModel.customInterestInput = "kaffee ☕"
+        let savedInvalid = await viewModel.save()
+        #expect(!savedInvalid)
+        #expect(viewModel.customInterestProblem == .duplicate)
+    }
+
+    @Test func interestsOfANewerAppVersionCountAndAreKept() async {
+        let (viewModel, repository) = await makeViewModel(ProfileDetails(
+            interests: [.rap], customInterests: ["Freestyle Rap"], supportsExtendedProfile: true,
+            preservedInterestIDs: ["future_0"]
+        ))
+        #expect(viewModel.selectedInterestCount == 3)
+        viewModel.toggleInterest(.travel)
+        #expect(await viewModel.save())
+        #expect(repository.state.withLock { $0.own.preservedInterestIDs } == ["future_0"])
     }
 
     @Test func draftsAndDiscardIncludeTheNewFields() async {

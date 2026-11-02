@@ -32,6 +32,9 @@ public final class ProfileDetailsViewModel {
     public private(set) var isSaving = false
     public private(set) var bannerActivity: BannerActivity = .idle
     public private(set) var errorMessage: String?
+    /// Fehler beim Banner (Hochladen, Entfernen, unlesbares Foto) – erscheint direkt am Banner, nicht unten bei
+    /// „Speichern“.
+    public private(set) var bannerError: String?
     /// Nach erfolgreichem Speichern bis zur nächsten Änderung: „Gespeichert“.
     public private(set) var didSave = false
 
@@ -133,7 +136,7 @@ public final class ProfileDetailsViewModel {
     /// wurde – Eingaben während des Ladens bleiben.
     public func prepareEditing() async {
         // Ungespeicherte Änderungen aus einem früheren Besuch bleiben (Speichern oder ausdrücklich verwerfen).
-        let keepsDraft = hasDraftSession && hasChanges
+        let keepsDraft = hasDraftSession && hasUserEdits
         if !keepsDraft { beginEditing() }
         let untouched = draft
         await load()
@@ -152,6 +155,7 @@ public final class ProfileDetailsViewModel {
         let languages: [String]
         let country: String?
         let showsAchievements: Bool
+        let customInterestInput: String
     }
 
     private var draft: Draft {
@@ -161,7 +165,8 @@ public final class ProfileDetailsViewModel {
             customInterests: draftCustomInterests,
             languages: draftLanguages,
             country: draftCountry,
-            showsAchievements: draftShowsAchievements
+            showsAchievements: draftShowsAchievements,
+            customInterestInput: customInterestInput
         )
     }
 
@@ -174,14 +179,26 @@ public final class ProfileDetailsViewModel {
         ProfileBioRules.normalized(draftBio).flatMap(ProfileBioRules.problem)
     }
 
-    public var hasChanges: Bool {
+    /// Von der Person geänderte Angaben – auch ein eingetippter, noch nicht hinzugefügter eigener Begriff. Neu
+    /// erreichte Auszeichnungsstufen zählen nicht dazu (die trägt die App selbst nach).
+    public var hasUserEdits: Bool {
         ProfileBioRules.normalized(draftBio) != details.bio
             || draftInterests != details.interests
             || draftCustomInterests != details.customInterests
             || draftLanguages != details.spokenLanguages
             || draftCountry != details.countryCode
             || draftShowsAchievements != details.showsAchievements
-            || (draftShowsAchievements && earned != details.achievements)
+            || hasPendingCustomInterest
+    }
+
+    /// Etwas zu speichern (auch eine neu erreichte Auszeichnungsstufe, wenn Auszeichnungen eingeschaltet sind).
+    public var hasChanges: Bool {
+        hasUserEdits || (draftShowsAchievements && earned != details.achievements)
+    }
+
+    /// Im Feld „Eigenes Interesse“ steht Text, der noch nicht hinzugefügt wurde.
+    public var hasPendingCustomInterest: Bool {
+        supportsExtendedProfile && !CustomInterestRules.normalized(customInterestInput).isEmpty
     }
 
     public var canSave: Bool {
@@ -197,9 +214,10 @@ public final class ProfileDetailsViewModel {
         details.interestLimit
     }
 
-    /// Ausgewählte Interessen (Katalog und eigene).
+    /// Ausgewählte Interessen (Katalog und eigene, dazu Einträge einer neueren App-Version, die hier nicht angezeigt
+    /// werden, aber erhalten bleiben).
     public var selectedInterestCount: Int {
-        draftInterests.count + draftCustomInterests.count
+        draftInterests.count + draftCustomInterests.count + details.preservedInterestIDs.count
     }
 
     /// Kategorien zur Auswahl – auf älteren Servern nur die mit dem ursprünglichen Katalog.
@@ -217,8 +235,16 @@ public final class ProfileDetailsViewModel {
         if let index = draftInterests.firstIndex(of: interest) {
             draftInterests.remove(at: index)
         } else if canAddInterest, supportsExtendedProfile || interest.isLegacy {
-            draftInterests.append(interest)
+            select(interest)
         }
+    }
+
+    /// Wählt einen Katalogeintrag aus; ein gleichnamiger eigener Begriff (z. B. „Freestyle“) entfällt dabei, damit nichts
+    /// doppelt erscheint.
+    private func select(_ interest: ProfileInterest) {
+        let titles = Set((interest.allTitles + [interest.rawValue]).map(CustomInterestRules.key))
+        draftCustomInterests.removeAll { titles.contains(CustomInterestRules.key($0)) }
+        draftInterests.append(interest)
     }
 
     public var canAddInterest: Bool {
@@ -252,7 +278,7 @@ public final class ProfileDetailsViewModel {
                 customInterestProblem = .limitReached
                 return false
             }
-            draftInterests.append(interest)
+            select(interest)
             customInterestInput = ""
             return true
         case .failure(let problem):
@@ -303,6 +329,10 @@ public final class ProfileDetailsViewModel {
             errorMessage = ProfileBioRules.message(for: problem)
             return false
         }
+        // Eingetippter, noch nicht hinzugefügter Begriff: erst hinzufügen (ungültig → Hinweis am Feld, nicht speichern).
+        if hasPendingCustomInterest, !addCustomInterest() {
+            return false
+        }
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
@@ -345,11 +375,11 @@ public final class ProfileDetailsViewModel {
     public func uploadBanner(jpegData: Data) async -> MediaReference? {
         guard let repository, let media, isAvailable, !isBusy else { return nil }
         guard jpegData.count <= MediaRules.maximumBytes(for: .avatar) else {
-            errorMessage = Self.message(for: MediaError.tooLarge)
+            bannerError = Self.message(for: MediaError.tooLarge)
             return nil
         }
         bannerActivity = .uploading
-        errorMessage = nil
+        bannerError = nil
         defer { bannerActivity = .idle }
 
         let previous = details.banner
@@ -357,7 +387,7 @@ public final class ProfileDetailsViewModel {
         do {
             uploaded = try await media.upload(jpegData, contentType: "image/jpeg", to: .avatar)
         } catch {
-            errorMessage = Self.message(for: error)
+            bannerError = Self.message(for: error)
             return nil
         }
         var updated = details
@@ -372,7 +402,7 @@ public final class ProfileDetailsViewModel {
             } else {
                 // Das neue Bild wird nicht verwendet – nicht als verwaiste Datei liegen lassen.
                 try? await media.delete(uploaded)
-                errorMessage = Self.message(for: error)
+                bannerError = Self.message(for: error)
                 return nil
             }
         }
@@ -387,21 +417,21 @@ public final class ProfileDetailsViewModel {
     public func removeBanner() async {
         guard let repository, let previous = details.banner, !isBusy else { return }
         bannerActivity = .removing
-        errorMessage = nil
+        bannerError = nil
         defer { bannerActivity = .idle }
         var updated = details
         updated.bannerPath = nil
         do {
             details = try await repository.saveOwnDetails(updated)
         } catch {
-            errorMessage = Self.message(for: error)
+            bannerError = Self.message(for: error)
             return
         }
         try? await media?.delete(previous)
     }
 
     public func reportUnreadablePhoto() {
-        errorMessage = PaceLocalization.text(
+        bannerError = PaceLocalization.text(
             de: "Das Foto konnte nicht gelesen werden. Bitte wähle ein anderes.",
             en: "The photo couldn't be read. Please choose a different one.",
             ru: "Не удалось прочитать фото. Пожалуйста, выбери другое."

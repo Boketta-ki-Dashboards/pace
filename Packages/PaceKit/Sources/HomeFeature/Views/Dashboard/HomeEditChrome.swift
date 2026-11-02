@@ -230,22 +230,30 @@ struct HomeSizeGlyph: View {
 /// Zeilen (Fertig neben der Wortmarke, „+ Widget hinzufügen“ darunter) berühren sich so nicht.
 struct HomePillButtonStyle: ButtonStyle {
     static let visibleHeight: CGFloat = 36
+    /// Darf zweizeilig umbrechen statt abgeschnitten zu werden – nur, wo die Pille eine eigene Zeile hat (sehr große
+    /// Bedienungshilfen-Schrift).
+    var allowsWrapping = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .labelStyle(HomePillLabelStyle())
             .font(.system(.headline, weight: .semibold))
             .foregroundStyle(PaceColor.onSelection)
-            .lineLimit(1)
+            .lineLimit(allowsWrapping ? 2 : 1)
+            .multilineTextAlignment(.center)
             .minimumScaleFactor(0.85)
+            .fixedSize(horizontal: false, vertical: allowsWrapping)
             .padding(.horizontal, PaceSpacing.s)
             .padding(.vertical, 6)
             .frame(minHeight: Self.visibleHeight)
-            .background(PaceColor.selectionFill, in: Capsule())
+            // Bei einer Zeile (36 pt) genau eine Kapsel, bei zwei Zeilen eine abgerundete Fläche.
+            .background(PaceColor.selectionFill, in: RoundedRectangle(cornerRadius: Self.visibleHeight / 2, style: .continuous))
             .frame(minHeight: PaceRootHeader<EmptyView, EmptyView>.rowHeight)
             .contentShape(Rectangle())
             .opacity(configuration.isPressed ? 0.8 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            // Größte Bedienungshilfen-Größen begrenzt: Der Kopf bleibt bedienbar, nichts wird abgeschnitten.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 }
 

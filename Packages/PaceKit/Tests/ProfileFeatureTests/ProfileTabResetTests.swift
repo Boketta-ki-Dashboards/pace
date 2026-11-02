@@ -72,4 +72,51 @@ struct ProfileTabResetTests {
         #expect(viewModel.didLeaveTab())
         #expect(viewModel.path.isEmpty)
     }
+
+    @Test func openingAProfilePageFromAnotherTabKeepsAStartedFeedback() async throws {
+        let viewModel = try await makeViewModel()
+        let feedback = ProfileRoute.feedback(.problem)
+        viewModel.path = [.dataHelpLegal, .help, feedback]
+        viewModel.setDraft(true, for: feedback)
+        // Z. B. Social → Privatsphäre: Die angefangene Rückmeldung bleibt darunter liegen.
+        viewModel.show(.privacy)
+        #expect(viewModel.path == [.dataHelpLegal, .help, feedback, .privacy])
+        // Pace-Bot → „Problem melden“: zurück zur schon offenen Rückmeldung, nichts geht verloren.
+        viewModel.show(feedback)
+        #expect(viewModel.path == [.dataHelpLegal, .help, feedback])
+        // Ohne Entwurf wie bisher: direkt die gewünschte Seite.
+        viewModel.setDraft(false, for: feedback)
+        viewModel.show(.privacy)
+        #expect(viewModel.path == [.privacy])
+    }
+
+    @Test func newlyEarnedAchievementsAreNoUserEditButTypedTermsAre() async throws {
+        let details = ProfileDetailsRepositoryStub {
+            $0.own = ProfileDetails(showsAchievements: true, achievements: [.streak7], supportsExtendedProfile: true)
+        }
+        let profile = Fixtures.profile()
+        let store = ProfileStore(
+            profile: profile,
+            profiles: ProfileRepositoryStub { $0.profiles[profile.id] = profile },
+            regions: RegionRepositoryStub(),
+            cache: InMemoryProfileCache()
+        )
+        let viewModel = ProfileViewModel(
+            store: store,
+            regions: RegionRepositoryStub(),
+            searchDebounce: .zero,
+            services: ProfileSettingsServices(profileDetails: details)
+        )
+        await viewModel.load()
+        viewModel.path = [.editProfile]
+        await viewModel.details.prepareEditing()
+        // Eine neu erreichte Stufe hält den Tab nicht offen (die App trägt sie selbst nach).
+        #expect(!viewModel.details.hasUserEdits)
+        #expect(viewModel.didLeaveTab())
+        // Ein eingetippter, noch nicht hinzugefügter Begriff schon.
+        viewModel.path = [.editProfile]
+        viewModel.details.customInterestInput = "Breakdance"
+        #expect(viewModel.details.hasUserEdits)
+        #expect(!viewModel.didLeaveTab())
+    }
 }

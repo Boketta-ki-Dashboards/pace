@@ -19,11 +19,13 @@ public struct ProfileView: View {
         NavigationStack(path: $viewModel.path) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    Color.clear.frame(height: 0).id(Self.topAnchor)
+                    // Anker direkt am Inhalt (kein zusätzliches Kind der ScrollView: das brächte Abstand, und der Kopf
+                    // stünde tiefer als in den anderen Tabs).
                     ProfileContent(viewModel: viewModel, onOpen: { viewModel.open($0) })
                         .padding(.horizontal, PaceSpacing.m)
                         .padding(.bottom, PaceSpacing.l)
                         .paceTabRoot(isAtRoot: viewModel.path.isEmpty) { viewModel.path.removeAll() }
+                        .id(Self.topAnchor)
                 }
                 // Zurück aus einem anderen Tab: Startseite oben (Wortmarke, Banner, Profilangaben sichtbar).
                 .onChange(of: viewModel.scrollToTopRequest) {

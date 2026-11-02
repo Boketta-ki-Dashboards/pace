@@ -53,13 +53,13 @@ struct ProfileInterestsIntegrationTests {
     @Test func serverRejectsWhatTheAppWouldNeverSend() async throws {
         let anna = try await IntegrationUser.make("Regeln", steps: 0)
         var details = try await anna.backend.profileDetails.ownDetails()
-        details.customInterests = ["Freestyle"]
+        details.customInterests = ["Breakdance"]
         _ = try await anna.backend.profileDetails.saveOwnDetails(details)
         // Die App prüft vorher; ungültige Werte erreichen den Server nicht (invalid ohne Anfrage).
-        details.customInterests = ["Freestyle", "FREESTYLE"]
+        details.customInterests = ["Breakdance", "BREAKDANCE"]
         await #expect(throws: ProfileDetailsError.invalid) {
             _ = try await anna.backend.profileDetails.saveOwnDetails(details)
         }
-        #expect(try await anna.backend.profileDetails.ownDetails().customInterests == ["Freestyle"])
+        #expect(try await anna.backend.profileDetails.ownDetails().customInterests == ["Breakdance"])
     }
 }

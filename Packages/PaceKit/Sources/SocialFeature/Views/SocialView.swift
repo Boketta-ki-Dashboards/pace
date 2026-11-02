@@ -167,7 +167,7 @@ struct SocialContent: View {
     /// Der Pace-Bot läuft nur auf dem Gerät: erreichbar auch ohne Verbindung, bei Serverfehlern und während des Ladens.
     private var helpBotCard: some View {
         PaceCard {
-            PaceBotListRow(session: viewModel.helpBot) { onOpen(.helpBot) }
+            PaceBotListRow(session: viewModel.helpBot, timestamp: viewModel.helpBot.lastUserActivity.map(viewModel.chats.timestamp(for:))) { onOpen(.helpBot) }
         }
     }
 
@@ -350,7 +350,7 @@ struct SocialContent: View {
             if showsHelpBot {
                 // Auch über die Suche auffindbar („Pace-Bot“, „Bot“, „Hilfe“ …).
                 PaceCard {
-                    PaceBotListRow(session: viewModel.helpBot) { onOpen(.helpBot) }
+                    PaceBotListRow(session: viewModel.helpBot, timestamp: viewModel.helpBot.lastUserActivity.map(viewModel.chats.timestamp(for:))) { onOpen(.helpBot) }
                 }
             }
         }

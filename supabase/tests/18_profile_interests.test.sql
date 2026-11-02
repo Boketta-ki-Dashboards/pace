@@ -1,6 +1,6 @@
 -- Pace: Interessen 2.0 – Katalog in Kategorien, eigene Interessen, gesprochene Sprachen, Land (Migration 20261102100000).
 begin;
-select plan(41);
+select plan(52);
 
 -- =============================================================================================================
 -- Struktur
@@ -84,7 +84,7 @@ select is(
 );
 
 -- =============================================================================================================
--- Eigenes Profil ändern (lena)
+-- Bestandsprofile lesen (ida, paul), eigenes Profil ändern (lena)
 -- =============================================================================================================
 
 set local role authenticated;
@@ -170,6 +170,26 @@ select throws_ok(
   '23514', 'invalid_custom_interests', 'ohne @-Erwähnungen'
 );
 select throws_ok(
+  $$update public.profiles set custom_interests = array['t.me/spam'] where id = auth.uid()$$,
+  '23514', 'invalid_custom_interests', 'ohne Links in der Form domain/…'
+);
+select throws_ok(
+  $$update public.profiles set custom_interests = array['onlyfans.com'] where id = auth.uid()$$,
+  '23514', 'invalid_custom_interests', 'ohne Domains'
+);
+select lives_ok(
+  $$update public.profiles set custom_interests = array['Node.js'] where id = auth.uid()$$,
+  'Punkt im Begriff erlaubt (Node.js)'
+);
+select throws_ok(
+  format('update public.profiles set custom_interests = array[%L] where id = auth.uid()', chr(160) || 'Rap'),
+  '23514', 'invalid_custom_interests', 'ohne geschütztes Leerzeichen am Rand'
+);
+select throws_ok(
+  format('update public.profiles set custom_interests = array[%L] where id = auth.uid()', chr(12644) || chr(12644)),
+  '23514', 'invalid_custom_interests', 'ohne leer dargestellte Füllzeichen'
+);
+select throws_ok(
   format('update public.profiles set custom_interests = array[%L] where id = auth.uid()', 'Cafe' || chr(769)),
   '23514', 'invalid_custom_interests', 'nur Unicode-NFC (sonst Doppelte in anderer Schreibweise möglich)'
 );
@@ -188,6 +208,30 @@ select throws_ok(
   '23514', null, 'einundzwanzig Interessen: abgelehnt'
 );
 
+-- Ältere App (kennt nur die zehn bisherigen IDs, zeigt höchstens fünf, sendet nie custom_interests): Sie nimmt
+-- „cycling“ heraus. Was sie nicht sehen konnte, bleibt erhalten.
+select lives_ok(
+  $$update public.profiles set interests = array['football', 'fitness', 'running', 'hiking'] where id = auth.uid()$$,
+  'ältere App ändert ihre fünf sichtbaren Interessen'
+);
+select is(
+  (select array_to_string(p.interests, ',') from public.profiles p where p.id = auth.uid()),
+  'football,fitness,running,hiking,rap,basketball,programming,travel,international_friendships,volleyball,swimming,dancing,gaming,books',
+  'ältere App: neue Katalog-IDs bleiben erhalten, nur „cycling“ ist entfernt'
+);
+-- Die neue App sendet custom_interests mit: genau die gewählte Liste.
+select lives_ok(
+  $$update public.profiles set interests = array['football', 'fitness', 'running', 'hiking', 'cycling', 'rap', 'basketball', 'programming',
+                                                 'travel', 'international_friendships', 'volleyball', 'swimming', 'dancing', 'gaming'],
+                               custom_interests = custom_interests where id = auth.uid()$$,
+  'neue App ändert die Liste'
+);
+select is(
+  (select cardinality(p.interests) from public.profiles p where p.id = auth.uid()),
+  14,
+  'neue App: „books“ entfernt, „cycling“ wieder da – nichts zurückgeholt'
+);
+
 -- Sprachen und Land
 select lives_ok(
   $$update public.profiles set spoken_languages = array['de', 'ru', 'sr', 'sq', 'ka', 'gsw'], country_code = 'IT' where id = auth.uid()$$,
@@ -200,6 +244,14 @@ select throws_ok(
 select throws_ok(
   $$update public.profiles set spoken_languages = array['Deutsch'] where id = auth.uid()$$,
   '23514', null, 'Sprachen nur als ISO-Code'
+);
+select throws_ok(
+  $$update public.profiles set spoken_languages = array['de,en'] where id = auth.uid()$$,
+  '23514', 'invalid_spoken_languages', 'ein Code je Eintrag (kein Komma)'
+);
+select throws_ok(
+  $$update public.profiles set spoken_languages = array[''] where id = auth.uid()$$,
+  '23514', 'invalid_spoken_languages', 'keine leeren Sprach-Einträge'
 );
 select throws_ok(
   $$update public.profiles set spoken_languages = array['de','en','ru','it','sr','sq','ka','fr','es','pt','nl'] where id = auth.uid()$$,

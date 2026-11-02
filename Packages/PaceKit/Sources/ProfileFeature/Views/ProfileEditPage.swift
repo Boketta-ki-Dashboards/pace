@@ -16,6 +16,8 @@ struct ProfileEditPage: View {
     @State private var showsPhotoPicker = false
     @State private var pickerItem: PhotosPickerItem?
     @State private var cropImage: ProfilePhotoCrop?
+    /// Das gewählte Foto wird gerade gelesen (bei iCloud-Fotos bis zu einigen Sekunden) – kein zweites Auswählen.
+    @State private var isLoadingPhoto = false
     /// Entwürfe nur beim ersten Öffnen übernehmen – zurück von „Konto & Profil“ bleiben ungespeicherte Eingaben.
     @State private var didBeginEditing = false
 
@@ -25,7 +27,9 @@ struct ProfileEditPage: View {
                 viewModel: viewModel,
                 details: viewModel.details,
                 backTitle: backTitle,
+                isLoadingPhoto: isLoadingPhoto,
                 onPickPhoto: { target in
+                    guard !isLoadingPhoto else { return }
                     pickerTarget = target
                     showsPhotoPicker = true
                 },
@@ -40,8 +44,12 @@ struct ProfileEditPage: View {
         .photosPicker(isPresented: $showsPhotoPicker, selection: $pickerItem, matching: .images)
         .onChange(of: pickerItem) { _, item in
             guard let item, let target = pickerTarget else { return }
+            isLoadingPhoto = true
             Task {
-                defer { pickerItem = nil }
+                defer {
+                    pickerItem = nil
+                    isLoadingPhoto = false
+                }
                 guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else {
                     reportUnreadablePhoto(for: target)
                     return
@@ -121,6 +129,7 @@ struct ProfileEditContent: View {
     let viewModel: ProfileViewModel
     @Bindable var details: ProfileDetailsViewModel
     let backTitle: String
+    var isLoadingPhoto = false
     var onPickPhoto: (ProfilePhotoTarget) -> Void = { _ in }
     var onOpen: (ProfileRoute) -> Void = { _ in }
     /// Für Vorschaubilder: aufgeklappte Interessen-Kategorien und offenes Feld „Eigenes Interesse“.
@@ -129,6 +138,8 @@ struct ProfileEditContent: View {
 
     /// Auswahl „Ändern“ / „Entfernen“ nach dem Antippen eines vorhandenen Bilds.
     @State private var photoActions: ProfilePhotoTarget?
+    /// Zuletzt angetipptes Bild (für die Ladeanzeige beim Lesen des Fotos).
+    @State private var pickedTarget: ProfilePhotoTarget?
 
     var body: some View {
         VStack(alignment: .leading, spacing: PaceSpacing.s) {
@@ -213,7 +224,7 @@ struct ProfileEditContent: View {
     /// (vorhandenes Bild: erst „Ändern“ oder „Entfernen“) – höchstens zwei Schritte bis zur Bildauswahl.
     private var picturesCard: some View {
         let account = viewModel.account
-        let isBusy = account.isAvatarBusy || details.isBusy
+        let isBusy = account.isAvatarBusy || details.isBusy || isLoadingPhoto
         return PaceCard(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 Button { tapped(.banner) } label: {
@@ -222,7 +233,9 @@ struct ProfileEditContent: View {
                         .frame(height: 112)
                         .clipped()
                         .overlay {
-                            if details.bannerActivity != .idle { ProfilePhotoBusyOverlay() }
+                            if details.bannerActivity != .idle || (isLoadingPhoto && pickedTarget == .banner) {
+                                ProfilePhotoBusyOverlay()
+                            }
                         }
                         .overlay(alignment: .topTrailing) {
                             if details.isAvailable { ProfilePhotoEditBadge().padding(PaceSpacing.s) }
@@ -240,7 +253,9 @@ struct ProfileEditContent: View {
                             .padding(3)
                             .background(PaceColor.surface, in: Circle())
                             .overlay {
-                                if account.isAvatarBusy { ProfilePhotoBusyOverlay().clipShape(Circle()) }
+                                if account.isAvatarBusy || (isLoadingPhoto && pickedTarget == .avatar) {
+                                    ProfilePhotoBusyOverlay().clipShape(Circle())
+                                }
                             }
                             .overlay(alignment: .bottomTrailing) { ProfilePhotoEditBadge() }
                             .contentShape(Circle())
@@ -262,7 +277,8 @@ struct ProfileEditContent: View {
                 .padding(.horizontal, PaceSpacing.m)
                 .padding(.bottom, PaceSpacing.s)
 
-                if let error = account.avatarError {
+                // Fehler direkt bei den Bildern (auch auf kleinen iPhones sichtbar, ohne nach unten zu scrollen).
+                ForEach([account.avatarError, details.bannerError].compactMap { $0 }, id: \.self) { error in
                     ProfileFootnote(text: error, isError: true)
                         .padding(.horizontal, PaceSpacing.m)
                         .padding(.bottom, PaceSpacing.s)
@@ -278,6 +294,7 @@ struct ProfileEditContent: View {
             presenting: photoActions
         ) { target in
             Button(target == .avatar ? ProfileDetailsTexts.changePhoto : ProfileDetailsTexts.changeBanner) {
+                pickedTarget = target
                 onPickPhoto(target)
             }
             Button(target == .avatar ? ProfileDetailsTexts.removePhoto : ProfileDetailsTexts.removeBanner, role: .destructive) {
@@ -297,7 +314,12 @@ struct ProfileEditContent: View {
         case .avatar: viewModel.account.avatar != nil
         case .banner: details.details.banner != nil
         }
-        if hasImage { photoActions = target } else { onPickPhoto(target) }
+        if hasImage {
+            photoActions = target
+        } else {
+            pickedTarget = target
+            onPickPhoto(target)
+        }
     }
 
     // MARK: Namen und Konto (unverändert unter „Konto & Profil“; das Profilbild auch dort)

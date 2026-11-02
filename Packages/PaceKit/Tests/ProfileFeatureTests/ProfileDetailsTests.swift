@@ -231,7 +231,9 @@ struct ProfileDetailsViewModelTests {
         await viewModel.load()
         repository.state.withLock { $0.error = .invalid }
         #expect(await viewModel.uploadBanner(jpegData: Data([1])) == nil)
-        #expect(viewModel.errorMessage != nil)
+        // Der Fehler erscheint am Banner, nicht unten bei „Speichern“.
+        #expect(viewModel.bannerError != nil)
+        #expect(viewModel.errorMessage == nil)
         #expect(media.state.withLock { $0.deleted.count } == 1)
     }
 }

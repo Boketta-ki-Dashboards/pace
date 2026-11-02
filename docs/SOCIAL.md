@@ -332,10 +332,31 @@ Nachricht, Spitzname, Teilen, Blockieren, Melden) bleiben unverändert. Eine Mel
 Interessen und Banner im Schnappschuss; das gemeldete Banner bleibt bis zur Moderation erhalten. Auszeichnungen werden
 nur aufgewertet (je Art die höhere Stufe) und beim Öffnen des Profils automatisch nachgetragen, nie still entfernt.
 
-### Pace-Bot (Auftrag 6)
+### Interessen 2.0, Sprachen, Land (Migration 20261102100000, Auftrag 7)
 
-Fester Eintrag oben in der Chatliste – und als eigene Karte, solange Social lädt, offline ist oder einen Fehler zeigt
-(der Bot läuft nur auf dem Gerät). **Keine KI, kein Server, keine Kosten:** 15 vorgefertigte Fragen und Antworten
+| Angabe | Regeln | Wo geprüft |
+|---|---|---|
+| Katalog-Interessen | 50 stabile IDs in fünf Kategorien (Sport & Bewegung 18, Musik & Kreativität 10, Technik & Gaming 8, Alltag & Freizeit 9, Sprachen & Kultur 5; „Reisen“ erscheint in zwei Kategorien), alle zehn IDs aus Auftrag 6 bleiben; Titel DE/EN/RU | App (`ProfileInterest`, `ProfileInterestCategory`), Trigger gegen `private.profile_interest_catalog` |
+| Eigene Interessen | „+ Eigenes Interesse hinzufügen“ → Text → „Hinzufügen“; 2–30 Zeichen, Leerraum normalisiert, NFC, keine Steuer-/unsichtbaren Zeichen, keine Links/`www.`/`@`, keine Doppelten ohne Rücksicht auf Groß-/Kleinschreibung; Begriffe aus dem Katalog (in jeder App-Sprache, z. B. „rap“, „Рэп“) werden als Katalogeintrag vorgeschlagen bzw. gewählt; Anzeige wörtlich (`Text(verbatim:)`), nie übersetzt | App (`CustomInterestRules`), Trigger `private.validate_profile_details` |
+| Anzahl | Katalog und eigene zusammen ≤ 20 (Server ohne neue Migration: ≤ 5 aus den ursprünglichen zehn) | App (`ProfileDetails.interestLimit`), Prüfregel `profiles_interests_total` |
+| Gesprochene Sprachen | freiwillig, ≤ 10 ISO-639-Codes aus einer durchsuchbaren Liste (Name in App-Sprache, Englisch oder der Sprache selbst); nie aus der App-Sprache abgeleitet | App (`SpokenLanguageCatalog`), Prüfregel `profiles_spoken_languages_valid` |
+| Land & Kultur | freiwillig, ein ISO-3166-Code mit Flagge; nur sichtbar, wenn gewählt; nicht geprüft, keine Ableitung aus Standort/Sprache/Name, ohne Einfluss auf Regionen und Ranglisten | App (`ProfileCountryCatalog`), Prüfregel `profiles_country_code_valid` |
+
+Anzeige: Das eigene Profil zeigt alle Interessen, fremde Profile zunächst sechs und „Alle Interessen ansehen (n)“.
+Sprachen und Land stehen als eigene kompakte Zeilen unter den Interessen. Sichtbarkeit und Blockierung wie bei der Bio
+(`social_profile_details`, bei Blockierung leer); keine Weitergabe an Freundeslisten, Gruppen oder Ranglisten. Eigene
+Interessen landen beim Melden im Schnappschuss. Ob der Server die Erweiterung kennt, erkennt die App am Schlüssel
+`custom_interests` in der RPC-Antwort; ohne ihn sendet sie die neuen Spalten nicht.
+
+### Pace-Bot (Auftrag 6, Sortierung seit Auftrag 7)
+
+**Seit Auftrag 7:** ein gewöhnlicher Eintrag der Chatliste (nur unter „Alle“), sortiert nach der letzten eigenen Frage
+(`PaceHelpBotSession.lastUserActivity`); unbenutzt steht er ganz unten. Begrüßung, Neustart, Laden, Sprachwechsel und
+erneutes Öffnen ändern die Position nicht. Über die Suche („Pace-Bot“, „Bot“, „Hilfe“, „Help“, „Бот“ …) auffindbar.
+Kann die Chatliste nicht geladen werden, erscheint er als einzelne Karte unter dem Hinweis – nie doppelt.
+
+Ursprünglich (Auftrag 6): fester Eintrag oben in der Chatliste – und als eigene Karte, solange Social lädt, offline
+ist oder einen Fehler zeigt (der Bot läuft nur auf dem Gerät). **Keine KI, kein Server, keine Kosten:** 15 vorgefertigte Fragen und Antworten
 (DE/EN/RU, `PaceHelpTopic`), optional einfache Stichwortsuche (Stichwort = Wortanfang, feste Vorränge, Ausschlüsse
 wie „Freund entfernen“); ist sie nicht eindeutig, antwortet der Bot ehrlich
 „Dazu habe ich leider noch keine passende Antwort …“ und bietet Hilfe an. Der Verlauf liegt nur auf dem Gerät

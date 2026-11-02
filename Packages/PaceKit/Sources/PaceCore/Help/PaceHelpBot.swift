@@ -261,10 +261,12 @@ public enum PaceHelpBot {
     /// Ob die Suche der Social-Seite den Pace-Bot zeigen soll („Pace-Bot“, „Bot“, „Hilfe“, „FAQ“ …).
     public static func matchesSearch(_ query: String) -> Bool {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 2 else { return false }
-        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        // Wie bei Namen in der Chatsuche: Die Eingabe ist der Anfang eines der Namen (ab drei Zeichen) – „Bot“, „Hilfe“,
+        // „Pace-Bot“; nicht „Talbot“, „Botswana“ oder „Helpful“.
+        guard trimmed.count >= 3 else { return false }
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive, .anchored]
         let names = ["Pace-Bot", "Pace Bot", "Pace-бот", "Bot", "Бот", "Hilfe", "Help", "Помощь", "FAQ", "Support"]
-        return names.contains { $0.range(of: trimmed, options: options) != nil || trimmed.range(of: $0, options: options) != nil }
+        return names.contains { $0.range(of: trimmed, options: options) != nil }
     }
 
     /// Ordnet eine freie Eingabe einem Thema zu – nur, wenn das eindeutig ist; sonst `nil` (ehrliche Antwort statt

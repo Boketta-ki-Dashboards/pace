@@ -274,6 +274,17 @@ public enum ProfileInterest: String, CaseIterable, Codable, Sendable, Identifiab
         return ids.compactMap(ProfileInterest.init(rawValue:)).filter { seen.insert($0).inserted }
             .prefix(ProfileInterestRules.maximumTotal).map { $0 }
     }
+
+    /// IDs im gültigen Format, die diese App-Version nicht kennt (aus einer neueren Version) – ohne Doppelte. Sie
+    /// bleiben beim Speichern erhalten (``ProfileDetails/preservedInterestIDs``).
+    public static func unknownIDs(_ ids: [String]) -> [String] {
+        var seen = Set<String>()
+        return ids.filter { id in
+            ProfileInterest(rawValue: id) == nil
+                && id.range(of: "^[a-z][a-z_]{1,39}$", options: .regularExpression) != nil
+                && seen.insert(id).inserted
+        }
+    }
 }
 
 /// Ein angezeigtes Interesse: aus dem Katalog (übersetzt) oder selbst eingegeben (wie eingegeben).
@@ -360,9 +371,16 @@ public enum CustomInterestRules {
         if length < minimumLength { return .tooShort }
         if length > maximumLength { return .tooLong }
         let lowered = text.lowercased()
-        if lowered.contains("://") || lowered.contains("www.") || lowered.contains("@") { return .link }
+        if lowered.contains("://") || lowered.contains("www.") || lowered.contains("@")
+            || lowered.range(of: linkPattern, options: .regularExpression) != nil {
+            return .link
+        }
         return nil
     }
+
+    /// Wie auf dem Server: „domain.tld/…“ oder eine bekannte Endung am Wortende („t.me/x“, „onlyfans.com“), nicht
+    /// „Node.js“.
+    static let linkPattern = #"\.[a-z]{2,}/|\.(com|net|org|de|ru|me|io|ly|gg|tv|app|xyz|info|link)($| )"#
 
     /// Prüft eine Eingabe gegen die aktuelle Auswahl: normalisiert, gültig, nicht doppelt, nicht im Katalog, Platz frei.
     /// - Returns: den zu speichernden Text oder das Problem.
@@ -389,9 +407,11 @@ public enum CustomInterestRules {
     }
 
     /// Steuerzeichen (auch Zeilenumbruch) und unsichtbare Formatzeichen wie bei der Bio – außer dem Zero-Width-Joiner,
-    /// den Emoji-Folgen brauchen.
+    /// den Emoji-Folgen brauchen –, dazu leer dargestellte Füllzeichen (Hangul-Füller, Braille-Leerzeichen, Combining
+    /// Grapheme Joiner), sonst entstünden leere Chips.
     static func isForbidden(_ scalar: Unicode.Scalar) -> Bool {
-        scalar.value == 0x0A || ProfileBioRules.isForbidden(scalar)
+        let blank: Set<UInt32> = [0x034F, 0x115F, 0x1160, 0x2800, 0x3164, 0xFFA0]
+        return scalar.value == 0x0A || blank.contains(scalar.value) || ProfileBioRules.isForbidden(scalar)
     }
 
     public static func message(for problem: Problem) -> String {
@@ -531,13 +551,20 @@ public enum ProfileCountryCatalog {
     public static func search(_ query: String) -> [String] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let english = Locale(identifier: "en")
+        // Namen einmal bestimmen (nicht bei jedem Vergleich im Sortieren).
+        let names = Dictionary(uniqueKeysWithValues: codes.map { ($0, name(for: $0)) })
         let matches = query.isEmpty ? codes : codes.filter { code in
-            [name(for: code), english.localizedString(forRegionCode: code), code].contains { name in
+            [names[code], english.localizedString(forRegionCode: code), code].contains { name in
                 name.map { $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil } ?? false
             }
         }
         let locale = PaceLocalization.shared.locale
-        return matches.sorted { name(for: $0).compare(name(for: $1), locale: locale) == .orderedAscending }
+        return matches.sorted { (names[$0] ?? $0).compare(names[$1] ?? $1, locale: locale) == .orderedAscending }
+    }
+
+    /// Code aus der Liste (der Server prüft nur das Format; unbekannte Codes wie „ZZ“ zeigt die App nicht an).
+    public static func isKnown(_ code: String) -> Bool {
+        codes.contains(code)
     }
 
     /// Gültiger Code wie auf dem Server: zwei Großbuchstaben.

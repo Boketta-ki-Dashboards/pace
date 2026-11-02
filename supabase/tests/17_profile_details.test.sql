@@ -106,8 +106,10 @@ select lives_ok(
   $$update public.profiles set interests = array['walking', 'running', 'hiking', 'fitness', 'cycling', 'football'] where id = auth.uid()$$,
   'sechs Interessen (seit 20261102100000 erlaubt)'
 );
+-- Wie die neue App (sendet custom_interests mit): genau die gewählte Liste. Eine Änderung nur von interests behandelt
+-- der Server wie eine ältere App und behält, was diese nicht sehen konnte (18_profile_interests).
 select lives_ok(
-  $$update public.profiles set interests = array['walking', 'running', 'hiking', 'fitness', 'cycling'] where id = auth.uid()$$,
+  $$update public.profiles set interests = array['walking', 'running', 'hiking', 'fitness', 'cycling'], custom_interests = '{}' where id = auth.uid()$$,
   'wieder fünf Interessen'
 );
 select throws_ok(

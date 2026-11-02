@@ -242,7 +242,8 @@ Funktionen nicht; die aktuelle App zeigt bei fehlenden Funktionen „noch nicht 
 
 # Auftrag 6: eine neue Migration (Social-Profil 2.0)
 
-> **Status: NICHT ausgeführt – Freigabe durch den Nutzer nötig.** Die Migration ist nur lokal bzw. in der CI
+> **Status: vom Nutzer produktiv eingespielt** (laut Auftrag 7). Der folgende Text beschreibt den damaligen Ablauf.
+> Ursprünglich: **NICHT ausgeführt – Freigabe durch den Nutzer nötig.** Die Migration ist nur lokal bzw. in der CI
 > (Job „Backend“: Docker-Supabase, pgTAP inkl. `17_profile_details.test.sql` mit 35 Prüfungen, `db lint`, Advisors)
 > gelaufen.
 > Ziel ist ausschließlich das Pace-Projekt `bnkrenfvfiaapsbkeejq`. Alle bisherigen Migrationen bleiben unverändert und
@@ -346,3 +347,122 @@ Vorwärts korrigieren (neue Migration). Die Spalten können bleiben – ältere 
 Fassungen stehen in `20261019100300_storage_realtime_access.sql` (`pace_access.can_read_avatar`, ohne `banner_path`),
 `20261023100000_friend_nicknames.sql` (`social_report`) und `20261019100400_moderation_account.sql`
 (`pace_access.is_report_evidence`). Ein vollständiges Zurück geht nur über die Sicherung.
+
+# Auftrag 7: eine neue Migration (Interessen 2.0)
+
+> **Status: NICHT ausgeführt – Freigabe durch den Nutzer nötig.** Die Migration ist nur lokal (Docker-Supabase im
+> Entwicklungscontainer) bzw. in der CI (Job „Backend“: pgTAP inkl. `18_profile_interests.test.sql` mit 52 Prüfungen,
+> `db lint`, Advisors, Swift-Integrationstests) gelaufen. Ziel ist ausschließlich das Pace-Projekt
+> `bnkrenfvfiaapsbkeejq`. `20261030100000_profile_details.sql` (bereits produktiv) bleibt unverändert und wird nicht
+> erneut ausgeführt. Kein `db reset`, es werden keine Daten gelöscht oder umgeschrieben.
+
+**Ist die Migration nötig?** Für die neuen Funktionen ja: größerer Katalog, eigene Interessen, mehr als fünf
+Interessen, gesprochene Sprachen und Land brauchen neue Spalten und eine neue serverseitige Prüfung. **Ohne** die
+Migration funktioniert die neue App unverändert weiter: Sie erkennt den Serverstand an der Antwort von
+`social_profile_details` (Schlüssel `custom_interests` fehlt) und bietet dann wie bisher höchstens fünf Interessen aus
+dem ursprünglichen Katalog an, mit dem Hinweis „Mehr Interessen, eigene Begriffe und Sprachen kommen mit dem nächsten
+Server-Update.“ Alle anderen Teile von Auftrag 7 (Home-Kopf, Pace-Bot, Statistik, Profilbild/Banner, Profil-Tab)
+brauchen keine Migration.
+
+## A. Was eingespielt wird
+
+| # | Migration | Inhalt | Voraussetzung |
+|---|---|---|---|
+| 11 | `20261102100000_profile_interests.sql` | Tabelle `private.profile_interest_catalog` (50 stabile IDs in 5 Kategorien, nicht über die API erreichbar); Trigger-Funktion `private.mark_profile_extended_write` mit Trigger `profiles_mark_extended_write`; Spalten `custom_interests text[]`, `spoken_languages text[]` (je `not null default '{}'`), `country_code text` in `profiles`; Prüfregel `profiles_interests_valid` (feste Fünferliste) ersetzt durch `profiles_interests_total` (Katalog + eigene ≤ 20) sowie `profiles_spoken_languages_valid` und `profiles_country_code_valid`; Trigger-Funktion `private.validate_profile_details` und Trigger `profiles_validate_details` erweitert; Spaltenrecht `update` auf die drei neuen Spalten; `social_profile_details` und `social_report` (gleiche Signaturen) liefern bzw. sichern zusätzlich eigene Interessen, Sprachen und Land | 1–10 produktiv |
+
+**Additiv und rückwärtskompatibel:**
+
+- Bestehende Interessen behalten ihre IDs; alle zehn bisherigen IDs stehen im neuen Katalog. Die neuen Prüfregeln
+  sind weiter als die alte (≤ 20 statt ≤ 5) – bestehende Zeilen erfüllen sie. Die neuen Spalten haben konstante
+  Standardwerte bzw. sind nullable; PostgreSQL legt sie ohne Umschreiben der Tabelle an.
+- Katalog-IDs prüft der Trigger jetzt gegen `private.profile_interest_catalog` (statt eines festen Arrays im
+  Constraint). Neue Interessen später: eine Zeile in der Tabelle (neue Migration mit `insert`) und eine in der App –
+  keine neue Spalte, kein neuer Constraint.
+- Eigene Interessen: 2–30 Zeichen, ohne Leerzeichen am Rand (auch geschützte) und doppelte Leerzeichen, ohne Steuer-,
+  unsichtbare und leer dargestellte Zeichen, ohne Links (`://`, `www.`, `domain.tld/…`, bekannte Endungen wie `.com`),
+  ohne `@`, Unicode-NFC, keine Doppelten ohne Rücksicht auf Groß-/Kleinschreibung
+  (`lower()`, auch kyrillisch). Sie gehören nur zum eigenen Profil, werden nie Teil des Katalogs und landen beim Melden
+  im Schnappschuss.
+- Sprachen: bis zu 10 ISO-639-Codes (jeder Eintrag einzeln geprüft), ohne Doppelte; Land: ein ISO-3166-Code oder `null`. Beides freiwillig, nicht
+  geprüft, ohne Einfluss auf Regionen und Ranglisten (die beruhen weiter allein auf `region_id`).
+- Sichtbarkeit wie bisher: nur über `social_profile_details` (gleiche Regeln wie das öffentliche Profil, bei
+  Blockierung leer); RLS auf `profiles` unverändert (nur die eigene Zeile). `private.profile_json` bleibt unverändert –
+  keine Weitergabe an Freundeslisten, Gruppen oder Ranglisten. Der Datenexport enthält die neuen Spalten automatisch.
+- Ältere App-Versionen ignorieren die neuen Schlüssel der RPC. Speichert eine **alte** App-Version (z. B. auf einem
+  zweiten Gerät) ihre Interessen, schickt sie nur die ersten fünf ihr bekannten IDs und nie `custom_interests`. Der
+  Trigger erkennt das (Markierung durch den Trigger `profiles_mark_extended_write`, der nur bei Änderungen von
+  `custom_interests` läuft) und behält alles, was die alte App nicht sehen konnte – neue Katalog-IDs und weitere
+  bisherige IDs bleiben erhalten. Die neue App sendet `custom_interests` immer mit und ändert die Liste genau so, wie
+  gewählt. Umgekehrt behält die neue App Katalog-IDs einer späteren App-Version (`preservedInterestIDs`).
+
+## B. Vorbereitung
+
+1. Sicherung wie in Abschnitt 3 oben (Backup-Zeitpunkt notieren bzw. `supabase db dump --linked …`).
+2. Keine Dashboard-Einstellung nötig (kein Bucket, keine Policy, keine Auth-Änderung).
+
+## C. Probelauf (durch den Nutzer)
+
+```sh
+supabase migration list --linked     # erwartet: alles bis 20261030100000 „remote“, nur 20261102100000 „local“
+supabase db push --dry-run           # muss genau 20261102100000_profile_interests.sql nennen
+```
+
+Erwartete Ausgabe des Probelaufs (sinngemäß):
+
+```text
+Would push these migrations:
+ • 20261102100000_profile_interests.sql
+```
+
+Abbrechen, wenn andere oder zusätzliche Migrationen erscheinen (insbesondere `20261030100000`) oder die Projekt-Ref
+nicht `bnkrenfvfiaapsbkeejq` ist.
+
+## D. Einspielen (nur nach ausdrücklicher Freigabe)
+
+```sh
+supabase db push                     # NIE mit --include-seed
+```
+
+Die Migration läuft in einer Transaktion; bei einem Fehler wird sie vollständig zurückgerollt.
+
+## E. Prüfung danach (SQL Editor, nur lesend)
+
+```sql
+-- Neue Spalten
+select column_name, data_type, is_nullable, column_default from information_schema.columns
+ where table_schema = 'public' and table_name = 'profiles'
+   and column_name in ('custom_interests', 'spoken_languages', 'country_code');
+-- erwartet: 3 Zeilen (custom_interests/spoken_languages: NO, '{}'; country_code: YES)
+
+-- Prüfregeln: alte Fünferliste weg, neue gültig
+select conname, convalidated from pg_constraint
+ where conrelid = 'public.profiles'::regclass
+   and conname in ('profiles_interests_valid', 'profiles_interests_total', 'profiles_spoken_languages_valid', 'profiles_country_code_valid');
+-- erwartet: profiles_interests_total, profiles_spoken_languages_valid, profiles_country_code_valid – convalidated = true
+
+-- Katalog: 50 Einträge, alle bisherigen IDs enthalten
+select count(*) from private.profile_interest_catalog;   -- erwartet: 50
+select count(*) from private.profile_interest_catalog
+ where id in ('walking','running','hiking','fitness','cycling','football','outdoor','everyday_movement','challenges','wellbeing');
+-- erwartet: 10
+
+-- Bestehende Interessen unverändert, neue Felder leer
+select count(*) from public.profiles where custom_interests <> '{}' or spoken_languages <> '{}' or country_code is not null;
+-- direkt danach: 0
+
+-- RPC liefert die neuen Schlüssel (Funktionstext)
+select pg_get_functiondef('public.social_profile_details(uuid)'::regprocedure) like '%custom_interests%';
+-- erwartet: true
+```
+
+Danach *Database → Advisors* (keine neuen Warnungen) und mit zwei Konten in der App: unter „Profil bearbeiten“ mehr als
+fünf Interessen wählen, ein eigenes Interesse hinzufügen („Rap“ → schlägt den Katalogeintrag vor), Sprachen und Land
+wählen, speichern; beim anderen Konto das Profil öffnen (sechs Interessen sichtbar, „Alle Interessen ansehen“,
+Sprachen und Land); nach Blockieren keine dieser Angaben mehr.
+
+## F. Rücknahme
+
+Vorwärts korrigieren (neue Migration). Die Spalten können bleiben – ältere App-Versionen ignorieren sie. Die vorigen
+Fassungen von `private.validate_profile_details`, `social_profile_details` und `social_report` stehen in
+`20261030100000_profile_details.sql`. Achtung: Eine Rückkehr zur alten Prüfregel (≤ 5 aus der festen Liste) schlägt
+fehl, sobald Profile mehr oder neue Interessen gespeichert haben; ein vollständiges Zurück geht nur über die Sicherung.

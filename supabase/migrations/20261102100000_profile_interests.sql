@@ -13,7 +13,7 @@
 --   der App (PaceCore.ProfileInterest) – kein neuer Constraint, keine neue Spalte. Nicht über die API erreichbar.
 -- * profiles.interests: Katalog-IDs, geprüft per Trigger gegen die Katalogtabelle (vorher festes Array im Constraint).
 -- * profiles.custom_interests: selbst eingegebene Begriffe – 2 bis 30 Zeichen, ohne Leerzeichen am Rand und doppelte
---   Leerzeichen, ohne Steuer- und unsichtbare Formatzeichen (wie die Bio), ohne Links, E-Mail-Adressen und @, Unicode-NFC,
+--   Leerzeichen, ohne Steuer-, unsichtbare und leer dargestellte Zeichen, ohne Links (auch „domain.de/…“), E-Mail-Adressen und @, Unicode-NFC,
 --   keine Doppelten ohne Rücksicht auf Groß-/Kleinschreibung. Sie gehören nur zum eigenen Profil, werden nie Teil des
 --   Katalogs und lassen sich über die bestehende Meldefunktion melden (Schnappschuss erweitert).
 -- * Katalog-Interessen und eigene zusammen höchstens 20.
@@ -24,6 +24,10 @@
 -- * Sichtbarkeit wie Bio und Interessen: social_profile_details (can_view_profile, bei Blockierung leer). Keine
 --   Weitergabe an Gruppen, Freundeslisten oder Ranglisten (private.profile_json bleibt unverändert).
 -- * Datenexport (account_export) enthält die neuen Spalten automatisch (to_jsonb der eigenen Zeile).
+-- * Schutz vor Datenverlust durch ältere App-Versionen: Wer nur interests ändert (ältere Apps kennen custom_interests
+--   nicht und senden es nie), kann nur die ersten fünf ihm bekannten Interessen gesehen haben. Alle anderen
+--   (neue Katalog-IDs, weitere bisherige IDs) bleiben bei einer solchen Änderung erhalten. Die neue App sendet
+--   custom_interests immer mit und ändert die Liste deshalb genau so, wie die Person sie gewählt hat.
 -- =============================================================================================================
 
 -- ---------------------------------------------------------------------------------------------------------------
@@ -137,6 +141,25 @@ alter table public.profiles add constraint profiles_country_code_valid check (
 -- Prüfung: Katalog, eigene Interessen, keine Doppelten
 -- ---------------------------------------------------------------------------------------------------------------
 
+-- Markiert eine Änderung der neuen App: Nur sie sendet custom_interests (die Markierung gilt für diese Zeile und wird
+-- von validate_profile_details gleich wieder gelöscht; Trigger laufen alphabetisch, „mark“ vor „validate“).
+create function private.mark_profile_extended_write()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform set_config('pace.profile_extended_write', 'on', true);
+  return new;
+end;
+$$;
+revoke all on function private.mark_profile_extended_write() from public, anon, authenticated;
+
+create trigger profiles_mark_extended_write
+  before update of custom_interests on public.profiles
+  for each row execute function private.mark_profile_extended_write();
+
 -- Ersetzt die Fassung aus 20261030100000_profile_details.sql (dort nur: keine doppelten Interessen und Auszeichnungen).
 create or replace function private.validate_profile_details()
 returns trigger
@@ -144,7 +167,27 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_legacy constant text[] := array['walking', 'running', 'hiking', 'fitness', 'cycling', 'football', 'outdoor',
+                                    'everyday_movement', 'challenges', 'wellbeing'];
+  v_extended_write boolean := coalesce(current_setting('pace.profile_extended_write', true), '') = 'on';
+  v_visible text[];
 begin
+  perform set_config('pace.profile_extended_write', '', true);
+
+  -- Änderung durch eine ältere App (ohne custom_interests): Sie sah nur die ersten fünf bisherigen IDs. Alles andere
+  -- bleibt erhalten, statt still zu verschwinden.
+  if tg_op = 'UPDATE' and not v_extended_write and new.interests is distinct from old.interests then
+    select coalesce(array_agg(o.v order by o.n), '{}') into v_visible
+      from (select u.v, u.n from unnest(old.interests) with ordinality as u(v, n)
+             where u.v = any(v_legacy) order by u.n limit 5) as o;
+    new.interests := new.interests || coalesce((
+      select array_agg(u.v order by u.n)
+        from unnest(old.interests) with ordinality as u(v, n)
+       where u.v <> all(v_visible) and u.v <> all(coalesce(new.interests, '{}'))
+    ), '{}');
+  end if;
+
   -- Katalog-Interessen: nur bekannte IDs, keine Doppelten.
   if (select count(*) <> count(distinct v) from unnest(new.interests) as v)
      or exists (
@@ -160,17 +203,22 @@ begin
         where v is null
            or char_length(v) not between 2 and 30
            or v <> btrim(v)
+           or v ~ '^[[:space:]\u00A0\u3000]|[[:space:]\u00A0\u3000]$'
            or v ~ '\s\s'
            or v ~ '[[:cntrl:]]'
            or v ~ '[\u0080-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u180E\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000E0001\U000E0020-\U000E007F]'
+           -- Leer dargestellte Füllzeichen (Hangul-Füller, Braille-Leerzeichen, Combining Grapheme Joiner).
+           or v ~ '[\u034F\u115F\u1160\u2800\u3164\uFFA0]'
            or v ~* '(://|www\.|@)'
+           or v ~* '\.[a-z]{2,}/|\.(com|net|org|de|ru|me|io|ly|gg|tv|app|xyz|info|link)($| )'
            or not (v is nfc normalized)
      )
      or (select count(*) <> count(distinct lower(v)) from unnest(new.custom_interests) as v) then
     raise exception 'invalid_custom_interests' using errcode = '23514';
   end if;
 
-  if (select count(*) <> count(distinct v) from unnest(new.spoken_languages) as v) then
+  if (select count(*) <> count(distinct v) from unnest(new.spoken_languages) as v)
+     or exists (select 1 from unnest(new.spoken_languages) as v where v !~ '^[a-z]{2,3}$') then
     raise exception 'invalid_spoken_languages' using errcode = '23514';
   end if;
   if (select count(*) <> count(distinct v) from unnest(new.achievements) as v) then

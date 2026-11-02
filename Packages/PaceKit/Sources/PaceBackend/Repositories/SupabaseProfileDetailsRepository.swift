@@ -109,18 +109,21 @@ struct ProfileDetailsRow: Decodable {
     var details: ProfileDetails {
         let parsedAchievements = ProfileAchievement.parse(achievements)
         let extended = customInterests != nil
-        let interests = ProfileInterest.parse(interests)
+        let parsed = ProfileInterest.parse(interests)
+        // IDs aus einer neueren App-Version: nicht anzeigen, aber erhalten (nur mit der Erweiterung auf dem Server).
+        let preserved = extended ? ProfileInterest.unknownIDs(interests) : []
         let custom = CustomInterestRules.parse(customInterests ?? [])
         return ProfileDetails(
             bio: bio,
-            interests: interests,
-            customInterests: Array(custom.prefix(max(0, ProfileInterestRules.maximumTotal - interests.count))),
+            interests: parsed,
+            customInterests: Array(custom.prefix(max(0, ProfileInterestRules.maximumTotal - parsed.count - preserved.count))),
             spokenLanguages: SpokenLanguageCatalog.parse(spokenLanguages),
-            countryCode: countryCode.flatMap { ProfileCountryCatalog.isValid($0) ? $0 : nil },
+            countryCode: countryCode.flatMap { ProfileCountryCatalog.isKnown($0) ? $0 : nil },
             bannerPath: bannerPath,
             showsAchievements: showsAchievements ?? !parsedAchievements.isEmpty,
             achievements: parsedAchievements,
-            supportsExtendedProfile: extended
+            supportsExtendedProfile: extended,
+            preservedInterestIDs: preserved
         )
     }
 }
@@ -166,13 +169,14 @@ struct ProfileDetailsUpdate: Encodable, Sendable {
             return
         }
         let custom = CustomInterestRules.parse(details.customInterests)
+        let preserved = ProfileInterest.unknownIDs(details.preservedInterestIDs)
         guard custom.count == details.customInterests.count,
-              catalog.count + custom.count <= ProfileInterestRules.maximumTotal,
+              catalog.count + preserved.count + custom.count <= ProfileInterestRules.maximumTotal,
               details.spokenLanguages.allSatisfy(SpokenLanguageCatalog.isValid),
               details.spokenLanguages.count <= ProfileInterestRules.maximumLanguages,
               details.countryCode.map(ProfileCountryCatalog.isValid) ?? true
         else { throw ProfileDetailsError.invalid }
-        interests = catalog.map(\.rawValue)
+        interests = catalog.map(\.rawValue) + preserved
         customInterests = custom
         spokenLanguages = SpokenLanguageCatalog.parse(details.spokenLanguages)
         countryCode = details.countryCode

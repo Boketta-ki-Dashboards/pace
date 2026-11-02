@@ -25,6 +25,9 @@ public struct ProfileDetails: Equatable, Sendable {
     /// Der Server kennt eigene Interessen, Sprachen und Land (Migration 20261102100000). Sonst gelten die bisherigen
     /// Grenzen: höchstens fünf Interessen aus dem ursprünglichen Katalog.
     public var supportsExtendedProfile: Bool
+    /// Katalog-IDs, die diese App-Version noch nicht kennt (aus einer neueren Version gespeichert). Nicht angezeigt,
+    /// aber beim Speichern unverändert mitgeschickt und auf die Höchstzahl angerechnet – sonst gingen sie verloren.
+    public var preservedInterestIDs: [String]
 
     public init(
         bio: String? = nil,
@@ -35,7 +38,8 @@ public struct ProfileDetails: Equatable, Sendable {
         bannerPath: String? = nil,
         showsAchievements: Bool = false,
         achievements: [ProfileAchievement] = [],
-        supportsExtendedProfile: Bool = false
+        supportsExtendedProfile: Bool = false,
+        preservedInterestIDs: [String] = []
     ) {
         self.bio = bio
         self.interests = interests
@@ -46,6 +50,7 @@ public struct ProfileDetails: Equatable, Sendable {
         self.showsAchievements = showsAchievements
         self.achievements = achievements
         self.supportsExtendedProfile = supportsExtendedProfile
+        self.preservedInterestIDs = preservedInterestIDs
     }
 
     public static let empty = ProfileDetails()

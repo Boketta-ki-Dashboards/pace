@@ -99,7 +99,7 @@ struct HelpBotChatListTests {
         for query in ["Pace-Bot", "pace bot", "bot", "Hilfe", "help", "бот"] {
             #expect(PaceHelpBot.matchesSearch(query), "\(query)")
         }
-        for query in ["Mia", "x", "Smoking red"] {
+        for query in ["Mia", "x", "pa", "Smoking red", "Talbot", "Botswana", "Helpful", "Abbott"] {
             #expect(!PaceHelpBot.matchesSearch(query), "\(query)")
         }
     }
