@@ -7,29 +7,63 @@ import Foundation
 /// Repository ``ProfileDetailsError/unavailable`` – die App zeigt die neuen Felder dann nicht an.
 public struct ProfileDetails: Equatable, Sendable {
     public var bio: String?
+    /// Interessen aus dem Katalog (stabile IDs).
     public var interests: [ProfileInterest]
+    /// Selbst eingegebene Interessen (normalisierter Text, so angezeigt wie eingegeben). Seit Migration 20261102100000.
+    public var customInterests: [String]
+    /// Freiwillig angegebene gesprochene Sprachen (ISO-639-Codes, z. B. `de`, `sr`). Nie aus der App-Sprache abgeleitet.
+    public var spokenLanguages: [String]
+    /// Freiwilliger Länder- bzw. Kulturbezug (ISO-3166-Code, z. B. `IT`) – Selbstbeschreibung, keine geprüfte Angabe.
+    /// Ohne Einfluss auf die regionalen Ranglisten.
+    public var countryCode: String?
     /// Banner im Bucket `avatars` (Ordner der eigenen öffentlichen ID); `nil` = neutraler Pace-Hintergrund.
     public var bannerPath: String?
     /// Auszeichnungen auf dem Profil zeigen (Standard: aus). Nur beim eigenen Profil bekannt.
     public var showsAchievements: Bool
     /// Beim eigenen Profil die gespeicherten, bei anderen nur die freigegebenen Auszeichnungen.
     public var achievements: [ProfileAchievement]
+    /// Der Server kennt eigene Interessen, Sprachen und Land (Migration 20261102100000). Sonst gelten die bisherigen
+    /// Grenzen: höchstens fünf Interessen aus dem ursprünglichen Katalog.
+    public var supportsExtendedProfile: Bool
 
     public init(
         bio: String? = nil,
         interests: [ProfileInterest] = [],
+        customInterests: [String] = [],
+        spokenLanguages: [String] = [],
+        countryCode: String? = nil,
         bannerPath: String? = nil,
         showsAchievements: Bool = false,
-        achievements: [ProfileAchievement] = []
+        achievements: [ProfileAchievement] = [],
+        supportsExtendedProfile: Bool = false
     ) {
         self.bio = bio
         self.interests = interests
+        self.customInterests = customInterests
+        self.spokenLanguages = spokenLanguages
+        self.countryCode = countryCode
         self.bannerPath = bannerPath
         self.showsAchievements = showsAchievements
         self.achievements = achievements
+        self.supportsExtendedProfile = supportsExtendedProfile
     }
 
     public static let empty = ProfileDetails()
+
+    /// Höchstzahl der Interessen (Katalog und eigene zusammen) – 20, auf älteren Servern 5.
+    public var interestLimit: Int {
+        supportsExtendedProfile ? ProfileInterestRules.maximumTotal : ProfileInterestRules.legacyMaximum
+    }
+
+    /// Alle Interessen zur Anzeige: Katalog (übersetzt) und eigene (wie eingegeben).
+    public var allInterests: [ProfileInterestItem] {
+        interests.map(ProfileInterestItem.catalog) + customInterests.map(ProfileInterestItem.custom)
+    }
+
+    /// Ob es Interessen, Sprachen oder ein Land zu zeigen gibt.
+    public var hasInterestsOrBackground: Bool {
+        !interests.isEmpty || !customInterests.isEmpty || !spokenLanguages.isEmpty || countryCode != nil
+    }
 
     public var banner: MediaReference? { .avatar(bannerPath) }
 
@@ -140,63 +174,6 @@ public enum ProfileBioRules {
                 ru: "Содержит невидимые или недопустимые символы."
             )
         }
-    }
-}
-
-// MARK: - Interessen
-
-/// Interesse aus dem festen Katalog (gespeichert wird die stabile ID, angezeigt die Übersetzung).
-public enum ProfileInterest: String, CaseIterable, Codable, Sendable, Identifiable {
-    case walking
-    case running
-    case hiking
-    case fitness
-    case cycling
-    case football
-    case outdoor
-    case everydayMovement = "everyday_movement"
-    case challenges
-    case wellbeing
-
-    /// Bis zu fünf Interessen je Profil.
-    public static let maximumCount = 5
-
-    public var id: String { rawValue }
-
-    public var title: String {
-        switch self {
-        case .walking: PaceLocalization.text(de: "Spazieren", en: "Walking", ru: "Прогулки")
-        case .running: PaceLocalization.text(de: "Laufen", en: "Running", ru: "Бег")
-        case .hiking: PaceLocalization.text(de: "Wandern", en: "Hiking", ru: "Походы")
-        case .fitness: PaceLocalization.text(de: "Fitness", en: "Fitness", ru: "Фитнес")
-        case .cycling: PaceLocalization.text(de: "Radfahren", en: "Cycling", ru: "Велоспорт")
-        case .football: PaceLocalization.text(de: "Fußball", en: "Football", ru: "Футбол")
-        case .outdoor: PaceLocalization.text(de: "Outdoor", en: "Outdoors", ru: "На природе")
-        case .everydayMovement: PaceLocalization.text(de: "Bewegung im Alltag", en: "Everyday movement", ru: "Движение каждый день")
-        case .challenges: PaceLocalization.text(de: "Challenges", en: "Challenges", ru: "Челленджи")
-        case .wellbeing: PaceLocalization.text(de: "Gesundheit & Wohlbefinden", en: "Health & wellbeing", ru: "Здоровье и самочувствие")
-        }
-    }
-
-    public var systemImage: String {
-        switch self {
-        case .walking: "figure.walk"
-        case .running: "figure.run"
-        case .hiking: "figure.hiking"
-        case .fitness: "dumbbell"
-        case .cycling: "bicycle"
-        case .football: "soccerball"
-        case .outdoor: "tree"
-        case .everydayMovement: "figure.walk.motion"
-        case .challenges: "flag.checkered"
-        case .wellbeing: "heart"
-        }
-    }
-
-    /// Unbekannte IDs (neuere App-Version) fallen weg, Doppelte auch; höchstens ``maximumCount``.
-    public static func parse(_ ids: [String]) -> [ProfileInterest] {
-        var seen = Set<ProfileInterest>()
-        return ids.compactMap(ProfileInterest.init(rawValue:)).filter { seen.insert($0).inserted }.prefix(maximumCount).map { $0 }
     }
 }
 

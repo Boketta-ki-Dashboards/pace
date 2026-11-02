@@ -2,7 +2,9 @@ import PaceCore
 import SwiftUI
 
 /// Kopf eines Pace-Profils (Social-Profil 2.0): Banner, Profilbild leicht überlappend, Anzeigename, Benutzername,
-/// optional Bio, Interessen und freigegebene Auszeichnungen. Für das eigene und fremde Profile gleich.
+/// optional Bio, Interessen, gesprochene Sprachen, Land und freigegebene Auszeichnungen. Für das eigene und fremde
+/// Profile gleich – nur zeigen fremde Profile zunächst wenige Interessen (``ProfileInterestRules/compactCount``), den
+/// Rest über „Alle Interessen ansehen“.
 ///
 /// Fehlt eine Angabe, entfällt sie ohne Platzhalter (beim eigenen Profil kann ``bioPrompt`` „Bio hinzufügen“ zeigen).
 /// Ohne Banner erscheint eine ruhige Fläche in Pace-Farben – kein Foto.
@@ -13,8 +15,10 @@ public struct PaceProfileShowcase<Actions: View>: View {
     private let avatar: MediaReference?
     private let details: ProfileDetails
     private let bioPrompt: (() -> Void)?
+    private let showsAllInterests: Bool
     private let actions: Actions
 
+    @State private var expandsInterests = false
     @ScaledMetric(relativeTo: .title) private var scaledAvatarSize: CGFloat = 84
 
     /// Mit großer Schrift wächst das Profilbild mit, aber begrenzt – daneben stehen die Aktionen.
@@ -23,6 +27,7 @@ public struct PaceProfileShowcase<Actions: View>: View {
     /// - Parameters:
     ///   - username: ohne „@“.
     ///   - bioPrompt: Beim eigenen Profil ohne Bio: „Bio hinzufügen“ öffnet die Bearbeitung.
+    ///   - showsAllInterests: Eigenes Profil: alle Interessen; fremde: zunächst kompakt.
     ///   - actions: Knöpfe rechts neben dem Profilbild (z. B. „Profil bearbeiten“, Teilen).
     public init(
         displayName: String,
@@ -31,6 +36,7 @@ public struct PaceProfileShowcase<Actions: View>: View {
         avatar: MediaReference?,
         details: ProfileDetails,
         bioPrompt: (() -> Void)? = nil,
+        showsAllInterests: Bool = false,
         @ViewBuilder actions: () -> Actions
     ) {
         self.displayName = displayName
@@ -39,6 +45,7 @@ public struct PaceProfileShowcase<Actions: View>: View {
         self.avatar = avatar
         self.details = details
         self.bioPrompt = bioPrompt
+        self.showsAllInterests = showsAllInterests
         self.actions = actions()
     }
 
@@ -89,16 +96,8 @@ public struct PaceProfileShowcase<Actions: View>: View {
                     }
                     .buttonStyle(.pacePressable)
                 }
-                if !details.interests.isEmpty {
-                    PaceFlowLayout(spacing: PaceSpacing.xs) {
-                        ForEach(details.interests) { interest in
-                            PaceProfileChip(title: interest.title, systemImage: interest.systemImage)
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(PaceLocalization.text(de: "Interessen", en: "Interests", ru: "Интересы") + ": "
-                        + details.interests.map(\.title).joined(separator: ", "))
-                }
+                interests
+                background
                 if !details.visibleAchievements.isEmpty {
                     PaceFlowLayout(spacing: PaceSpacing.xs) {
                         ForEach(details.visibleAchievements) { achievement in
@@ -120,6 +119,94 @@ public struct PaceProfileShowcase<Actions: View>: View {
             RoundedRectangle(cornerRadius: PaceRadius.card, style: .continuous)
                 .strokeBorder(PaceColor.border, lineWidth: 1)
         )
+    }
+}
+
+extension PaceProfileShowcase {
+    /// Katalog-Interessen übersetzt, eigene so, wie sie eingegeben wurden.
+    @ViewBuilder private var interests: some View {
+        let all = details.allInterests
+        if !all.isEmpty {
+            let isCompact = !showsAllInterests && !expandsInterests && all.count > ProfileInterestRules.compactCount
+            let visible = isCompact ? Array(all.prefix(ProfileInterestRules.compactCount)) : all
+            VStack(alignment: .leading, spacing: PaceSpacing.xs) {
+                PaceFlowLayout(spacing: PaceSpacing.xs) {
+                    ForEach(visible) { item in
+                        PaceProfileChip(title: item.title, systemImage: item.systemImage)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(PaceLocalization.text(de: "Interessen", en: "Interests", ru: "Интересы") + ": "
+                    + all.map(\.title).joined(separator: ", "))
+                if isCompact {
+                    Button {
+                        withAnimation(.snappy(duration: 0.25)) { expandsInterests = true }
+                    } label: {
+                        Text(PaceLocalization.text(
+                            de: "Alle Interessen ansehen (\(all.count))",
+                            en: "See all interests (\(all.count))",
+                            ru: "Все интересы (\(all.count))"
+                        ))
+                        .font(PaceFont.callout.weight(.semibold))
+                        .foregroundStyle(PaceColor.accent)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.pacePressable)
+                }
+            }
+        }
+    }
+
+    /// Gesprochene Sprachen und Land als eigene kompakte Zeilen (nicht zwischen den Interessen).
+    @ViewBuilder private var background: some View {
+        if !details.spokenLanguages.isEmpty || details.countryCode != nil {
+            VStack(alignment: .leading, spacing: PaceSpacing.xxs) {
+                if !details.spokenLanguages.isEmpty {
+                    PaceProfileFactRow(
+                        systemImage: "character.bubble",
+                        title: PaceLocalization.text(de: "Sprachen", en: "Languages", ru: "Языки"),
+                        value: details.spokenLanguages.map(SpokenLanguageCatalog.name(for:)).joined(separator: " · ")
+                    )
+                }
+                if let code = details.countryCode {
+                    PaceProfileFactRow(
+                        systemImage: "globe.europe.africa",
+                        title: PaceLocalization.text(de: "Verbunden mit", en: "Connected to", ru: "Близкая страна"),
+                        value: "\(ProfileCountryCatalog.flag(for: code)) \(ProfileCountryCatalog.name(for: code))"
+                    )
+                }
+            }
+        }
+    }
+}
+
+/// Kompakte Zeile „Sprachen: Deutsch · Russisch“ im Profilkopf.
+struct PaceProfileFactRow: View {
+    let systemImage: String
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: PaceSpacing.xs) {
+            Image(systemName: systemImage)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(PaceColor.accent)
+                .frame(width: 20)
+                .accessibilityHidden(true)
+            Text(line)
+                .font(PaceFont.caption)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var line: AttributedString {
+        var label = AttributedString(title + ": ")
+        label.foregroundColor = PaceColor.textSecondary
+        var content = AttributedString(value)
+        content.foregroundColor = PaceColor.textPrimary
+        return label + content
     }
 }
 
@@ -157,10 +244,11 @@ public struct PaceProfileBanner: View {
 /// Kompakter Tag für Interessen und Auszeichnungen.
 public struct PaceProfileChip: View {
     private let title: String
-    private let systemImage: String
+    private let systemImage: String?
     private let isAchievement: Bool
 
-    public init(title: String, systemImage: String, isAchievement: Bool = false) {
+    /// - Parameter systemImage: `nil` bei eigenen Interessen (nur Text).
+    public init(title: String, systemImage: String?, isAchievement: Bool = false) {
         self.title = title
         self.systemImage = systemImage
         self.isAchievement = isAchievement
@@ -168,11 +256,15 @@ public struct PaceProfileChip: View {
 
     public var body: some View {
         Label {
-            Text(title)
+            // Eigene Interessen sind nutzergenerierter Text: wörtlich, ohne Markdown.
+            Text(verbatim: title)
                 .lineLimit(1)
+                .truncationMode(.tail)
         } icon: {
-            Image(systemName: systemImage)
-                .foregroundStyle(isAchievement ? PaceColor.streak : PaceColor.accent)
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .foregroundStyle(isAchievement ? PaceColor.streak : PaceColor.accent)
+            }
         }
         .font(.footnote.weight(.semibold))
         .foregroundStyle(PaceColor.textPrimary)

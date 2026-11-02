@@ -1,6 +1,6 @@
 -- Pace: Social-Profil 2.0 – Bio, Interessen, Banner, freiwillige Auszeichnungen (Migration 20261030100000).
 begin;
-select plan(35);
+select plan(36);
 
 -- =============================================================================================================
 -- Struktur
@@ -101,9 +101,14 @@ select lives_ok(
   $$update public.profiles set interests = array['walking', 'running', 'hiking', 'fitness', 'cycling'] where id = auth.uid()$$,
   'fünf Interessen'
 );
-select throws_ok(
+-- Seit 20261102100000 bis zu 20 Interessen (Katalog und eigene zusammen) – die Grenze prüft 18_profile_interests.
+select lives_ok(
   $$update public.profiles set interests = array['walking', 'running', 'hiking', 'fitness', 'cycling', 'football'] where id = auth.uid()$$,
-  '23514', null, 'höchstens fünf Interessen'
+  'sechs Interessen (seit 20261102100000 erlaubt)'
+);
+select lives_ok(
+  $$update public.profiles set interests = array['walking', 'running', 'hiking', 'fitness', 'cycling'] where id = auth.uid()$$,
+  'wieder fünf Interessen'
 );
 select throws_ok(
   $$update public.profiles set interests = array['basejumping'] where id = auth.uid()$$, '23514', null, 'nur Interessen aus dem Katalog'
@@ -135,8 +140,9 @@ select lives_ok(
   'Auszeichnungen speichern (noch nicht sichtbar)'
 );
 
+-- Eigene Interessen, Sprachen und Land (seit 20261102100000) prüft 18_profile_interests.
 select is(
-  public.social_profile_details(pg_temp.pid(1)),
+  public.social_profile_details(pg_temp.pid(1)) - array['custom_interests', 'spoken_languages', 'country_code'],
   jsonb_build_object(
     'bio', 'Auf dem Weg zu 100 Tagen.',
     'interests', jsonb_build_array('walking', 'running', 'hiking', 'fitness', 'cycling'),
@@ -190,7 +196,7 @@ select throws_ok(
 );
 set local request.jwt.claims = '{"sub":"a1700000-0000-4000-8000-000000000004","role":"authenticated"}';
 select is(
-  public.social_profile_details(pg_temp.pid(1)),
+  public.social_profile_details(pg_temp.pid(1)) - array['custom_interests', 'spoken_languages', 'country_code'],
   jsonb_build_object('bio', null, 'interests', '[]'::jsonb, 'banner_path', null, 'achievements', '[]'::jsonb),
   'von mir blockierte Person: keine persönlichen Angaben'
 );

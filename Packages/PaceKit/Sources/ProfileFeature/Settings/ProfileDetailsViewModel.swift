@@ -41,7 +41,17 @@ public final class ProfileDetailsViewModel {
     @ObservationIgnored private var hasDraftSession = false
     public var draftBio = ""
     public private(set) var draftInterests: [ProfileInterest] = []
+    /// Selbst eingegebene Interessen (normalisiert, ohne Doppelte).
+    public private(set) var draftCustomInterests: [String] = []
+    public private(set) var draftLanguages: [String] = []
+    public var draftCountry: String?
     public var draftShowsAchievements = false
+    /// Eingabefeld „Eigenes Interesse hinzufügen“.
+    public var customInterestInput = "" {
+        didSet { if customInterestInput != oldValue { customInterestProblem = nil } }
+    }
+    /// Problem der letzten Eingabe (z. B. doppelt, zu lang) – verschwindet beim Weitertippen.
+    public private(set) var customInterestProblem: CustomInterestRules.Problem?
 
     @ObservationIgnored private let repository: (any ProfileDetailsRepository)?
     @ObservationIgnored private let media: (any MediaRepository)?
@@ -64,7 +74,13 @@ public final class ProfileDetailsViewModel {
 
     /// Ob das Profil etwas Neues zu zeigen hat (Bio, Interessen, Banner, sichtbare Auszeichnungen).
     public var hasContent: Bool {
-        details.bio != nil || !details.interests.isEmpty || details.bannerPath != nil || !details.visibleAchievements.isEmpty
+        details.bio != nil || details.hasInterestsOrBackground || details.bannerPath != nil
+            || !details.visibleAchievements.isEmpty
+    }
+
+    /// Der Server kennt eigene Interessen, Sprachen und Land (Migration 20261102100000).
+    public var supportsExtendedProfile: Bool {
+        details.supportsExtendedProfile
     }
 
     /// Auszeichnungen, die beim Einschalten veröffentlicht würden: erreichte Stufen, ohne schon veröffentlichte höhere
@@ -102,7 +118,12 @@ public final class ProfileDetailsViewModel {
         hasDraftSession = true
         draftBio = details.bio ?? ""
         draftInterests = details.interests
+        draftCustomInterests = details.customInterests
+        draftLanguages = details.spokenLanguages
+        draftCountry = details.countryCode
         draftShowsAchievements = details.showsAchievements
+        customInterestInput = ""
+        customInterestProblem = nil
         errorMessage = nil
         didSave = false
     }
@@ -127,11 +148,21 @@ public final class ProfileDetailsViewModel {
     private struct Draft: Equatable {
         let bio: String
         let interests: [ProfileInterest]
+        let customInterests: [String]
+        let languages: [String]
+        let country: String?
         let showsAchievements: Bool
     }
 
     private var draft: Draft {
-        Draft(bio: draftBio, interests: draftInterests, showsAchievements: draftShowsAchievements)
+        Draft(
+            bio: draftBio,
+            interests: draftInterests,
+            customInterests: draftCustomInterests,
+            languages: draftLanguages,
+            country: draftCountry,
+            showsAchievements: draftShowsAchievements
+        )
     }
 
     /// Zeichen der Bio wie auf dem Server gezählt (nach dem Normalisieren).
@@ -146,6 +177,9 @@ public final class ProfileDetailsViewModel {
     public var hasChanges: Bool {
         ProfileBioRules.normalized(draftBio) != details.bio
             || draftInterests != details.interests
+            || draftCustomInterests != details.customInterests
+            || draftLanguages != details.spokenLanguages
+            || draftCountry != details.countryCode
             || draftShowsAchievements != details.showsAchievements
             || (draftShowsAchievements && earned != details.achievements)
     }
@@ -158,17 +192,102 @@ public final class ProfileDetailsViewModel {
         draftInterests.contains(interest)
     }
 
-    /// Wählt ein Interesse aus oder ab (höchstens fünf).
+    /// Höchstzahl der Interessen (Katalog und eigene zusammen): 20, auf älteren Servern 5.
+    public var interestLimit: Int {
+        details.interestLimit
+    }
+
+    /// Ausgewählte Interessen (Katalog und eigene).
+    public var selectedInterestCount: Int {
+        draftInterests.count + draftCustomInterests.count
+    }
+
+    /// Kategorien zur Auswahl – auf älteren Servern nur die mit dem ursprünglichen Katalog.
+    public var interestCategories: [ProfileInterestCategory] {
+        ProfileInterestCategory.allCases.filter { !catalog(in: $0).isEmpty }
+    }
+
+    /// Wählbare Einträge einer Kategorie (ältere Server: nur der ursprüngliche Katalog).
+    public func catalog(in category: ProfileInterestCategory) -> [ProfileInterest] {
+        category.interests.filter { supportsExtendedProfile || $0.isLegacy }
+    }
+
+    /// Wählt ein Interesse aus oder ab (zusammen mit eigenen höchstens ``interestLimit``).
     public func toggleInterest(_ interest: ProfileInterest) {
         if let index = draftInterests.firstIndex(of: interest) {
             draftInterests.remove(at: index)
-        } else if draftInterests.count < ProfileInterest.maximumCount {
+        } else if canAddInterest, supportsExtendedProfile || interest.isLegacy {
             draftInterests.append(interest)
         }
     }
 
     public var canAddInterest: Bool {
-        draftInterests.count < ProfileInterest.maximumCount
+        selectedInterestCount < interestLimit
+    }
+
+    /// Katalogeintrag, der zur aktuellen Eingabe passt (z. B. „rap“ → Rap) – wird statt eines eigenen Chips
+    /// vorgeschlagen.
+    public var customInterestSuggestion: ProfileInterest? {
+        CustomInterestRules.catalogMatch(for: customInterestInput).flatMap { draftInterests.contains($0) ? nil : $0 }
+    }
+
+    /// „Hinzufügen“: Gibt es den Begriff im Katalog, wird der Katalogeintrag ausgewählt; sonst entsteht ein eigener
+    /// Chip. Ungültige oder doppelte Eingaben bleiben im Feld und zeigen ``customInterestProblem``.
+    /// - Returns: `true`, wenn etwas hinzugefügt wurde.
+    @discardableResult
+    public func addCustomInterest() -> Bool {
+        guard supportsExtendedProfile else { return false }
+        switch CustomInterestRules.validate(
+            customInterestInput,
+            existing: draftCustomInterests,
+            selected: draftInterests,
+            limit: interestLimit
+        ) {
+        case .success(let text):
+            draftCustomInterests.append(text)
+            customInterestInput = ""
+            return true
+        case .failure(.inCatalog(let interest)):
+            guard canAddInterest else {
+                customInterestProblem = .limitReached
+                return false
+            }
+            draftInterests.append(interest)
+            customInterestInput = ""
+            return true
+        case .failure(let problem):
+            customInterestProblem = problem
+            return false
+        }
+    }
+
+    public func removeCustomInterest(_ text: String) {
+        draftCustomInterests.removeAll { $0 == text }
+    }
+
+    // MARK: Sprachen und Land
+
+    public func speaks(_ code: String) -> Bool {
+        draftLanguages.contains(code)
+    }
+
+    public var canAddLanguage: Bool {
+        draftLanguages.count < ProfileInterestRules.maximumLanguages
+    }
+
+    /// Wählt eine gesprochene Sprache aus oder ab (höchstens zehn).
+    public func toggleLanguage(_ code: String) {
+        if let index = draftLanguages.firstIndex(of: code) {
+            draftLanguages.remove(at: index)
+        } else if canAddLanguage, supportsExtendedProfile, SpokenLanguageCatalog.isValid(code) {
+            draftLanguages.append(code)
+        }
+    }
+
+    /// Land bzw. Kulturbezug wählen oder entfernen (`nil`).
+    public func setCountry(_ code: String?) {
+        guard supportsExtendedProfile || code == nil else { return }
+        draftCountry = code.flatMap { ProfileCountryCatalog.isValid($0) ? $0 : nil }
     }
 
     public func removeBio() {
@@ -190,6 +309,9 @@ public final class ProfileDetailsViewModel {
         var updated = details
         updated.bio = ProfileBioRules.normalized(draftBio)
         updated.interests = draftInterests
+        updated.customInterests = draftCustomInterests
+        updated.spokenLanguages = draftLanguages
+        updated.countryCode = draftCountry
         updated.showsAchievements = draftShowsAchievements
         updated.achievements = draftShowsAchievements ? earned : []
         do {
@@ -368,12 +490,132 @@ public enum ProfileDetailsTexts {
         PaceLocalization.text(de: "Interessen", en: "Interests", ru: "Интересы")
     }
 
-    public static func interestsHint(selected: Int) -> String {
+    public static func interestsHint(selected: Int, limit: Int) -> String {
         PaceLocalization.text(
-            de: "\(selected) von \(ProfileInterest.maximumCount) ausgewählt",
-            en: "\(selected) of \(ProfileInterest.maximumCount) selected",
-            ru: "Выбрано \(selected) из \(ProfileInterest.maximumCount)"
+            de: "\(selected) von \(limit) ausgewählt",
+            en: "\(selected) of \(limit) selected",
+            ru: "Выбрано \(selected) из \(limit)"
         )
+    }
+
+    public static var yourInterests: String {
+        PaceLocalization.text(de: "Deine Auswahl", en: "Your selection", ru: "Твой выбор")
+    }
+
+    public static var noInterestsSelected: String {
+        PaceLocalization.text(
+            de: "Noch nichts ausgewählt – tippe unten auf Begriffe, die zu dir passen.",
+            en: "Nothing selected yet – tap the terms below that fit you.",
+            ru: "Пока ничего не выбрано – нажми ниже на то, что тебе близко."
+        )
+    }
+
+    public static var addCustomInterest: String {
+        PaceLocalization.text(de: "Eigenes Interesse hinzufügen", en: "Add your own interest", ru: "Добавить свой интерес")
+    }
+
+    public static var customInterestPlaceholder: String {
+        PaceLocalization.text(de: "z. B. Musik produzieren", en: "e.g. Producing music", ru: "например, Битмейкинг")
+    }
+
+    public static var add: String {
+        PaceLocalization.text(de: "Hinzufügen", en: "Add", ru: "Добавить")
+    }
+
+    public static func selectSuggestion(_ interest: ProfileInterest) -> String {
+        PaceLocalization.text(
+            de: "„\(interest.title)“ aus dem Katalog wählen",
+            en: "Choose “\(interest.title)” from the catalog",
+            ru: "Выбрать «\(interest.title)» из каталога"
+        )
+    }
+
+    public static var customInterestNote: String {
+        PaceLocalization.text(
+            de: "Eigene Begriffe erscheinen nur auf deinem Profil – so, wie du sie schreibst. Andere können sie melden.",
+            en: "Your own terms appear only on your profile – exactly as you write them. Others can report them.",
+            ru: "Свои слова видны только в твоём профиле – так, как ты их пишешь. Другие могут на них пожаловаться."
+        )
+    }
+
+    public static func removeInterest(_ title: String) -> String {
+        PaceLocalization.text(de: "\(title) entfernen", en: "Remove \(title)", ru: "Удалить \(title)")
+    }
+
+    public static var legacyInterestsHint: String {
+        PaceLocalization.text(
+            de: "Mehr Interessen, eigene Begriffe und Sprachen kommen mit dem nächsten Server-Update.",
+            en: "More interests, your own terms and languages arrive with the next server update.",
+            ru: "Больше интересов, свои слова и языки появятся со следующим обновлением сервера."
+        )
+    }
+
+    public static var allInterests: String {
+        PaceLocalization.text(de: "Alle Interessen ansehen", en: "See all interests", ru: "Все интересы")
+    }
+
+    public static var spokenLanguages: String {
+        PaceLocalization.text(de: "Gesprochene Sprachen", en: "Languages I speak", ru: "Языки, на которых я говорю")
+    }
+
+    public static var addLanguages: String {
+        PaceLocalization.text(de: "Sprachen auswählen", en: "Choose languages", ru: "Выбрать языки")
+    }
+
+    public static var editLanguages: String {
+        PaceLocalization.text(de: "Sprachen ändern", en: "Change languages", ru: "Изменить языки")
+    }
+
+    public static var languagesNote: String {
+        PaceLocalization.text(
+            de: "Freiwillig und unabhängig von der App-Sprache.",
+            en: "Optional and independent of the app language.",
+            ru: "По желанию и независимо от языка приложения."
+        )
+    }
+
+    public static func languagesHint(selected: Int) -> String {
+        PaceLocalization.text(
+            de: "\(selected) von \(ProfileInterestRules.maximumLanguages) ausgewählt",
+            en: "\(selected) of \(ProfileInterestRules.maximumLanguages) selected",
+            ru: "Выбрано \(selected) из \(ProfileInterestRules.maximumLanguages)"
+        )
+    }
+
+    public static var searchLanguages: String {
+        PaceLocalization.text(de: "Sprache suchen", en: "Search languages", ru: "Найти язык")
+    }
+
+    public static var country: String {
+        PaceLocalization.text(de: "Land & Kultur", en: "Country & culture", ru: "Страна и культура")
+    }
+
+    public static var chooseCountry: String {
+        PaceLocalization.text(de: "Land auswählen", en: "Choose a country", ru: "Выбрать страну")
+    }
+
+    public static var removeCountry: String {
+        PaceLocalization.text(de: "Land entfernen", en: "Remove country", ru: "Убрать страну")
+    }
+
+    public static var searchCountries: String {
+        PaceLocalization.text(de: "Land suchen", en: "Search countries", ru: "Найти страну")
+    }
+
+    public static var countryNote: String {
+        PaceLocalization.text(
+            de: "Freiwillig: ein Land, mit dem du dich verbunden fühlst. Nur sichtbar, wenn du eins wählst – wird nicht überprüft und hat keinen Einfluss auf Ranglisten.",
+            en: "Optional: a country you feel connected to. Only visible if you choose one – it isn't verified and doesn't affect rankings.",
+            ru: "По желанию: страна, с которой ты себя связываешь. Видна, только если ты её выберешь, – не проверяется и не влияет на рейтинги."
+        )
+    }
+
+    public static var done: String {
+        PaceLocalization.text(de: "Fertig", en: "Done", ru: "Готово")
+    }
+
+    public static var noResults: String {
+        PaceLocalization.text(de: "Keine Treffer", en: "No results", ru: "Ничего не найдено")
     }
 
     public static var banner: String {

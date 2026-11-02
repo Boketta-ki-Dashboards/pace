@@ -141,8 +141,8 @@ struct ProfileContent: View {
             .padding(.bottom, PaceSpacing.xxs)
     }
 
-    /// Social-Profil 2.0: Banner, Profilbild, Namen, Bio, Interessen, freigegebene Auszeichnungen – so, wie andere
-    /// das Profil sehen. „Profil bearbeiten“ und Teilen rechts neben dem Profilbild.
+    /// Social-Profil 2.0: Banner, Profilbild, Namen, Bio, alle Interessen, Sprachen, Land, freigegebene
+    /// Auszeichnungen – so, wie andere das Profil sehen (die sehen zunächst nur einige Interessen). „Profil bearbeiten“ und Teilen rechts neben dem Profilbild.
     private var identityCard: some View {
         PaceProfileShowcase(
             displayName: viewModel.displayName,
@@ -150,7 +150,8 @@ struct ProfileContent: View {
             seed: viewModel.avatarSeed,
             avatar: viewModel.avatar,
             details: viewModel.details.details,
-            bioPrompt: viewModel.details.isAvailable ? { onOpen(.editProfile) } : nil
+            bioPrompt: viewModel.details.isAvailable ? { onOpen(.editProfile) } : nil,
+            showsAllInterests: true
         ) {
             HStack(spacing: PaceSpacing.xs) {
                 Button {

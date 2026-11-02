@@ -232,9 +232,11 @@ select lives_ok(
   'lena meldet eine Nachricht von max'
 );
 reset role;
--- Bio, Interessen und Banner (seit 20261030100000 im Schnappschuss) prüft 17_profile_details.
+-- Bio, Interessen und Banner (seit 20261030100000 im Schnappschuss) prüft 17_profile_details, eigene Interessen,
+-- Sprachen und Land (seit 20261102100000) 18_profile_interests.
 select is(
-  (select r.target_snapshot - array['bio', 'interests', 'banner_path'] from public.reports r
+  (select r.target_snapshot - array['bio', 'interests', 'banner_path', 'custom_interests', 'spoken_languages', 'country_code']
+     from public.reports r
     where r.reporter_id = pg_temp.uid(1) and r.target_type = 'user'),
   jsonb_build_object('public_id', pg_temp.pid(2), 'username', 'max_m', 'display_name', 'Max', 'avatar_path', null),
   'Meldung einer Person: Schnappschuss ohne nickname'

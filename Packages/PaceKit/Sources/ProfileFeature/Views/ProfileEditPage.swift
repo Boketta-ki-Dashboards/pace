@@ -5,7 +5,7 @@ import SwiftUI
 import UIKit
 
 /// „Profil bearbeiten“ (Social-Profil 2.0): oben die Vorschau mit Banner und Profilbild – antippen zum Bearbeiten
-/// (Auftrag 7) –, darunter Bio, Interessen, Auszeichnungen. Namen und Konto bleiben unter „Konto & Profil“. Alles ist
+/// (Auftrag 7) –, darunter Bio, Interessen (Katalog und eigene), gesprochene Sprachen, Land & Kultur, Auszeichnungen. Namen und Konto bleiben unter „Konto & Profil“. Alles ist
 /// freiwillig.
 struct ProfileEditPage: View {
     let viewModel: ProfileViewModel
@@ -123,6 +123,9 @@ struct ProfileEditContent: View {
     let backTitle: String
     var onPickPhoto: (ProfilePhotoTarget) -> Void = { _ in }
     var onOpen: (ProfileRoute) -> Void = { _ in }
+    /// Für Vorschaubilder: aufgeklappte Interessen-Kategorien und offenes Feld „Eigenes Interesse“.
+    var expandedInterestCategories: Set<ProfileInterestCategory>?
+    var showsCustomInterestField = false
 
     /// Auswahl „Ändern“ / „Entfernen“ nach dem Antippen eines vorhandenen Bilds.
     @State private var photoActions: ProfilePhotoTarget?
@@ -166,7 +169,15 @@ struct ProfileEditContent: View {
             nameCard
             if details.isAvailable {
                 bioCard
-                interestsCard
+                ProfileInterestsCard(
+                    details: details,
+                    initiallyExpanded: expandedInterestCategories,
+                    showsCustomFieldInitially: showsCustomInterestField
+                )
+                if details.supportsExtendedProfile {
+                    ProfileLanguagesCard(details: details)
+                    ProfileCountryCard(details: details)
+                }
                 achievementsCard
                 if let error = details.errorMessage {
                     ProfileFootnote(text: error, isError: true)
@@ -333,48 +344,6 @@ struct ProfileEditContent: View {
                     Button(ProfileDetailsTexts.removeBio, role: .destructive) { details.removeBio() }
                         .font(PaceFont.callout)
                         .frame(minHeight: 44)
-                }
-            }
-        }
-    }
-
-    // MARK: Interessen
-
-    private var interestsCard: some View {
-        PaceCard {
-            VStack(alignment: .leading, spacing: PaceSpacing.s) {
-                HStack {
-                    PaceCardHeader(ProfileDetailsTexts.interests)
-                    Spacer()
-                    Text(ProfileDetailsTexts.interestsHint(selected: details.draftInterests.count))
-                        .font(PaceFont.caption)
-                        .foregroundStyle(PaceColor.textSecondary)
-                }
-                PaceFlowLayout(spacing: PaceSpacing.xs) {
-                    ForEach(ProfileInterest.allCases) { interest in
-                        let isSelected = details.isSelected(interest)
-                        Button {
-                            details.toggleInterest(interest)
-                        } label: {
-                            Label(interest.title, systemImage: isSelected ? "checkmark" : interest.systemImage)
-                                .font(.footnote.weight(.semibold))
-                                .lineLimit(1)
-                                .padding(.horizontal, PaceSpacing.s)
-                                .frame(minHeight: 36)
-                                .foregroundStyle(isSelected ? PaceColor.onSelection : PaceColor.textPrimary)
-                                .background(isSelected ? PaceColor.selectionFill : PaceColor.fieldBackground, in: Capsule())
-                                .overlay(Capsule().strokeBorder(isSelected ? PaceColor.accent : PaceColor.border, lineWidth: 1))
-                                .contentShape(Capsule())
-                        }
-                        .buttonStyle(.pacePressable)
-                        .disabled(!isSelected && !details.canAddInterest)
-                        .accessibilityAddTraits(isSelected ? .isSelected : [])
-                        .accessibilityHint(!isSelected && !details.canAddInterest ? PaceLocalization.text(
-                            de: "Höchstens 5 Interessen. Wähle zuerst eines ab.",
-                            en: "At most 5 interests. Deselect one first.",
-                            ru: "Не больше 5 интересов. Сначала сними один."
-                        ) : "")
-                    }
                 }
             }
         }

@@ -24,8 +24,10 @@ struct ProfileBioRulesTests {
     }
 
     @Test func catalogsUseStableIDsAndLimits() {
+        // Seit Interessen 2.0 bis zu 20 (vorher 5); unbekannte und doppelte IDs fallen weg.
         #expect(ProfileInterest.parse(["walking", "walking", "galaxy", "running", "hiking", "fitness", "cycling", "football"])
-            == [.walking, .running, .hiking, .fitness, .cycling])
+            == [.walking, .running, .hiking, .fitness, .cycling, .football])
+        #expect(ProfileInterest.parse(ProfileInterest.allCases.map(\.rawValue)).count == ProfileInterestRules.maximumTotal)
         #expect(ProfileInterest.everydayMovement.rawValue == "everyday_movement")
         #expect(ProfileAchievement.parse(["streak_30", "unknown", "streak_30"]) == [.streak30])
         #expect(ProfileAchievement.earned(longestStreak: 6, bestDaySteps: 9_999).isEmpty)
