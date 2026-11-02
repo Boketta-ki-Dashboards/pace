@@ -80,7 +80,9 @@ enum Snapshot {
     ) async throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for scheme in [ColorScheme.light, .dark] {
-            let controller = UIHostingController(rootView: content.environment(\.colorScheme, scheme))
+            // Wie RootView in der App: `preferredColorScheme` stellt auch die UIKit-Teile (Titel der Navigationsleiste in
+            // Sheets) auf das Schema um.
+            let controller = UIHostingController(rootView: content.environment(\.colorScheme, scheme).preferredColorScheme(scheme))
             controller.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
             // Auch das Fenster: sonst folgen UIKit-Teile wie die Navigationsleiste dem Simulator-Erscheinungsbild.
             controller.additionalSafeAreaInsets = safeArea

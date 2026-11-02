@@ -453,6 +453,10 @@ select count(*) from public.profiles where custom_interests <> '{}' or spoken_la
 -- RPC liefert die neuen Schlüssel (Funktionstext)
 select pg_get_functiondef('public.social_profile_details(uuid)'::regprocedure) like '%custom_interests%';
 -- erwartet: true
+
+-- Doppelte eigene Interessen werden auch kyrillisch erkannt (Groß-/Kleinschreibung der Datenbank)
+select lower('МУЗЫКА') = 'музыка';
+-- erwartet: true (lokal und in der CI so geprüft; die App erkennt Doppelte ohnehin schon vor dem Speichern)
 ```
 
 Danach *Database → Advisors* (keine neuen Warnungen) und mit zwei Konten in der App: unter „Profil bearbeiten“ mehr als
